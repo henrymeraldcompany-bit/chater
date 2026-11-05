@@ -125,7 +125,7 @@ export default function App() {
     document.documentElement.dataset.wallpaper = wallpaper
     try { window.localStorage.setItem(WALLPAPER_STORAGE_KEY, wallpaper) } catch { /* Wallpaper remains active for this session. */ }
   }, [wallpaper])
-  useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 1500); return () => window.clearTimeout(timer) }, [])
+  useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 600); return () => window.clearTimeout(timer) }, [])
   const pageCopy = useMemo(() => ({
     Moments: { eyebrow: 'LIFE IN LITTLE UPDATES', title: 'Moments', description: 'Share a little piece of your day. Moments disappear after 24 hours.', action: 'Share a Moment', icon: CirclePlay },
     Groups: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Groups', description: 'Create group chats, bring people together, and share with everyone in the group.', action: 'Create a group', icon: Users },
