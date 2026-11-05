@@ -69,6 +69,9 @@ export default function App() {
     document.documentElement.style.setProperty('--accent-soft', `${accent}22`)
   }, [accent])
   useEffect(() => {
+    try { window.localStorage.setItem(ACCENT_STORAGE_KEY, accent) } catch { /* Accent remains active for this session. */ }
+  }, [accent])
+  useEffect(() => {
     const root = document.documentElement
     let media: MediaQueryList | undefined
     const applyTheme = () => {
