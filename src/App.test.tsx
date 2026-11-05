@@ -62,6 +62,21 @@ describe('Chater application shell', () => {
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#a78bfa')
   })
 
+  it('applies a valid custom HEX accent and rejects incomplete values', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    const hexInput = screen.getByLabelText('Custom HEX colour')
+    const apply = screen.getByRole('button', { name: 'Apply' })
+    expect(apply).toBeDisabled()
+    fireEvent.change(hexInput, { target: { value: '#12ab' } })
+    expect(apply).toBeDisabled()
+    fireEvent.change(hexInput, { target: { value: '12ABEF' } })
+    expect(apply).toBeEnabled()
+    fireEvent.click(apply)
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#12abef')
+    expect(screen.getByRole('status')).toHaveTextContent('Custom accent colour applied')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
