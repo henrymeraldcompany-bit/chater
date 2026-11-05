@@ -5,6 +5,7 @@ import App from './App'
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  window.localStorage.clear()
 })
 
 function openApp() {
@@ -75,6 +76,26 @@ describe('Chater application shell', () => {
     fireEvent.click(apply)
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#12abef')
     expect(screen.getByRole('status')).toHaveTextContent('Custom accent colour applied')
+  })
+
+  it('remembers the selected accent colour after the app is reopened', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Gold' }))
+    expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#eab308')
+
+    cleanup()
+    openApp()
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    expect(screen.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('ignores an invalid saved accent and safely uses the default cyan', () => {
+    window.localStorage.setItem('chater:preferences:accent', 'not-a-colour')
+    openApp()
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#00fdff')
+    expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#00fdff')
   })
 
   it('switches to the Moments screen from bottom navigation', () => {
