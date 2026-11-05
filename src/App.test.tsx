@@ -206,7 +206,7 @@ describe('Chater application shell', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'password123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('status')).toHaveTextContent('Username must be 3–20 characters')
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'henry_cee' } })
+    fireEvent.change(screen.getByPlaceholderText('yourusername'), { target: { value: 'henry_cee' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('status')).toHaveTextContent('Your details are valid')
     expect(screen.getByRole('status')).toHaveTextContent('Account creation and email verification will be connected')
