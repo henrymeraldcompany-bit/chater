@@ -52,7 +52,7 @@ export default function App() {
           <div className="empty-state chat-empty"><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
         </>}
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Communities} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='You'&&<ProfileScreen onSettings={()=>setDialog('settings')}/>}
       </div>
