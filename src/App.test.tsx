@@ -201,7 +201,7 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Henry Example' } })
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'he' } })
+    fireEvent.change(screen.getByPlaceholderText('yourusername'), { target: { value: 'he' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'password123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
