@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
-type Tab = 'Chats' | 'Moments' | 'Communities' | 'Calls' | 'You'
+type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
 const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
   { label: 'Chats', icon: MessageCircle }, { label: 'Moments', icon: CirclePlay },
-  { label: 'Communities', icon: Users }, { label: 'Calls', icon: Phone }, { label: 'You', icon: UserRound }
+  { label: 'Groups', icon: Users }, { label: 'Calls', icon: Phone }, { label: 'You', icon: UserRound }
 ]
 const filters: Filter[] = ['All', 'Unread', 'Favorites', 'Groups']
 
@@ -27,7 +27,7 @@ export default function App() {
   useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 1500); return () => window.clearTimeout(timer) }, [])
   const pageCopy = useMemo(() => ({
     Moments: { eyebrow: 'LIFE IN LITTLE UPDATES', title: 'Moments', description: 'Share a little piece of your day. Moments disappear after 24 hours.', action: 'Share a Moment', icon: CirclePlay },
-    Communities: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Communities', description: 'Bring groups together around the people and things that matter.', action: 'Create a community', icon: Users },
+    Groups: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Groups', description: 'Create group chats, bring people together, and share with everyone in the group.', action: 'Create a group', icon: Users },
     Calls: { eyebrow: 'CLOSER, WHEREVER YOU ARE', title: 'Calls', description: 'Your voice and video call history will appear here.', action: 'Start a call', icon: Phone }
   }), [])
   if (showSplash) return <SplashScreen />
@@ -52,7 +52,7 @@ export default function App() {
           <div className="empty-state chat-empty"><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
         </>}
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='Communities'&&<FeatureEmpty data={pageCopy.Communities} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Communities} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='You'&&<ProfileScreen onSettings={()=>setDialog('settings')}/>}
       </div>
