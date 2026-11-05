@@ -93,3 +93,12 @@ img,svg{max-width:100%}
 .accent-swatch:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .accent-help{margin:13px 0 0;color:#928c82;font-size:10px;line-height:1.6}
 @media(min-width:480px){.accent-palette{grid-template-columns:repeat(10,minmax(0,1fr));gap:8px}}
+
+/* Custom HEX accent input — Task 25 */
+.custom-accent{margin-top:18px;padding-top:16px;border-top:1px solid #302d28}
+.custom-accent>label{display:block;color:#f7f5f0;font-size:12px;font-weight:700;margin-bottom:10px}
+.custom-accent-controls{display:flex;align-items:center;gap:9px}
+.custom-accent-controls input{width:0;min-width:0;flex:1;height:42px;padding:0 12px;border:1px solid #39352f;border-radius:10px;background:#101010;color:#fff;font-size:13px;letter-spacing:1px;text-transform:uppercase}
+.custom-accent-controls input:focus{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 22%,transparent);outline-offset:1px}
+.custom-accent-controls .secondary-button{height:42px;padding:0 16px;white-space:nowrap}
+.custom-accent-notice{margin:9px 0 0;color:var(--accent);font-size:11px}
