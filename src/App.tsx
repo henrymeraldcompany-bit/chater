@@ -109,7 +109,6 @@ export default function App() {
   const [profileUsername, setProfileUsername] = useState('')
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoNotice, setPhotoNotice] = useState('')
-  const [authLoading, setAuthLoading] = useState(true)
   const [accent, setAccent] = useState(readSavedAccent)
   const [theme, setTheme] = useState<ThemePreference>(readSavedTheme)
   const [wallpaper, setWallpaper] = useState<Wallpaper>(readSavedWallpaper)
@@ -149,12 +148,11 @@ export default function App() {
   }, [wallpaper])
   useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 600); return () => window.clearTimeout(timer) }, [])
   useEffect(() => {
-    if (!firebaseAuth) { setAuthLoading(false); return }
+    if (!firebaseAuth) return
     return onAuthStateChanged(firebaseAuth, user => {
       setAuthUser(user)
       setProfilePhotoUrl(user?.photoURL || '')
       setProfileUsername(user ? window.localStorage.getItem(`chater:profile:username:${user.uid}`) || '' : '')
-      setAuthLoading(false)
     })
   }, [])
   useEffect(() => () => {
@@ -230,7 +228,7 @@ export default function App() {
       try {
         const credential = await createUserWithEmailAndPassword(firebaseAuth, registrationEmail.trim(), registrationPassword)
         await updateProfile(credential.user, { displayName: registrationName.trim() })
-        window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, registrationUsername)
+        try { window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, registrationUsername) } catch { /* Username remains in the current form session. */ }
         setProfileUsername(registrationUsername)
         let photoWarning = ''
         if(registrationPhoto){
