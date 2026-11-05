@@ -49,6 +49,19 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('offers ten selectable accent colour presets in settings', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    expect(screen.getByRole('group', { name: 'Choose an accent colour' })).toBeInTheDocument()
+    const cyan = screen.getByRole('button', { name: 'Cyan' })
+    const violet = screen.getByRole('button', { name: 'Violet' })
+    expect(cyan).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(violet)
+    expect(violet).toHaveAttribute('aria-pressed', 'true')
+    expect(cyan).toHaveAttribute('aria-pressed', 'false')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#a78bfa')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
