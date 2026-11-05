@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import App from './App'
 
 afterEach(() => {
@@ -10,7 +10,7 @@ afterEach(() => {
 function openApp() {
   vi.useFakeTimers()
   render(<App />)
-  vi.advanceTimersByTime(1500)
+  act(() => { vi.advanceTimersByTime(1500) })
 }
 
 describe('Chater application shell', () => {
