@@ -97,6 +97,35 @@ describe('Chater application shell', () => {
     expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#00fdff')
   })
 
+  it('offers dark, light and system appearance choices and persists them', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    const theme = screen.getByLabelText('Theme')
+    expect(theme).toHaveValue('dark')
+    fireEvent.change(theme, { target: { value: 'light' } })
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+    expect(window.localStorage.getItem('chater:preferences:theme')).toBe('light')
+    fireEvent.change(theme, { target: { value: 'dark' } })
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    fireEvent.change(theme, { target: { value: 'system' } })
+    expect(document.documentElement).toHaveAttribute('data-theme-preference', 'system')
+    expect(['light', 'dark']).toContain(document.documentElement.getAttribute('data-theme'))
+    expect(window.localStorage.getItem('chater:preferences:theme')).toBe('system')
+  })
+
+  it('restores the saved light appearance on the next launch', () => {
+    window.localStorage.setItem('chater:preferences:theme', 'light')
+    openApp()
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+  })
+
+  it('uses dark appearance when the saved theme preference is invalid', () => {
+    window.localStorage.setItem('chater:preferences:theme', 'sepia')
+    openApp()
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(window.localStorage.getItem('chater:preferences:theme')).toBe('dark')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
