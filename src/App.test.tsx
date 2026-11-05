@@ -24,7 +24,7 @@ describe('Chater application shell', () => {
   it('shows all five primary navigation destinations after the splash', () => {
     openApp()
     expect(screen.getAllByRole('navigation', { name: 'Main navigation' })).toHaveLength(2)
-    for (const label of ['Chats', 'Moments', 'Communities', 'Calls', 'You']) {
+    for (const label of ['Chats', 'Moments', 'Groups', 'Calls', 'You']) {
       expect(screen.getAllByRole('button', { name: label }).length).toBeGreaterThanOrEqual(2)
     }
   })
