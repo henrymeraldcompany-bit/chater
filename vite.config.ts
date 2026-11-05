@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -30,9 +30,5 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,woff2}']
       }
     })
-  ],
-  test: {
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts'
-  }
+  ]
 })
