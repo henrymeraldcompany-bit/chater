@@ -126,6 +126,34 @@ describe('Chater application shell', () => {
     expect(window.localStorage.getItem('chater:preferences:theme')).toBe('dark')
   })
 
+  it('offers chat wallpaper presets and updates the preview', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    const group = screen.getByRole('group', { name: 'Choose a chat wallpaper' })
+    expect(group).toBeInTheDocument()
+    const ocean = screen.getByRole('button', { name: 'Ocean' })
+    fireEvent.click(ocean)
+    expect(ocean).toHaveAttribute('aria-pressed', 'true')
+    expect(document.documentElement).toHaveAttribute('data-wallpaper', 'ocean')
+    expect(screen.getByLabelText('Chat wallpaper preview')).toHaveAttribute('data-wallpaper', 'ocean')
+    expect(window.localStorage.getItem('chater:preferences:wallpaper')).toBe('ocean')
+  })
+
+  it('restores the saved chat wallpaper preference on launch', () => {
+    window.localStorage.setItem('chater:preferences:wallpaper', 'aurora')
+    openApp()
+    expect(document.documentElement).toHaveAttribute('data-wallpaper', 'aurora')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    expect(screen.getByRole('button', { name: 'Aurora' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('falls back to the default wallpaper for an invalid saved value', () => {
+    window.localStorage.setItem('chater:preferences:wallpaper', 'unknown')
+    openApp()
+    expect(document.documentElement).toHaveAttribute('data-wallpaper', 'default')
+    expect(window.localStorage.getItem('chater:preferences:wallpaper')).toBe('default')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
