@@ -102,3 +102,40 @@ img,svg{max-width:100%}
 .custom-accent-controls input:focus{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 22%,transparent);outline-offset:1px}
 .custom-accent-controls .secondary-button{height:42px;padding:0 16px;white-space:nowrap}
 .custom-accent-notice{margin:9px 0 0;color:var(--accent);font-size:11px}
+
+
+/* Appearance themes */
+:root{--page:#101010;--panel:#191919;--panel-raised:#201f1d;--text:#f7f5f0;--text-strong:#fff;--text-muted:#96918a;--border:#302d28;--field:#1b1a18;--nav:#151514f5;--hover:#24211c;--dialog:#1c1a17;--selected:#0d3435;--selected-text:#9bffff}
+:root[data-theme="light"]{color-scheme:light;--page:#f5f6f8;--panel:#fff;--panel-raised:#eef1f4;--text:#252a31;--text-strong:#171b22;--text-muted:#68717d;--border:#dce1e7;--field:#fff;--nav:#ffffffed;--hover:#edf1f5;--dialog:#fff;--selected:#e5f7f7;--selected-text:#087f82;color:var(--text);background:var(--page)}
+:root[data-theme="dark"]{color-scheme:dark}
+body,.app-shell{background:var(--page);color:var(--text)}
+.topbar{background:color-mix(in srgb,var(--page) 94%,transparent);border-color:var(--border)}
+.mobile-brand,.rail-brand,.topbar-title strong,.page-heading h1,.profile-page>h1,.empty-state h2,.profile-card h2,.dialog-head h2{color:var(--text-strong)}
+.icon-button{color:var(--text)}
+.icon-button:hover,.rail-link:hover{background:var(--hover)}
+.search-box,.filter-button{background:var(--field);border-color:var(--border);color:var(--text-muted)}
+.search-box input{color:var(--text-strong)}
+.filter-chip{background:var(--panel);border-color:var(--border);color:var(--text-muted)}
+.filter-chip.selected,.rail-link.active{background:var(--selected);border-color:var(--accent);color:var(--selected-text)}
+.profile-card{background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--accent) 12%,var(--panel-raised)) 0%,var(--panel-raised) 48%,var(--panel) 100%);border-color:var(--border)}
+.profile-options,.settings-list{border-color:var(--border)}
+.profile-options button,.settings-list button{background:var(--panel);border-color:var(--border);color:var(--text)}
+.profile-options small,.rail-profile small{color:var(--text-muted)}
+.secondary-button{background:var(--panel-raised);border-color:var(--border);color:var(--accent)}
+.bottom-nav{background:var(--nav);border-color:var(--border)}
+.nav-item{color:var(--text-muted)}
+.dialog-card{background:var(--dialog);border-color:var(--border)}
+.dialog-copy,.subheading,.empty-description,.profile-about{color:var(--text-muted)}
+.dialog-backdrop{background:#0008}
+.desktop-rail{background:var(--panel);border-color:var(--border)}
+.rail-link{color:var(--text-muted)}
+.rail-profile{border-color:var(--border)}
+.theme-settings{padding:0 0 18px;margin:0 0 18px;border-bottom:1px solid var(--border)}
+.theme-select-label{display:block;font-size:11px;font-weight:700;color:var(--text);margin:13px 0 7px}
+.theme-select{width:100%;min-height:43px;padding:0 12px;border:1px solid var(--border);border-radius:11px;background:var(--field);color:var(--text);font:inherit;font-size:12px}
+.theme-select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+:root[data-theme="light"] .splash-screen{background:radial-gradient(ellipse at 50% 42%,#d9f5f5 0%,#edf5f6 42%,#f5f6f8 78%)}
+:root[data-theme="light"] .splash-screen p{color:#68717d}
+:root[data-theme="light"] .empty-icon{background:linear-gradient(145deg,#e5f7f7,#f5fbfb);border-color:var(--accent)}
+:root[data-theme="light"] .empty-orbit{border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+:root[data-theme="light"] .dialog-backdrop{background:#18212b66}
