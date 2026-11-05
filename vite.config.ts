@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  base: '/chater/',
   plugins: [
     react(),
     tailwindcss(),
@@ -11,22 +12,22 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/chater.svg'],
       manifest: {
-        id: '/',
+        id: './',
         name: 'Chater',
         short_name: 'Chater',
         description: 'Connect. Converse. Share.',
-        start_url: '/',
-        scope: '/',
+        start_url: './',
+        scope: './',
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#101010',
         theme_color: '#101010',
         icons: [
-          { src: '/icons/chater.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+          { src: 'icons/chater.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
         ]
       },
       workbox: {
-        navigateFallback: '/index.html',
+        navigateFallback: 'index.html',
         globPatterns: ['**/*.{js,css,html,svg,woff2}']
       }
     })
