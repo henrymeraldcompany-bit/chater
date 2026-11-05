@@ -194,6 +194,24 @@ describe('Chater application shell', () => {
     expect(screen.getAllByRole('button', { name: 'Chats' })[0]).not.toHaveAttribute('aria-current')
   })
 
+  it('validates account registration details without pretending to create an account', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Henry Example' } })
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'he' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Username must be 3–20 characters')
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'henry_cee' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Your details are valid')
+    expect(screen.getByRole('status')).toHaveTextContent('Account creation and email verification will be connected')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
