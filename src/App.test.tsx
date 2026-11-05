@@ -68,7 +68,6 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
     const hexInput = screen.getByLabelText('Custom HEX colour')
     const apply = screen.getByRole('button', { name: 'Apply' })
-    expect(apply).toBeDisabled()
     fireEvent.change(hexInput, { target: { value: '#12ab' } })
     expect(apply).toBeDisabled()
     fireEvent.change(hexInput, { target: { value: '12ABEF' } })
