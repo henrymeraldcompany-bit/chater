@@ -1,109 +1,71 @@
-import { useEffect, useState } from 'react'
-import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreVertical, Camera, CheckCheck } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Communities' | 'Calls' | 'You'
-
+type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
 const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
-  { label: 'Chats', icon: MessageCircle },
-  { label: 'Moments', icon: CirclePlay },
-  { label: 'Communities', icon: Users },
-  { label: 'Calls', icon: Phone },
-  { label: 'You', icon: UserRound }
+  { label: 'Chats', icon: MessageCircle }, { label: 'Moments', icon: CirclePlay },
+  { label: 'Communities', icon: Users }, { label: 'Calls', icon: Phone }, { label: 'You', icon: UserRound }
 ]
-
-const conversations = [
-  { name: 'Alex Morgan', message: 'Are we still meeting today?', time: '11:42', initials: 'AM', color: 'avatar-gold', unread: 2 },
-  { name: 'Family Circle', message: 'Mum: Good morning everyone ❤️', time: '10:15', initials: 'FC', color: 'avatar-rust', unread: 0 },
-  { name: 'Daniel Okafor', message: 'Voice message · 0:18', time: 'Yesterday', initials: 'DO', color: 'avatar-olive', unread: 0 },
-  { name: 'Project Team', message: 'You: The document is ready', time: 'Yesterday', initials: 'PT', color: 'avatar-blue', unread: 0 },
-  { name: 'Ada', message: 'Thank you!', time: 'Tuesday', initials: 'A', color: 'avatar-pink', unread: 0 }
-]
+const filters: Filter[] = ['All', 'Unread', 'Favorites', 'Groups']
 
 function SplashScreen() {
-  return (
-    <div className="splash-screen" aria-label="Chater from GOZIE">
-      <div className="splash-brand">
-        <img src="/icons/chater.svg" alt="Chater logo" />
-        <span>Chater</span>
-      </div>
-      <p>from <strong>GOZIE</strong></p>
-    </div>
-  )
+  return <div className="splash-screen" aria-label="Chater from GOZIE"><div className="splash-brand"><img src="/icons/chater.svg" alt="Chater logo"/><span>Chater</span></div><p>from <strong>GOZIE</strong></p></div>
+}
+function EmptyIllustration({ icon: Icon }: { icon: typeof MessageCircle }) {
+  return <div className="empty-art"><div className="empty-orbit orbit-one"/><div className="empty-orbit orbit-two"/><div className="empty-icon"><Icon size={34} strokeWidth={1.5}/></div><span className="sparkle sparkle-a">✦</span><span className="sparkle sparkle-b">✧</span></div>
 }
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('Chats')
+  const [filter, setFilter] = useState<Filter>('All')
   const [query, setQuery] = useState('')
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setShowSplash(false), 1500)
-    return () => window.clearTimeout(timer)
-  }, [])
-
-  const filtered = conversations.filter((chat) => chat.name.toLowerCase().includes(query.toLowerCase()))
-
+  const [dialog, setDialog] = useState<'new-chat' | 'search' | 'settings' | null>(null)
+  const [username, setUsername] = useState('')
+  useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 1500); return () => window.clearTimeout(timer) }, [])
+  const pageCopy = useMemo(() => ({
+    Moments: { eyebrow: 'LIFE IN LITTLE UPDATES', title: 'Moments', description: 'Share a little piece of your day. Moments disappear after 24 hours.', action: 'Share a Moment', icon: CirclePlay },
+    Communities: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Communities', description: 'Bring groups together around the people and things that matter.', action: 'Create a community', icon: Users },
+    Calls: { eyebrow: 'CLOSER, WHEREVER YOU ARE', title: 'Calls', description: 'Your voice and video call history will appear here.', action: 'Start a call', icon: Phone }
+  }), [])
   if (showSplash) return <SplashScreen />
-
-  return (
-    <main className="app-shell">
+  const openTab = (tab: Tab) => { setActiveTab(tab); setDialog(null) }
+  return <main className="app-shell">
+    <aside className="desktop-rail">
+      <div className="rail-brand"><img src="/icons/chater.svg" alt=""/><span>Chater</span></div>
+      <nav aria-label="Main navigation" className="rail-nav">{tabs.map(({label,icon:Icon}) => <button key={label} className={activeTab===label?'rail-link active':'rail-link'} onClick={()=>openTab(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
+      <div className="rail-bottom"><button className="rail-link" onClick={()=>setDialog('settings')}><Settings size={19}/><span>Settings</span></button><div className="rail-profile"><div className="profile-avatar">H</div><div><strong>Your profile</strong><small>Set up your account</small></div><MoreHorizontal size={18}/></div></div>
+    </aside>
+    <section className="main-column">
       <header className="topbar">
-        <div className="wordmark">Chater<span>.</span></div>
-        <div className="top-actions">
-          <button className="icon-button" aria-label="Open camera"><Camera size={21} /></button>
-          <button className="icon-button" aria-label="More options"><MoreVertical size={21} /></button>
-        </div>
+        <div className="mobile-brand"><img src="/icons/chater.svg" alt=""/><span>Chater</span></div>
+        <div className="topbar-title"><span className="eyebrow">CONNECT. CONVERSE. SHARE.</span><strong>{activeTab}</strong></div>
+        <div className="top-actions"><button className="icon-button" aria-label="Search" onClick={()=>setDialog('search')}><Search size={20}/></button><button className="icon-button" aria-label="Settings" onClick={()=>setDialog('settings')}><Settings size={19}/></button><button className="profile-avatar top-avatar" aria-label="Your profile" onClick={()=>openTab('You')}>H</button></div>
       </header>
+      <div className="content-wrap">
+        {activeTab==='Chats' && <>
+          <div className="page-heading"><div><p className="eyebrow">YOUR CONVERSATIONS</p><h1>Chats<span className="heading-dot">.</span></h1><p className="subheading">Your people are just a message away.</p></div><button className="primary-button desktop-new" onClick={()=>setDialog('new-chat')}><Plus size={17}/> New chat</button></div>
+          <div className="chat-toolbar"><label className="search-box"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search conversations or @username"/>{query&&<button aria-label="Clear search" onClick={()=>setQuery('')}><X size={15}/></button>}</label><button className="filter-button" aria-label="More filters"><SlidersHorizontal size={18}/></button></div>
+          <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
+          <div className="empty-state chat-empty"><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
+        </>}
+        {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Communities'&&<FeatureEmpty data={pageCopy.Communities} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='You'&&<ProfileScreen onSettings={()=>setDialog('settings')}/>}
+      </div>
+    </section>
+    <button className="compose-button" aria-label="Start a new chat" onClick={()=>setDialog('new-chat')}><Plus size={25}/></button>
+    <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
+    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='settings'?<div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button></div>:<><p className="dialog-copy">Search with someone's unique username. Their email address stays private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>setUsername(e.target.value.replace(/^@/,''))} placeholder="@username"/><button aria-label="Clear username" onClick={()=>setUsername('')}><X size={15}/></button></label><button className="primary-button dialog-action" onClick={()=>setDialog(null)} disabled={!username.trim()}><Search size={17}/> Search username</button></>}</section></div>}
+  </main>
+}
 
-      <section className="page-content">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">YOUR SPACE</p>
-            <h1>{activeTab}</h1>
-          </div>
-          <span className="online-indicator"><i /> Connected</span>
-        </div>
-
-        {activeTab === 'Chats' ? (
-          <>
-            <label className="search-box">
-              <Search size={19} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search chats or @username" />
-              <kbd>/</kbd>
-            </label>
-            <div className="filter-row"><span className="filter-active">All chats</span><span>Unread</span><span>Favorites</span><span>Groups</span></div>
-            <div className="chat-list">
-              {filtered.map((chat) => (
-                <button className="chat-row" key={chat.name} onClick={() => undefined}>
-                  <div className={`avatar ${chat.color}`}>{chat.initials}</div>
-                  <div className="chat-copy">
-                    <div className="chat-title"><strong>{chat.name}</strong><time>{chat.time}</time></div>
-                    <div className="chat-preview"><span><CheckCheck size={15} /> {chat.message}</span>{chat.unread > 0 && <b>{chat.unread}</b>}</div>
-                  </div>
-                </button>
-              ))}
-              {filtered.length === 0 && <p className="empty-state">No matching conversations. Search a username to find someone.</p>}
-            </div>
-          </>
-        ) : (
-          <div className="placeholder-panel">
-            <div className="placeholder-icon">{activeTab === 'Moments' ? <CirclePlay /> : activeTab === 'Communities' ? <Users /> : activeTab === 'Calls' ? <Phone /> : <UserRound />}</div>
-            <h2>{activeTab}</h2>
-            <p>This space is being prepared for Chater's {activeTab.toLowerCase()} experience.</p>
-          </div>
-        )}
-      </section>
-
-      <button className="compose-button" aria-label="Start a new chat"><Plus size={27} /></button>
-
-      <nav className="bottom-nav" aria-label="Main navigation">
-        {tabs.map(({ label, icon: Icon }) => (
-          <button key={label} className={activeTab === label ? 'nav-item active' : 'nav-item'} onClick={() => setActiveTab(label)}>
-            <Icon size={21} strokeWidth={activeTab === label ? 2.4 : 1.8} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </nav>
-    </main>
-  )
+function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;description:string;action:string;icon:typeof MessageCircle};onAction:()=>void}) {
+  const Icon=data.icon
+  return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
+}
+function ProfileScreen({onSettings}:{onSettings:()=>void}) {
+  return <div className="profile-page"><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card"><div className="profile-avatar large">H</div><h2>Your name</h2><p className="profile-handle">@yourusername</p><p className="profile-about">Add a little about yourself.</p><button className="secondary-button" onClick={onSettings}><Settings size={16}/> Profile settings</button></div><div className="profile-options"><button onClick={onSettings}><ShieldCheck/><span><strong>Privacy and security</strong><small>Choose who can reach you</small></span><ChevronRight/></button><button onClick={onSettings}><Bell/><span><strong>Notifications</strong><small>Make Chater yours</small></span><ChevronRight/></button><button onClick={onSettings}><HelpCircle/><span><strong>Help and support</strong><small>We're here to help</small></span><ChevronRight/></button></div></div>
 }
