@@ -154,6 +154,34 @@ describe('Chater application shell', () => {
     expect(window.localStorage.getItem('chater:preferences:wallpaper')).toBe('default')
   })
 
+  it('offers message bubble styles and updates the preview', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    const group = screen.getByRole('group', { name: 'Choose a message bubble style' })
+    expect(group).toBeInTheDocument()
+    const soft = screen.getByRole('button', { name: 'Soft' })
+    fireEvent.click(soft)
+    expect(soft).toHaveAttribute('aria-pressed', 'true')
+    expect(document.documentElement).toHaveAttribute('data-bubble-style', 'soft')
+    expect(screen.getByLabelText('Message bubble preview')).toHaveAttribute('data-bubble-style', 'soft')
+    expect(window.localStorage.getItem('chater:preferences:bubble-style')).toBe('soft')
+  })
+
+  it('restores the saved message bubble style on launch', () => {
+    window.localStorage.setItem('chater:preferences:bubble-style', 'square')
+    openApp()
+    expect(document.documentElement).toHaveAttribute('data-bubble-style', 'square')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    expect(screen.getByRole('button', { name: 'Square' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('falls back to rounded message bubbles for an invalid saved value', () => {
+    window.localStorage.setItem('chater:preferences:bubble-style', 'unknown')
+    openApp()
+    expect(document.documentElement).toHaveAttribute('data-bubble-style', 'rounded')
+    expect(window.localStorage.getItem('chater:preferences:bubble-style')).toBe('rounded')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
