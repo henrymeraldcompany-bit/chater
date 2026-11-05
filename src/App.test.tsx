@@ -1,6 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth'
 import App from './App'
+
+vi.mock('firebase/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('firebase/auth')>()
+  return {
+    ...actual,
+    getAuth: vi.fn(() => ({})),
+    onAuthStateChanged: vi.fn((_auth, callback) => { callback(null); return vi.fn() }),
+    createUserWithEmailAndPassword: vi.fn(),
+    sendEmailVerification: vi.fn(),
+    updateProfile: vi.fn(),
+    signOut: vi.fn()
+  }
+})
+
+vi.mock('firebase/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('firebase/storage')>()
+  return { ...actual, getStorage: vi.fn(() => ({})), ref: vi.fn(), uploadBytes: vi.fn(), getDownloadURL: vi.fn() }
+})
 
 afterEach(() => {
   cleanup()
@@ -194,7 +213,12 @@ describe('Chater application shell', () => {
     expect(screen.getAllByRole('button', { name: 'Chats' })[0]).not.toHaveAttribute('aria-current')
   })
 
-  it('validates account registration details without pretending to create an account', () => {
+  it('validates registration details and creates a Firebase account for valid details', async () => {
+    vi.mocked(createUserWithEmailAndPassword).mockResolvedValue({
+      user: { uid: 'test-user', email: 'henry@example.com', displayName: 'Henry Example', photoURL: null, emailVerified: false }
+    } as never)
+    vi.mocked(updateProfile).mockResolvedValue(undefined)
+    vi.mocked(sendEmailVerification).mockResolvedValue(undefined)
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
@@ -208,8 +232,10 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Username must be 3–20 characters')
     fireEvent.change(screen.getByPlaceholderText('yourusername'), { target: { value: 'henry_cee' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Your details are valid')
-    expect(screen.getByRole('status')).toHaveTextContent('Account creation and email verification will be connected')
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your account has been created'))
+    expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(expect.anything(), 'henry@example.com', 'password123')
+    expect(updateProfile).toHaveBeenCalled()
+    expect(sendEmailVerification).toHaveBeenCalled()
   })
 
   it('switches to the Moments screen from bottom navigation', () => {
