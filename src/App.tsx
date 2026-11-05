@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, sendEmailVerification, signOut, updateProfile, type User } from 'firebase/auth'
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage'
+import { firebaseApp } from './lib/firebase'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
@@ -74,6 +77,16 @@ function EmptyIllustration({ icon: Icon }: { icon: typeof MessageCircle }) {
   return <div className="empty-art"><div className="empty-orbit orbit-one"/><div className="empty-orbit orbit-two"/><div className="empty-icon"><Icon size={34} strokeWidth={1.5}/></div><span className="sparkle sparkle-a">✦</span><span className="sparkle sparkle-b">✧</span></div>
 }
 
+const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
+const firebaseStorage = firebaseApp ? getStorage(firebaseApp) : null
+
+function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
+  const initial = displayName?.trim().charAt(0).toUpperCase()
+  return <span className={`profile-avatar ${className}`} aria-label={displayName ? `${displayName} profile picture` : 'Default profile picture'}>
+    {photoURL ? <img src={photoURL} alt="" /> : initial || <UserRound size={20} />}
+  </span>
+}
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('Chats')
@@ -88,6 +101,15 @@ export default function App() {
   const [registrationPassword, setRegistrationPassword] = useState('')
   const [registrationConfirm, setRegistrationConfirm] = useState('')
   const [registrationNotice, setRegistrationNotice] = useState('')
+  const [registrationBusy, setRegistrationBusy] = useState(false)
+  const [registrationPhoto, setRegistrationPhoto] = useState<File | null>(null)
+  const [registrationPhotoPreview, setRegistrationPhotoPreview] = useState('')
+  const [authUser, setAuthUser] = useState<User | null>(null)
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
+  const [profileUsername, setProfileUsername] = useState('')
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoNotice, setPhotoNotice] = useState('')
+  const [authLoading, setAuthLoading] = useState(true)
   const [accent, setAccent] = useState(readSavedAccent)
   const [theme, setTheme] = useState<ThemePreference>(readSavedTheme)
   const [wallpaper, setWallpaper] = useState<Wallpaper>(readSavedWallpaper)
@@ -126,6 +148,41 @@ export default function App() {
     try { window.localStorage.setItem(WALLPAPER_STORAGE_KEY, wallpaper) } catch { /* Wallpaper remains active for this session. */ }
   }, [wallpaper])
   useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 600); return () => window.clearTimeout(timer) }, [])
+  useEffect(() => {
+    if (!firebaseAuth) { setAuthLoading(false); return }
+    return onAuthStateChanged(firebaseAuth, user => {
+      setAuthUser(user)
+      setProfilePhotoUrl(user?.photoURL || '')
+      setProfileUsername(user ? window.localStorage.getItem(`chater:profile:username:${user.uid}`) || '' : '')
+      setAuthLoading(false)
+    })
+  }, [])
+  useEffect(() => () => {
+    if (registrationPhotoPreview) URL.revokeObjectURL(registrationPhotoPreview)
+  }, [registrationPhotoPreview])
+  const uploadPhotoForUser = async (user: User, file: File) => {
+    if (!firebaseStorage) throw new Error('Firebase Storage is not available yet. Enable Storage in your Firebase project and try again.')
+    if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
+    if (file.size > 5 * 1024 * 1024) throw new Error('Your profile picture must be 5 MB or smaller.')
+    const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+    const imageRef = ref(firebaseStorage, `profilePictures/${user.uid}/avatar-${Date.now()}.${extension}`)
+    await uploadBytes(imageRef, file, { contentType: file.type })
+    const photoURL = await getDownloadURL(imageRef)
+    await updateProfile(user, { photoURL })
+    setProfilePhotoUrl(photoURL)
+    return photoURL
+  }
+  const handleProfilePhotoUpload = async (file: File) => {
+    if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
+    setPhotoBusy(true)
+    setPhotoNotice('')
+    try {
+      await uploadPhotoForUser(authUser, file)
+      setPhotoNotice('Your profile picture has been updated.')
+    } catch (error) {
+      setPhotoNotice(error instanceof Error ? error.message : 'The picture could not be uploaded. Please try again.')
+    } finally { setPhotoBusy(false) }
+  }
   const pageCopy = useMemo(() => ({
     Moments: { eyebrow: 'LIFE IN LITTLE UPDATES', title: 'Moments', description: 'Share a little piece of your day. Moments disappear after 24 hours.', action: 'Share a Moment', icon: CirclePlay },
     Groups: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Groups', description: 'Create group chats, bring people together, and share with everyone in the group.', action: 'Create a group', icon: Users },
@@ -138,13 +195,13 @@ export default function App() {
     <aside className="desktop-rail">
       <div className="rail-brand"><BrandLogo className="brand-logo" /><span>Chater</span></div>
       <nav aria-label="Main navigation" className="rail-nav">{tabs.map(({label,icon:Icon}) => <button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'rail-link active':'rail-link'} onClick={()=>openTab(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
-      <div className="rail-bottom"><button className="rail-link" onClick={()=>setDialog('settings')}><Settings size={19}/><span>Settings</span></button><div className="rail-profile"><div className="profile-avatar">H</div><div><strong>Your profile</strong><small>Set up your account</small></div><MoreHorizontal size={18}/></div></div>
+      <div className="rail-bottom"><button className="rail-link" onClick={()=>setDialog('settings')}><Settings size={19}/><span>Settings</span></button><div className="rail-profile"><ProfileAvatar photoURL={profilePhotoUrl} displayName={authUser?.displayName}/><div><strong>{authUser?.displayName || 'Your profile'}</strong><small>{authUser ? 'Chater account' : 'Set up your account'}</small></div><MoreHorizontal size={18}/></div></div>
     </aside>
     <section className="main-column" id="main-content" tabIndex={-1}>
       <header className="topbar">
         <div className="mobile-brand"><BrandLogo className="brand-logo" /><span>Chater</span></div>
         <div className="topbar-title"><span className="eyebrow">CONNECT. CONVERSE. SHARE.</span><strong>{activeTab}</strong></div>
-        <div className="top-actions"><button className="icon-button" aria-label="Search" onClick={()=>setDialog('search')}><Search size={20}/></button><button className="icon-button" aria-label="Settings" onClick={()=>setDialog('settings')}><Settings size={19}/></button><button className="profile-avatar top-avatar" aria-label="Your profile" onClick={()=>openTab('You')}>H</button></div>
+        <div className="top-actions"><button className="icon-button" aria-label="Search" onClick={()=>setDialog('search')}><Search size={20}/></button><button className="icon-button" aria-label="Settings" onClick={()=>setDialog('settings')}><Settings size={19}/></button><button className="avatar-button" aria-label="Your profile" onClick={()=>openTab('You')}><ProfileAvatar className="top-avatar" photoURL={profilePhotoUrl} displayName={authUser?.displayName}/></button></div>
       </header>
       <div className="content-wrap">
         {activeTab==='Chats' && <>
@@ -156,12 +213,66 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}}/>}
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onSignOut={async()=>{if(firebaseAuth)await signOut(firebaseAuth)}}/>}
       </div>
     </section>
     <button className="compose-button" aria-label="Start a new chat" onClick={()=>setDialog('new-chat')}><Plus size={25}/></button>
     <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
-    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value)}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={7} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button></div><p className="dialog-copy">Account and privacy controls will be connected in a later implementation task.</p></>:dialog==='register'?<form className="registration-form" onSubmit={e=>{e.preventDefault();const validUsername=/^[a-z0-9_]{3,20}$/.test(registrationUsername);if(!validUsername){setRegistrationNotice('Username must be 3–20 characters using lowercase letters, numbers or underscores.');return}if(registrationPassword.length<8){setRegistrationNotice('Choose a password with at least 8 characters.');return}if(registrationPassword!==registrationConfirm){setRegistrationNotice('Your passwords do not match.');return}setRegistrationNotice('Your details are valid. Account creation and email verification will be connected in the next authentication tasks.')}}><p className="dialog-copy">Create a Chater identity. Your email stays private; your username is how people can find you.</p><label>Full name<input required autoComplete="name" value={registrationName} onChange={e=>setRegistrationName(e.target.value)} placeholder="Your name" maxLength={60}/></label><label>Email address<input required type="email" autoComplete="email" value={registrationEmail} onChange={e=>setRegistrationEmail(e.target.value)} placeholder="you@example.com"/></label><label>Username<input required autoComplete="username" value={registrationUsername} onChange={e=>{setRegistrationUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''));setRegistrationNotice('')}} placeholder="yourusername" maxLength={20}/><small>3–20 characters: lowercase letters, numbers and underscores.</small></label><label>Password<input required type="password" autoComplete="new-password" value={registrationPassword} onChange={e=>{setRegistrationPassword(e.target.value);setRegistrationNotice('')}} minLength={8} placeholder="At least 8 characters"/></label><label>Confirm password<input required type="password" autoComplete="new-password" value={registrationConfirm} onChange={e=>{setRegistrationConfirm(e.target.value);setRegistrationNotice('')}} minLength={8} placeholder="Enter your password again"/></label><button className="primary-button dialog-action" type="submit">Continue</button>{registrationNotice&&<p className="dialog-notice" role="status">{registrationNotice}</p>}<p className="registration-footnote">Email verification will be required when account services are connected.</p></form>:<><p className="dialog-copy">Search with someone's unique username. Their email address stays private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="@username"/><button aria-label="Clear username" onClick={()=>setUsername('')}><X size={15}/></button></label><button className="primary-button dialog-action" onClick={()=>setSearchNotice('Username discovery will be connected when account and discovery services are implemented.')} disabled={!username.trim()}><Search size={17}/> Search username</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
+    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value)}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={7} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button></div><p className="dialog-copy">Account and privacy controls will be connected in a later implementation task.</p></>:dialog==='register'?<form className="registration-form" onSubmit={async e=>{
+      e.preventDefault()
+      setRegistrationNotice('')
+      const validUsername=/^[a-z0-9_]{3,20}$/.test(registrationUsername)
+      if(!validUsername){setRegistrationNotice('Username must be 3–20 characters using lowercase letters, numbers or underscores.');return}
+      if(registrationPassword.length<8){setRegistrationNotice('Choose a password with at least 8 characters.');return}
+      if(registrationPassword!==registrationConfirm){setRegistrationNotice('Your passwords do not match.');return}
+      if(!firebaseAuth){setRegistrationNotice('Firebase is not configured correctly. Please try again later.');return}
+      setRegistrationBusy(true)
+      try {
+        const credential = await createUserWithEmailAndPassword(firebaseAuth, registrationEmail.trim(), registrationPassword)
+        await updateProfile(credential.user, { displayName: registrationName.trim() })
+        window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, registrationUsername)
+        setProfileUsername(registrationUsername)
+        let photoWarning = ''
+        if(registrationPhoto){
+          try { await uploadPhotoForUser(credential.user, registrationPhoto) }
+          catch(error){ photoWarning = error instanceof Error ? ` Your account was created, but the picture was not uploaded: ${error.message}` : ' Your account was created, but the picture could not be uploaded.' }
+        }
+        try { await sendEmailVerification(credential.user) }
+        catch { photoWarning += ' The verification email could not be sent right now; you can request it again later.' }
+        setRegistrationPassword('')
+        setRegistrationConfirm('')
+        setRegistrationPhoto(null)
+        setRegistrationPhotoPreview('')
+        setRegistrationNotice(`Your account has been created. Check ${registrationEmail.trim()} for the verification email.${photoWarning}`)
+      } catch(error) {
+        const code = (error as {code?: string})?.code
+        const messages: Record<string,string> = {
+          'auth/email-already-in-use':'An account already exists with this email address. Try signing in instead.',
+          'auth/invalid-email':'Enter a valid email address.',
+          'auth/weak-password':'Choose a stronger password with at least 8 characters.',
+          'auth/operation-not-allowed':'Email/Password sign-up is not enabled yet. In Firebase Console, open Authentication → Sign-in method and enable Email/Password.',
+          'auth/unauthorized-domain':'This website domain is not authorized. Add henrymeraldcompany-bit.github.io under Firebase Authentication → Settings → Authorized domains.',
+          'auth/network-request-failed':'Network connection failed. Check your internet connection and try again.',
+          'auth/too-many-requests':'Too many attempts. Wait a little and try again.'
+        }
+        setRegistrationNotice(messages[code || ''] || (error instanceof Error ? error.message : 'Account creation failed. Please try again.'))
+      } finally { setRegistrationBusy(false) }
+    }}>
+      <p className="dialog-copy">Create a Chater identity. Your email stays private; your username is how people can find you.</p>
+      <div className="registration-photo-row">
+        <ProfileAvatar className="registration-avatar" photoURL={registrationPhotoPreview} displayName={registrationName}/>
+        <label className="photo-picker-button">{registrationPhoto ? 'Change picture' : 'Add profile picture'}<input type="file" accept="image/*" onChange={e=>{const file=e.target.files?.[0];if(file){if(!file.type.startsWith('image/')){setRegistrationNotice('Choose an image file.');return}if(file.size>5*1024*1024){setRegistrationNotice('Your profile picture must be 5 MB or smaller.');return}setRegistrationPhoto(file);setRegistrationPhotoPreview(URL.createObjectURL(file));setRegistrationNotice('')}}}/></label>
+        <small>Optional · JPG, PNG or WebP · up to 5 MB</small>
+      </div>
+      <label>Full name<input required autoComplete="name" value={registrationName} onChange={e=>setRegistrationName(e.target.value)} placeholder="Your name" maxLength={60}/></label>
+      <label>Email address<input required type="email" autoComplete="email" value={registrationEmail} onChange={e=>setRegistrationEmail(e.target.value)} placeholder="you@example.com"/></label>
+      <label>Username<input required autoComplete="username" value={registrationUsername} onChange={e=>{setRegistrationUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''));setRegistrationNotice('')}} placeholder="yourusername" maxLength={20}/><small>3–20 characters: lowercase letters, numbers and underscores.</small></label>
+      <label>Password<input required type="password" autoComplete="new-password" value={registrationPassword} onChange={e=>{setRegistrationPassword(e.target.value);setRegistrationNotice('')}} minLength={8} placeholder="At least 8 characters"/></label>
+      <label>Confirm password<input required type="password" autoComplete="new-password" value={registrationConfirm} onChange={e=>{setRegistrationConfirm(e.target.value);setRegistrationNotice('')}} minLength={8} placeholder="Enter your password again"/></label>
+      <button className="primary-button dialog-action" type="submit" disabled={registrationBusy}>{registrationBusy ? 'Creating account…' : 'Continue'}</button>
+      {registrationNotice&&<p className="dialog-notice" role="status">{registrationNotice}</p>}
+      <p className="registration-footnote">A verification email will be sent after account creation. You can change your profile picture later.</p>
+    </form>:<><p className="dialog-copy">Search with someone's unique username. Their email address stays private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="@username"/><button aria-label="Clear username" onClick={()=>setUsername('')}><X size={15}/></button></label><button className="primary-button dialog-action" onClick={()=>setSearchNotice('Username discovery will be connected when account and discovery services are implemented.')} disabled={!username.trim()}><Search size={17}/> Search username</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
   </main>
 }
 
@@ -169,6 +280,20 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   const Icon=data.icon
   return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
 }
-function ProfileScreen({onSettings,onRegister}:{onSettings:()=>void;onRegister:()=>void}) {
-  return <div className="profile-page"><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card"><div className="profile-avatar large">H</div><h2>Your name</h2><p className="profile-handle">@yourusername</p><p className="profile-about">Add a little about yourself.</p><button className="primary-button" onClick={onRegister}>Create account</button><button className="secondary-button" onClick={onSettings}><Settings size={16}/> Profile settings</button></div><div className="profile-options"><button onClick={onSettings}><ShieldCheck/><span><strong>Privacy and security</strong><small>Choose who can reach you</small></span><ChevronRight/></button><button onClick={onSettings}><Bell/><span><strong>Notifications</strong><small>Make Chater yours</small></span><ChevronRight/></button><button onClick={onSettings}><HelpCircle/><span><strong>Help and support</strong><small>We're here to help</small></span><ChevronRight/></button></div></div>
+function ProfileScreen({user,photoURL,username,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onSignOut}:{user:User|null;photoURL:string;username:string;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onSignOut:()=>void}) {
+  return <div className="profile-page"><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
+    <ProfileAvatar className="large" photoURL={photoURL} displayName={user?.displayName}/>
+    <h2>{user?.displayName || 'Your name'}</h2>
+    <p className="profile-handle">{user ? (username ? `@${username}` : user.email) : '@yourusername'}</p>
+    <p className="profile-about">{user ? (user.emailVerified ? 'Email verified' : 'Please verify your email address.') : 'Add a little about yourself.'}</p>
+    {user ? <>
+      <label className="photo-picker-button profile-photo-picker">{photoBusy ? 'Uploading picture…' : 'Add / change profile picture'}<input type="file" accept="image/*" disabled={photoBusy} onChange={e=>{const file=e.target.files?.[0];if(file)onPhotoUpload(file);e.currentTarget.value=''}}/></label>
+      {photoNotice&&<p className="dialog-notice profile-photo-notice" role="status">{photoNotice}</p>}
+      <button className="secondary-button profile-settings-button" onClick={onSettings}><Settings size={16}/> Profile settings</button>
+      <button className="text-button profile-signout" onClick={onSignOut}>Sign out</button>
+    </> : <>
+      <button className="primary-button profile-create-button" onClick={onRegister}>Create account</button>
+      <button className="secondary-button profile-settings-button" onClick={onSettings}><Settings size={16}/> Profile settings</button>
+    </>}
+  </div><div className="profile-options"><button onClick={onSettings}><ShieldCheck/><span><strong>Privacy and security</strong><small>Choose who can reach you</small></span><ChevronRight/></button><button onClick={onSettings}><Bell/><span><strong>Notifications</strong><small>Make Chater yours</small></span><ChevronRight/></button><button onClick={onSettings}><HelpCircle/><span><strong>Help and support</strong><small>We're here to help</small></span><ChevronRight/></button></div></div>
 }
