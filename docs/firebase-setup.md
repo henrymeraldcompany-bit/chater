@@ -26,3 +26,18 @@ These are Firebase client configuration values, not Admin SDK credentials. They 
 ## Important next step
 
 Confirm in the Firebase Console that the project `chater-8f834` has the Cloud Firestore database created in the intended location, and that Email/Password Authentication is enabled when Task 32 begins. Do not weaken Firestore or Storage rules to make the frontend work.
+
+## Profile picture storage rules
+
+Chater uploads profile pictures to `profilePictures/{userId}/`. To enable uploads safely:
+
+1. In Firebase Console, open **Build → Storage** and create/enable the project's Storage bucket.
+2. Open the **Rules** tab.
+3. Replace the rules with the contents of the repository's `storage.rules` file.
+4. Publish the rules.
+
+The rules allow signed-in users to read profile pictures and allow each user to upload only to their own folder. Uploads must be image files under 5 MB. Do not use public write access.
+
+## Email registration prerequisites
+
+In Firebase Console, open **Build → Authentication → Sign-in method** and enable **Email/Password**. Under Authentication settings, add `henrymeraldcompany-bit.github.io` to **Authorized domains**. If either is missing, Chater will show a specific error when registration is attempted.
