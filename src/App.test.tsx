@@ -19,6 +19,16 @@ describe('Chater application shell', () => {
     render(<App />)
     expect(screen.getByLabelText('Chater from GOZIE')).toBeInTheDocument()
     expect(screen.getByText('GOZIE')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Chater logo' })).toHaveAttribute('src', expect.stringContaining('icons/chater.svg'))
+  })
+
+  it('uses the original Chater logo in both responsive app headers', () => {
+    openApp()
+    const logos = screen.getAllByRole('img', { name: 'Chater logo' })
+    expect(logos).toHaveLength(2)
+    for (const logo of logos) {
+      expect(logo).toHaveAttribute('src', expect.stringContaining('icons/chater.svg'))
+    }
   })
 
   it('shows all five primary navigation destinations after the splash', () => {
