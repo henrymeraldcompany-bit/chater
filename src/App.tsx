@@ -10,7 +10,7 @@ const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
 const filters: Filter[] = ['All', 'Unread', 'Favorites', 'Groups']
 
 function SplashScreen() {
-  return <div className="splash-screen" aria-label="Chater from GOZIE"><div className="splash-brand"><img src="/icons/chater.svg" alt="Chater logo"/><span>Chater</span></div><p>from <strong>GOZIE</strong></p></div>
+  return <div className="splash-screen" aria-label="Chater from GOZIE"><div className="splash-brand"><img src={`${import.meta.env.BASE_URL}icons/chater.svg`} alt="Chater logo"/><span>Chater</span></div><p>from <strong>GOZIE</strong></p></div>
 }
 function EmptyIllustration({ icon: Icon }: { icon: typeof MessageCircle }) {
   return <div className="empty-art"><div className="empty-orbit orbit-one"/><div className="empty-orbit orbit-two"/><div className="empty-icon"><Icon size={34} strokeWidth={1.5}/></div><span className="sparkle sparkle-a">✦</span><span className="sparkle sparkle-b">✧</span></div>
@@ -34,13 +34,13 @@ export default function App() {
   const openTab = (tab: Tab) => { setActiveTab(tab); setDialog(null) }
   return <main className="app-shell">
     <aside className="desktop-rail">
-      <div className="rail-brand"><img src="/icons/chater.svg" alt=""/><span>Chater</span></div>
+      <div className="rail-brand"><img src={`${import.meta.env.BASE_URL}icons/chater.svg`} alt=""/><span>Chater</span></div>
       <nav aria-label="Main navigation" className="rail-nav">{tabs.map(({label,icon:Icon}) => <button key={label} className={activeTab===label?'rail-link active':'rail-link'} onClick={()=>openTab(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
       <div className="rail-bottom"><button className="rail-link" onClick={()=>setDialog('settings')}><Settings size={19}/><span>Settings</span></button><div className="rail-profile"><div className="profile-avatar">H</div><div><strong>Your profile</strong><small>Set up your account</small></div><MoreHorizontal size={18}/></div></div>
     </aside>
     <section className="main-column">
       <header className="topbar">
-        <div className="mobile-brand"><img src="/icons/chater.svg" alt=""/><span>Chater</span></div>
+        <div className="mobile-brand"><img src={`${import.meta.env.BASE_URL}icons/chater.svg`} alt=""/><span>Chater</span></div>
         <div className="topbar-title"><span className="eyebrow">CONNECT. CONVERSE. SHARE.</span><strong>{activeTab}</strong></div>
         <div className="top-actions"><button className="icon-button" aria-label="Search" onClick={()=>setDialog('search')}><Search size={20}/></button><button className="icon-button" aria-label="Settings" onClick={()=>setDialog('settings')}><Settings size={19}/></button><button className="profile-avatar top-avatar" aria-label="Your profile" onClick={()=>openTab('You')}>H</button></div>
       </header>
