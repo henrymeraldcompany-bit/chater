@@ -182,6 +182,18 @@ describe('Chater application shell', () => {
     expect(window.localStorage.getItem('chater:preferences:bubble-style')).toBe('rounded')
   })
 
+  it('provides a keyboard skip link and marks the active navigation destination', () => {
+    openApp()
+    const skipLink = screen.getByRole('link', { name: 'Skip to main content' })
+    expect(skipLink).toHaveAttribute('href', '#main-content')
+    expect(document.getElementById('main-content')).toHaveAttribute('tabindex', '-1')
+    const chats = screen.getAllByRole('button', { name: 'Chats' })
+    expect(chats[0]).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Groups' })[0])
+    expect(screen.getAllByRole('button', { name: 'Groups' })[0]).toHaveAttribute('aria-current', 'page')
+    expect(screen.getAllByRole('button', { name: 'Chats' })[0]).not.toHaveAttribute('aria-current')
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
