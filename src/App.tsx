@@ -20,6 +20,16 @@ const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
   { label: 'Groups', icon: Users }, { label: 'Calls', icon: Phone }, { label: 'You', icon: UserRound }
 ]
 const filters: Filter[] = ['All', 'Unread', 'Favorites', 'Groups']
+const ACCENT_STORAGE_KEY = 'chater:preferences:accent'
+const isValidHexAccent = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value)
+function readSavedAccent(): string {
+  try {
+    const saved = window.localStorage.getItem(ACCENT_STORAGE_KEY)
+    return saved && isValidHexAccent(saved) ? saved.toLowerCase() : accentPresets[0].value
+  } catch {
+    return accentPresets[0].value
+  }
+}
 
 function BrandLogo({ className }: { className: string }) {
   return <img className={className} src={`${import.meta.env.BASE_URL}icons/chater.svg`} alt="Chater logo" />
@@ -40,7 +50,7 @@ export default function App() {
   const [dialog, setDialog] = useState<'new-chat' | 'search' | 'settings' | null>(null)
   const [username, setUsername] = useState('')
   const [searchNotice, setSearchNotice] = useState('')
-  const [accent, setAccent] = useState(accentPresets[0].value)
+  const [accent, setAccent] = useState(readSavedAccent)
   const [customHex, setCustomHex] = useState('#00fdff')
   const [customHexNotice, setCustomHexNotice] = useState('')
   const normalizedCustomHex = /^#?[0-9a-fA-F]{6}$/.test(customHex.trim()) ? (customHex.trim().startsWith('#') ? customHex.trim() : `#${customHex.trim()}`) : ''
