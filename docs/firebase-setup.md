@@ -1,24 +1,28 @@
 # Firebase project setup
 
-This repository contains the Firebase Web SDK and a safe, optional app initializer. A real Firebase project must still be created in the owner's Firebase Console; repository access cannot create or configure resources inside a Google account.
+Chater's Firebase Web configuration is connected in `src/lib/firebase.ts` for the project `chater-8f834`.
 
-## Create the project
+## Connected web app
 
-1. Open https://console.firebase.google.com/ and sign in with the Google account that will own Chater's Firebase project.
-2. Select **Add project** and name it **Chater** (or another name you choose).
-3. Complete the project creation flow. Google Analytics is optional for this milestone.
-4. In Project settings, add a **Web app** named **Chater Web**.
-5. Copy the web app's Firebase configuration values.
-6. In the repository's deployment environment, provide the six `VITE_FIREBASE_*` values listed in `.env.example`. For local development, copy that file to `.env.local` and fill it in.
-7. Do not commit `.env.local`, service-account JSON, Admin SDK credentials, or private keys. The Firebase web config is intended for client apps; security must be enforced by Firebase Security Rules and trusted backend code.
+- **Project ID:** `chater-8f834`
+- **Auth domain:** `chater-8f834.firebaseapp.com`
+- **Storage bucket:** `chater-8f834.firebasestorage.app`
+- **Messaging sender ID:** `980191020906`
+- **Web app ID:** `1:980191020906:web:697cd47ff87bd6bb624713`
+- **Analytics measurement ID:** `G-N36H678CMD`
+
+The six required Firebase web configuration values are embedded as client-side configuration so the GitHub Pages build can initialize Firebase without repository Actions secrets. The Analytics measurement ID is also configured; Analytics initializes only when Firebase reports browser support.
+
+These are Firebase client configuration values, not Admin SDK credentials. They are visible to visitors in any web app that uses Firebase. Do not add service-account JSON, Admin SDK credentials, or private keys to frontend code, Vite variables, or this repository. Protect data with Firebase Authentication and restrictive Firestore/Storage Security Rules, and apply suitable API-key restrictions in Google Cloud.
 
 ## Current code behavior
 
-- `src/lib/firebase.ts` initializes the Firebase app only when all six web configuration values are present.
-- Without configuration, the app continues to build and run as a frontend preview; Firebase-dependent features must remain unavailable rather than pretending to work.
+- `src/lib/firebase.ts` initializes the Firebase app using the supplied Chater Web configuration.
+- Optional `VITE_FIREBASE_*` variables can override the built-in values for local development; see `.env.example`.
+- Firebase Analytics is initialized only in browsers supported by the Analytics SDK.
 - Authentication providers and sign-in flows are deliberately left for roadmap Task 32.
-- Firestore, Storage, and other services must be enabled and secured in later tasks before use.
+- Firestore, Storage, and other services must be enabled and secured before the app uses them.
 
-## Deployment note
+## Important next step
 
-GitHub Pages builds need the six `VITE_FIREBASE_*` values configured as repository Actions variables (or secrets where appropriate) and explicitly passed into the build workflow. Do not place service-account credentials in Vite variables.
+Confirm in the Firebase Console that the project `chater-8f834` has the Cloud Firestore database created in the intended location, and that Email/Password Authentication is enabled when Task 32 begins. Do not weaken Firestore or Storage rules to make the frontend work.
