@@ -364,6 +364,7 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
 }
 function ProfileScreen({user,photoURL,username,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
+  const [confirmSignOut,setConfirmSignOut] = useState(false)
   return <div className="profile-page">
     <style>{`.profile-avatar-wrap{position:relative;width:max-content;margin:0 auto 1rem}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
     <div className="profile-avatar-wrap">
@@ -375,11 +376,12 @@ function ProfileScreen({user,photoURL,username,onPhotoUpload,photoBusy,photoNoti
     </div>
     <h2>{user?.displayName || 'Your name'}</h2>
     <p className="profile-handle">{user ? (username ? `@${username}` : user.email) : '@yourusername'}</p>
-    <p className="profile-about">{user ? (user.emailVerified ? 'Email verified' : 'Please verify your email address.') : 'Add a little about yourself.'}</p>
+    {(!user || !user.emailVerified) && <p className="profile-about">{user ? 'Please verify your email address.' : 'Add a little about yourself.'}</p>}
     {user ? <>
       {photoNotice&&<p className="dialog-notice profile-photo-notice" role="alert">{photoNotice}</p>}
       <button className="secondary-button profile-settings-button" onClick={onSettings}><Settings size={16}/> Profile settings</button>
-      <button className="text-button profile-signout" onClick={onSignOut}>Sign out</button>
+      <button className="text-button profile-signout" onClick={()=>setConfirmSignOut(true)}>Sign out</button>
+      {confirmSignOut && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setConfirmSignOut(false)}}><section className="dialog-card" role="alertdialog" aria-modal="true" aria-labelledby="signout-title" aria-describedby="signout-description"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="signout-title">Sign out?</h2></div><button className="icon-button" aria-label="Close confirmation" onClick={()=>setConfirmSignOut(false)}><X size={18}/></button></div><p className="dialog-copy" id="signout-description">Are you sure you want to sign out of your account?</p><div className="dialog-actions"><button className="secondary-button" onClick={()=>setConfirmSignOut(false)}>Cancel</button><button className="primary-button" onClick={onSignOut}>Yes, sign out</button></div></section></div>}
     </> : <>
       <button className="primary-button profile-create-button" onClick={onRegister}>Create account</button>
       <button className="secondary-button profile-settings-button" onClick={onLogin}>Sign in</button>
