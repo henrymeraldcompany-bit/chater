@@ -274,7 +274,7 @@ describe('Chater application shell', () => {
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
-    await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
     fireEvent.change(screen.getByLabelText('Add or change profile picture'), { target: { files: [file] } })
@@ -303,12 +303,36 @@ describe('Chater application shell', () => {
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
-    await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
     fireEvent.change(screen.getByLabelText('Add or change profile picture'), { target: { files: [file] } })
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Upload preset is not allowed'))
     expect(screen.getByLabelText('Add or change profile picture')).toBeEnabled()
+  })
+
+  it('does not show an email verified label and asks for confirmation before signing out', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(signOut).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
+    expect(screen.queryByText('Email verified')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    expect(signOut).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(signOut).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, sign out' }))
+    await waitFor(() => expect(signOut).toHaveBeenCalled())
   })
 
   it('switches to the Moments screen from bottom navigation', () => {
