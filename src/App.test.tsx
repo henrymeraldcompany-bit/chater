@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
 import App from './App'
 
 vi.mock('firebase/auth', async (importOriginal) => {
@@ -14,6 +14,7 @@ vi.mock('firebase/auth', async (importOriginal) => {
     reload: vi.fn(),
     signOut: vi.fn(),
     sendEmailVerification: vi.fn(),
+    sendPasswordResetEmail: vi.fn(),
     updateProfile: vi.fn()
   }
 })
@@ -297,6 +298,33 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('A new verification email has been sent'))
     expect(sendEmailVerification).toHaveBeenCalledTimes(2)
     expect(signOut).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends a password reset email and gives inbox and spam-folder guidance', async () => {
+    vi.mocked(sendPasswordResetEmail).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }))
+    expect(screen.getByRole('heading', { name: 'Reset your password' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('If an account exists for this email address'))
+    expect(screen.getByRole('status')).toHaveTextContent('Spam or Junk folder')
+    expect(sendPasswordResetEmail).toHaveBeenCalledWith(expect.anything(), 'henry@example.com')
+    expect(screen.getByRole('button', { name: 'Back to sign in' })).toBeInTheDocument()
+  })
+
+  it('shows a useful message when password reset is rate limited', async () => {
+    vi.mocked(sendPasswordResetEmail).mockRejectedValue({ code: 'auth/too-many-requests' })
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Too many attempts'))
+    expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1)
   })
 
   it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
