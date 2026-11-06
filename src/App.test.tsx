@@ -18,14 +18,10 @@ vi.mock('firebase/auth', async (importOriginal) => {
   }
 })
 
-vi.mock('firebase/storage', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('firebase/storage')>()
-  return { ...actual, getStorage: vi.fn(() => ({})), ref: vi.fn(), uploadBytes: vi.fn(), getDownloadURL: vi.fn() }
-})
-
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   window.localStorage.clear()
 })
 
