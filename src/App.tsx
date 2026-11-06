@@ -268,7 +268,24 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{if(firebaseAuth)await signOut(firebaseAuth)}}/>}
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
+          if(!firebaseAuth)return
+          try {
+            await signOut(firebaseAuth)
+            setAuthUser(null)
+            setProfilePhotoUrl('')
+            setProfileUsername('')
+            setPhotoNotice('')
+            setLoginPassword('')
+            setLoginNotice('')
+            setConfirmSignOut(false)
+            const savedAccent=readSavedAccent()
+            setAccent(savedAccent)
+            setCustomHex(savedAccent)
+          } catch {
+            setPhotoNotice('We could not sign you out. Check your connection and try again.')
+          }
+        }}/>}
       </div>
     </section>
     <button className="compose-button" aria-label="Start a new chat" onClick={()=>setDialog('new-chat')}><Plus size={25}/></button>
