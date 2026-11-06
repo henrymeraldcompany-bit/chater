@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, reload, sendEmailVerification, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
+import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, reload, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage'
 import { firebaseApp } from './lib/firebase'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
@@ -253,6 +253,7 @@ export default function App() {
       registrationInProgress.current = true
       try {
         const credential = await createUserWithEmailAndPassword(firebaseAuth, registrationEmail.trim(), registrationPassword)
+        await updateProfile(credential.user, { displayName: registrationName.trim() })
         try { window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, registrationUsername) } catch { /* Username can be entered again after sign-in. */ }
         await sendEmailVerification(credential.user)
         await signOut(firebaseAuth)
@@ -299,7 +300,7 @@ export default function App() {
       <button className="primary-button dialog-action" type="submit" disabled={registrationBusy}>{registrationBusy ? 'Creating account…' : 'Continue'}</button>
       {registrationNotice&&<p className="dialog-notice" role="status">{registrationNotice}</p>}
       <p className="registration-footnote">After verifying your email, return to Chater and sign in. Add your profile picture after signing in.</p>
-    </form>dialog==='login'?<form className="registration-form" onSubmit={async e=>{
+    </form>:dialog==='login'?<form className="registration-form" onSubmit={async e=>{
       e.preventDefault()
       setLoginNotice('')
       if(!firebaseAuth){setLoginNotice('Firebase is not configured correctly. Please try again later.');return}
@@ -309,8 +310,9 @@ export default function App() {
         const credential = await signInWithEmailAndPassword(firebaseAuth, loginEmail.trim(), loginPassword)
         await reload(credential.user)
         if (!credential.user.emailVerified) {
+          await sendEmailVerification(credential.user).catch(() => undefined)
           await signOut(firebaseAuth)
-          setLoginNotice('Your email is not verified yet. Open the verification email, tap its link, then return here and sign in again.')
+          setLoginNotice('Your email is not verified yet. We have sent another verification email if possible. Open its link, then return here and sign in again.')
           return
         }
         setAuthUser(credential.user)
