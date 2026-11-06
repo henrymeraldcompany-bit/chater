@@ -30,6 +30,7 @@ function openApp() {
   vi.useFakeTimers()
   render(<App />)
   act(() => { vi.advanceTimersByTime(1500) })
+  vi.useRealTimers()
 }
 
 describe('Chater application shell', () => {
