@@ -107,6 +107,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginNotice, setLoginNotice] = useState('')
   const [loginBusy, setLoginBusy] = useState(false)
+  const [verificationResendBusy, setVerificationResendBusy] = useState(false)
   const registrationInProgress = useRef(false)
   const loginInProgress = useRef(false)
   const [authUser, setAuthUser] = useState<User | null>(null)
@@ -367,6 +368,33 @@ export default function App() {
       <label>Password<input required type="password" autoComplete="current-password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="Your password"/></label>
       <button className="primary-button dialog-action" type="submit" disabled={loginBusy}>{loginBusy ? 'Checking account…' : 'Sign in'}</button>
       {loginNotice&&<p className="dialog-notice" role="status">{loginNotice}</p>}
+      {loginNotice.includes('not verified yet')&&<button className="secondary-button dialog-action" type="button" disabled={verificationResendBusy||loginBusy} onClick={async()=>{
+        if(!firebaseAuth){setLoginNotice('Firebase is not configured correctly. Please try again later.');return}
+        if(!loginEmail.trim()||!loginPassword){setLoginNotice('Enter your email address and password first so we can safely resend your verification email.');return}
+        setVerificationResendBusy(true)
+        loginInProgress.current=true
+        let pendingUser: User | null=null
+        try {
+          const credential=await signInWithEmailAndPassword(firebaseAuth,loginEmail.trim(),loginPassword)
+          pendingUser=credential.user
+          await reload(pendingUser)
+          if(pendingUser.emailVerified){
+            await signOut(firebaseAuth)
+            setLoginNotice('Your email is now verified. You can sign in normally.')
+          } else {
+            await sendEmailVerification(pendingUser)
+            await signOut(firebaseAuth)
+            setLoginNotice('A new verification email has been sent. Check your inbox and Spam or Junk folder, open the link, then return here to sign in.')
+          }
+        } catch(error) {
+          if(pendingUser&&firebaseAuth.currentUser) await signOut(firebaseAuth).catch(()=>undefined)
+          const code=(error as {code?:string})?.code
+          setLoginNotice(code==='auth/too-many-requests'?'Too many attempts. Wait a little before requesting another email.':code==='auth/network-request-failed'?'Network connection failed. Check your internet connection and try again.':error instanceof Error?error.message:'We could not resend the verification email. Please try again.')
+        } finally {
+          loginInProgress.current=false
+          setVerificationResendBusy(false)
+        }
+      }}>{verificationResendBusy?'Sending verification email…':'Resend verification email'}</button>}
       <button className="text-button" type="button" onClick={()=>{setRegistrationNotice('');setDialog('register')}}>Create a new account</button>
     </form>:<><p className="dialog-copy">Search with someone's unique username. Their email address stays private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="@username"/><button aria-label="Clear username" onClick={()=>setUsername('')}><X size={15}/></button></label><button className="primary-button dialog-action" onClick={()=>setSearchNotice('Username discovery will be connected when account and discovery services are implemented.')} disabled={!username.trim()}><Search size={17}/> Search username</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
   </main>
