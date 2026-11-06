@@ -280,6 +280,26 @@ describe('Chater application shell', () => {
     expect(sendEmailVerification).toHaveBeenCalled()
   })
 
+  it('rejects a username already reserved by another Chater account', async () => {
+    const user = { uid: 'duplicate-user', email: 'duplicate@example.com', emailVerified: false, photoURL: null, displayName: 'Duplicate User' }
+    vi.mocked(createUserWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(runTransaction).mockRejectedValueOnce(Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' }))
+    vi.mocked(deleteUser).mockResolvedValue(undefined)
+    vi.mocked(signOut).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Duplicate User' } })
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'duplicate@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('yourusername'), { target: { value: 'taken_name' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('That username is already taken'))
+    expect(deleteUser).toHaveBeenCalledWith(user)
+    expect(sendEmailVerification).not.toHaveBeenCalled()
+  })
+
   it('blocks unverified sign-in, resends verification, and keeps the user signed out', async () => {
     const user = { uid: 'pending-user', email: 'pending@example.com', emailVerified: false, photoURL: null, displayName: 'Pending User' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
