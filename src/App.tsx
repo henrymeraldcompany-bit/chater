@@ -56,9 +56,10 @@ function readSavedTheme(): ThemePreference {
   } catch { return 'dark' }
 }
 const isValidHexAccent = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value)
-function readSavedAccent(): string {
+function readSavedAccent(userId?: string | null): string {
   try {
-    const saved = window.localStorage.getItem(ACCENT_STORAGE_KEY)
+    const storageKey = userId ? `${ACCENT_STORAGE_KEY}:${userId}` : ACCENT_STORAGE_KEY
+    const saved = window.localStorage.getItem(storageKey)
     return saved && isValidHexAccent(saved) ? saved.toLowerCase() : accentPresets[0].value
   } catch {
     return accentPresets[0].value
@@ -126,8 +127,11 @@ export default function App() {
     document.documentElement.style.setProperty('--accent-soft', `${accent}22`)
   }, [accent])
   useEffect(() => {
-    try { window.localStorage.setItem(ACCENT_STORAGE_KEY, accent) } catch { /* Accent remains active for this session. */ }
-  }, [accent])
+    try {
+      const storageKey = authUser?.uid ? `${ACCENT_STORAGE_KEY}:${authUser.uid}` : ACCENT_STORAGE_KEY
+      window.localStorage.setItem(storageKey, accent)
+    } catch { /* Accent remains active for this session. */ }
+  }, [accent, authUser?.uid])
   useEffect(() => {
     const root = document.documentElement
     let media: MediaQueryList | undefined
@@ -157,6 +161,9 @@ export default function App() {
       if (registrationInProgress.current || loginInProgress.current) return
       if (!user) {
         setAuthUser(null)
+        const savedAccent = readSavedAccent()
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl('')
         setProfileUsername('')
         return
@@ -170,6 +177,9 @@ export default function App() {
           return
         }
         setAuthUser(user)
+        const savedAccent = readSavedAccent(user.uid)
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl(user.photoURL || '')
         setProfileUsername(window.localStorage.getItem(`chater:profile:username:${user.uid}`) || '')
       } catch {
@@ -330,6 +340,9 @@ export default function App() {
           return
         }
         setAuthUser(credential.user)
+        const savedAccent = readSavedAccent(credential.user.uid)
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl(credential.user.photoURL || '')
         setProfileUsername(window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || '')
         setLoginPassword('')
