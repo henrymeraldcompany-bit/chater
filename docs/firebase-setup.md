@@ -27,16 +27,17 @@ These are Firebase client configuration values, not Admin SDK credentials. They 
 
 Confirm in the Firebase Console that the project `chater-8f834` has the Cloud Firestore database created in the intended location, and that Email/Password Authentication is enabled when Task 32 begins. Do not weaken Firestore or Storage rules to make the frontend work.
 
-## Profile picture storage rules
+## Profile picture uploads (Cloudinary)
 
-Chater uploads profile pictures to `profilePictures/{userId}/`. To enable uploads safely:
+Chater stores profile-picture image files in Cloudinary using an unsigned upload preset. Firebase Authentication remains responsible for accounts and sign-in; the resulting Cloudinary secure URL is saved to the signed-in Firebase user's `photoURL`.
 
-1. In Firebase Console, open **Build → Storage** and create/enable the project's Storage bucket.
-2. Open the **Rules** tab.
-3. Replace the rules with the contents of the repository's `storage.rules` file.
-4. Publish the rules.
+- **Cloud name:** `amzak6nf`
+- **Unsigned upload preset:** `chater_profiles`
+- **Upload endpoint:** `https://api.cloudinary.com/v1_1/amzak6nf/image/upload`
+- **Client-side validation:** image files only, maximum 5 MB.
+- **Folder:** `chater/profiles/{firebase-user-uid}`
 
-The rules allow signed-in users to read profile pictures and allow each user to upload only to their own folder. Uploads must be image files under 5 MB. Do not use public write access.
+The cloud name and unsigned preset name are public client-side configuration. Never put a Cloudinary API secret in frontend code or this repository. The upload preset must remain **Unsigned** for browser uploads. Firebase Storage is not required for Chater profile-picture uploads.
 
 ## Email registration prerequisites
 
