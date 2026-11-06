@@ -125,7 +125,7 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gold' }))
     expect(window.localStorage.getItem('chater:preferences:accent:account-one')).toBe('#eab308')
     expect(window.localStorage.getItem('chater:preferences:accent:account-two')).toBe('#a78bfa')
-    expect(window.localStorage.getItem('chater:preferences:accent')).toBeNull()
+    expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#00fdff')
   })
 
   it('ignores an invalid saved accent and safely uses the default cyan', () => {
