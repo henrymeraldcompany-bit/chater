@@ -259,7 +259,7 @@ export default function App() {
         setRegistrationConfirm('')
         setLoginEmail(registrationEmail.trim())
         setLoginPassword('')
-        setLoginNotice(`Your account has been created. We sent a verification link to ${registrationEmail.trim()}. Open that email, verify your address, then return here and sign in.`)
+        setLoginNotice(`Your account has been created. We sent a verification link to ${registrationEmail.trim()}. Check your inbox and, if you cannot find it, check your Spam or Junk folder. Open the link to verify your email, then return here and sign in.`)
         setDialog('login')
       } catch(error) {
         const code = (error as {code?: string})?.code
@@ -287,7 +287,7 @@ export default function App() {
       <label>Confirm password<input required type="password" autoComplete="new-password" value={registrationConfirm} onChange={e=>{setRegistrationConfirm(e.target.value);setRegistrationNotice('')}} minLength={8} placeholder="Enter your password again"/></label>
       <button className="primary-button dialog-action" type="submit" disabled={registrationBusy}>{registrationBusy ? 'Creating account…' : 'Continue'}</button>
       {registrationNotice&&<p className="dialog-notice" role="status">{registrationNotice}</p>}
-      <p className="registration-footnote">After verifying your email, return to Chater and sign in. Add your profile picture after signing in.</p>
+      <p className="registration-footnote">After creating your account, check your inbox for the verification email. If it is missing, check your Spam or Junk folder. Verify your email, then return to Chater and sign in. Add your profile picture after signing in.</p>
     </form>:dialog==='login'?<form className="registration-form" onSubmit={async e=>{
       e.preventDefault()
       setLoginNotice('')
@@ -300,7 +300,7 @@ export default function App() {
         if (!credential.user.emailVerified) {
           await sendEmailVerification(credential.user).catch(() => undefined)
           await signOut(firebaseAuth)
-          setLoginNotice('Your email is not verified yet. We have sent another verification email if possible. Open its link, then return here and sign in again.')
+          setLoginNotice('Your email is not verified yet. We have sent another verification email if possible. Check your inbox and Spam or Junk folder, open the verification link, then return here and sign in again.')
           return
         }
         setAuthUser(credential.user)
@@ -323,7 +323,7 @@ export default function App() {
         setLoginBusy(false)
       }
     }}>
-      <p className="dialog-copy">Sign in only after confirming your email address. Chater checks verification before opening your account.</p>
+      <p className="dialog-copy">Sign in only after confirming your email address. If you are waiting for a verification email, check your inbox and Spam or Junk folder. Chater checks verification before opening your account.</p>
       <label>Email address<input required type="email" autoComplete="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} placeholder="you@example.com"/></label>
       <label>Password<input required type="password" autoComplete="current-password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder="Your password"/></label>
       <button className="primary-button dialog-action" type="submit" disabled={loginBusy}>{loginBusy ? 'Checking account…' : 'Sign in'}</button>
