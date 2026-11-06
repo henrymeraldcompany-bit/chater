@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
 import App from './App'
@@ -17,6 +17,10 @@ vi.mock('firebase/auth', async (importOriginal) => {
     sendPasswordResetEmail: vi.fn(),
     updateProfile: vi.fn()
   }
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
 afterEach(() => {
