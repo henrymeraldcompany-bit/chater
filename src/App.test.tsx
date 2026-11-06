@@ -373,6 +373,9 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     fireEvent.click(screen.getByRole('button', { name: 'Yes, sign out' }))
     await waitFor(() => expect(signOut).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.queryByText('Henry Example')).not.toBeInTheDocument()
   })
 
   it('switches to the Moments screen from bottom navigation', () => {
