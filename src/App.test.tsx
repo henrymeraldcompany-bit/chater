@@ -14,8 +14,7 @@ vi.mock('firebase/auth', async (importOriginal) => {
     reload: vi.fn(),
     signOut: vi.fn(),
     sendEmailVerification: vi.fn(),
-    updateProfile: vi.fn(),
-    signOut: vi.fn()
+    updateProfile: vi.fn()
   }
 })
 
