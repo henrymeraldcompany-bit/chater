@@ -277,8 +277,9 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
-    fireEvent.change(screen.getByLabelText('Add / change profile picture'), { target: { files: [file] } })
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your profile picture has been updated.'))
+    fireEvent.change(screen.getByLabelText('Add or change profile picture'), { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByRole('img', { name: '' })).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/profiles/test-user/avatar.png'))
+    expect(screen.queryByText('Your profile picture has been updated.')).not.toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       'https://api.cloudinary.com/v1_1/amzak6nf/image/upload',
       expect.objectContaining({ method: 'POST' })
@@ -305,9 +306,9 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
-    fireEvent.change(screen.getByLabelText('Add / change profile picture'), { target: { files: [file] } })
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Upload preset is not allowed'))
-    expect(screen.getByLabelText('Add / change profile picture')).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('Add or change profile picture'), { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Upload preset is not allowed'))
+    expect(screen.getByLabelText('Add or change profile picture')).toBeEnabled()
   })
 
   it('switches to the Moments screen from bottom navigation', () => {
