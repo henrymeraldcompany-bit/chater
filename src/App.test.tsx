@@ -280,6 +280,25 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('lets an unverified user explicitly request another verification email', async () => {
+    const user = { uid: 'pending-user', email: 'pending@example.com', emailVerified: false, photoURL: null, displayName: 'Pending User' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(sendEmailVerification).mockResolvedValue(undefined)
+    vi.mocked(signOut).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'pending@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resend verification email' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('A new verification email has been sent'))
+    expect(sendEmailVerification).toHaveBeenCalledTimes(2)
+    expect(signOut).toHaveBeenCalledTimes(2)
+  })
+
   it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
