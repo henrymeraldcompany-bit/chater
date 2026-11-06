@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
-import { firebaseApp } from './lib/firebase'
+import { firebaseApp, firestoreDb } from './lib/firebase'
+import { deleteDoc, doc, runTransaction, serverTimestamp } from 'firebase/firestore'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
@@ -303,6 +304,22 @@ export default function App() {
       registrationInProgress.current = true
       try {
         const credential = await createUserWithEmailAndPassword(firebaseAuth, registrationEmail.trim(), registrationPassword)
+        if (!firestoreDb) throw new Error('Chater could not connect to the username service. Please try again later.')
+        const usernameRef = doc(firestoreDb, 'usernames', registrationUsername)
+        const userProfileRef = doc(firestoreDb, 'users', credential.user.uid)
+        try {
+          await runTransaction(firestoreDb, async transaction => {
+            const usernameSnapshot = await transaction.get(usernameRef)
+            if (usernameSnapshot.exists()) {
+              throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
+            }
+            transaction.set(usernameRef, { uid: credential.user.uid, username: registrationUsername, createdAt: serverTimestamp() })
+            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, displayName: registrationName.trim(), createdAt: serverTimestamp() }, { merge: true })
+          })
+        } catch (reservationError) {
+          await deleteDoc(userProfileRef).catch(() => undefined)
+          throw reservationError
+        }
         await updateProfile(credential.user, { displayName: registrationName.trim() })
         try { window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, registrationUsername) } catch { /* Username can be entered again after sign-in. */ }
         await sendEmailVerification(credential.user)
@@ -320,6 +337,7 @@ export default function App() {
         const code = (error as {code?: string})?.code
         const messages: Record<string,string> = {
           'auth/email-already-in-use':'An account already exists with this email address. Try signing in instead.',
+          'chater/username-taken':'That username is already taken. Choose another username.',
           'auth/invalid-email':'Enter a valid email address.',
           'auth/weak-password':'Choose a stronger password with at least 8 characters.',
           'auth/operation-not-allowed':'Email/Password sign-up is not enabled yet. In Firebase Console, open Authentication → Sign-in method and enable Email/Password.',
