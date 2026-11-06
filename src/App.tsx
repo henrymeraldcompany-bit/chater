@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, reload, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
-import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage'
 import { firebaseApp } from './lib/firebase'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
@@ -78,7 +77,8 @@ function EmptyIllustration({ icon: Icon }: { icon: typeof MessageCircle }) {
 }
 
 const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
-const firebaseStorage = firebaseApp ? getStorage(firebaseApp) : null
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'amzak6nf'
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'chater_profiles'
 
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
@@ -179,16 +179,43 @@ export default function App() {
     })
   }, [])
   const uploadPhotoForUser = async (user: User, file: File) => {
-    if (!firebaseStorage) throw new Error('Firebase Storage is not available yet. Enable Storage in your Firebase project and try again.')
+    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+      throw new Error('Profile picture uploads are not configured yet. Please try again later.')
+    }
     if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
     if (file.size > 5 * 1024 * 1024) throw new Error('Your profile picture must be 5 MB or smaller.')
-    const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
-    const imageRef = ref(firebaseStorage, `profilePictures/${user.uid}/avatar-${Date.now()}.${extension}`)
-    await uploadBytes(imageRef, file, { contentType: file.type })
-    const photoURL = await getDownloadURL(imageRef)
-    await updateProfile(user, { photoURL })
-    setProfilePhotoUrl(photoURL)
-    return photoURL
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
+    formData.append('folder', `chater/profiles/${user.uid}`)
+
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 45000)
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: 'POST', body: formData, signal: controller.signal }
+      )
+      const result = await response.json().catch(() => ({})) as {
+        secure_url?: string
+        error?: { message?: string }
+      }
+      if (!response.ok || !result.secure_url) {
+        throw new Error(result.error?.message || 'Cloudinary could not upload this picture. Please try again.')
+      }
+      const photoURL = result.secure_url
+      await updateProfile(user, { photoURL })
+      setProfilePhotoUrl(photoURL)
+      return photoURL
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('The upload took too long. Check your connection and try again.')
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timeout)
+    }
   }
   const handleProfilePhotoUpload = async (file: File) => {
     if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
