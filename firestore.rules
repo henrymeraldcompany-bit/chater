@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /usernames/{username} {
+      // Usernames are public identifiers; reads support availability checks.
+      allow read: if true;
+      // A username can be created once and permanently belongs to its owner.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == username
+        && username.matches('^[a-z0-9_]{3,20}$');
+      // Renaming and releasing usernames are handled in a later secured task.
+      allow update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[a-z0-9_]{3,20}$');
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+  }
+}
