@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
+import { createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { deleteDoc, doc, runTransaction, serverTimestamp } from 'firebase/firestore'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
@@ -318,6 +318,7 @@ export default function App() {
           })
         } catch (reservationError) {
           await deleteDoc(userProfileRef).catch(() => undefined)
+          await deleteUser(credential.user).catch(() => undefined)
           throw reservationError
         }
         await updateProfile(credential.user, { displayName: registrationName.trim() })
