@@ -280,7 +280,6 @@ export default function App() {
             setPhotoNotice('')
             setLoginPassword('')
             setLoginNotice('')
-            setConfirmSignOut(false)
             const savedAccent=readSavedAccent()
             setAccent(savedAccent)
             setCustomHex(savedAccent)
