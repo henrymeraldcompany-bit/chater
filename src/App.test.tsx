@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
 import App from './App'
 
 vi.mock('firebase/auth', async (importOriginal) => {
@@ -10,6 +10,9 @@ vi.mock('firebase/auth', async (importOriginal) => {
     getAuth: vi.fn(() => ({})),
     onAuthStateChanged: vi.fn((_auth: unknown, callback: (user: null) => void) => { callback(null); return vi.fn() }),
     createUserWithEmailAndPassword: vi.fn(),
+    signInWithEmailAndPassword: vi.fn(),
+    reload: vi.fn(),
+    signOut: vi.fn(),
     sendEmailVerification: vi.fn(),
     updateProfile: vi.fn(),
     signOut: vi.fn()
@@ -218,6 +221,7 @@ describe('Chater application shell', () => {
       user: { uid: 'test-user', email: 'henry@example.com', displayName: 'Henry Example', photoURL: null, emailVerified: false }
     } as never)
     vi.mocked(updateProfile).mockResolvedValue(undefined)
+    vi.mocked(signOut).mockResolvedValue(undefined)
     vi.mocked(sendEmailVerification).mockResolvedValue(undefined)
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
@@ -233,9 +237,29 @@ describe('Chater application shell', () => {
     fireEvent.change(screen.getByPlaceholderText('yourusername'), { target: { value: 'henry_cee' } })
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your account has been created'))
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(signOut).toHaveBeenCalled()
     expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(expect.anything(), 'henry@example.com', 'password123')
     expect(updateProfile).toHaveBeenCalled()
     expect(sendEmailVerification).toHaveBeenCalled()
+  })
+
+  it('blocks unverified sign-in, resends verification, and keeps the user signed out', async () => {
+    const user = { uid: 'pending-user', email: 'pending@example.com', emailVerified: false, photoURL: null, displayName: 'Pending User' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(sendEmailVerification).mockResolvedValue(undefined)
+    vi.mocked(signOut).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'pending@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your email is not verified yet'))
+    expect(sendEmailVerification).toHaveBeenCalledWith(user)
+    expect(signOut).toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('switches to the Moments screen from bottom navigation', () => {
