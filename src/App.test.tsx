@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
 import App from './App'
 
@@ -251,7 +251,7 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'pending@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your email is not verified yet'))
     expect(screen.getByRole('status')).toHaveTextContent('Spam or Junk folder')
     expect(sendEmailVerification).toHaveBeenCalledWith(user)
