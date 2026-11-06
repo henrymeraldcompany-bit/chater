@@ -263,6 +263,57 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(updateProfile).mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ secure_url: 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/profiles/test-user/avatar.png' })
+    }))
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
+
+    const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
+    fireEvent.change(screen.getByLabelText('Add / change profile picture'), { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your profile picture has been updated.'))
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.cloudinary.com/v1_1/amzak6nf/image/upload',
+      expect.objectContaining({ method: 'POST' })
+    )
+    expect(updateProfile).toHaveBeenCalledWith(user, {
+      photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/profiles/test-user/avatar.png'
+    })
+  })
+
+  it('shows a clear Cloudinary upload error and resets the uploading state', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: { message: 'Upload preset is not allowed' } })
+    }))
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
+
+    const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
+    fireEvent.change(screen.getByLabelText('Add / change profile picture'), { target: { files: [file] } })
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Upload preset is not allowed'))
+    expect(screen.getByLabelText('Add / change profile picture')).toBeEnabled()
+  })
+
   it('switches to the Moments screen from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
