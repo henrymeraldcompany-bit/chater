@@ -273,7 +273,7 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
@@ -301,7 +301,7 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(screen.getByText('Email verified')).toBeInTheDocument())
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
