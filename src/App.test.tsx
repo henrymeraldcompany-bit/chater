@@ -107,6 +107,27 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('loads and saves accent colours separately for each signed-in account', async () => {
+    const user = { uid: 'account-one', email: 'one@example.com', emailVerified: true, photoURL: null, displayName: 'Account One' }
+    window.localStorage.setItem('chater:preferences:accent:account-one', '#f59e0b')
+    window.localStorage.setItem('chater:preferences:accent:account-two', '#a78bfa')
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'one@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Account One' })).toBeInTheDocument())
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#f59e0b')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Gold' }))
+    expect(window.localStorage.getItem('chater:preferences:accent:account-one')).toBe('#eab308')
+    expect(window.localStorage.getItem('chater:preferences:accent:account-two')).toBe('#a78bfa')
+    expect(window.localStorage.getItem('chater:preferences:accent')).toBeNull()
+  })
+
   it('ignores an invalid saved accent and safely uses the default cyan', () => {
     window.localStorage.setItem('chater:preferences:accent', 'not-a-colour')
     openApp()
