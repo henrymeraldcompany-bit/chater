@@ -108,8 +108,6 @@ export default function App() {
   const [loginBusy, setLoginBusy] = useState(false)
   const registrationInProgress = useRef(false)
   const loginInProgress = useRef(false)
-  const [registrationPhoto, setRegistrationPhoto] = useState<File | null>(null)
-  const [registrationPhotoPreview, setRegistrationPhotoPreview] = useState('')
   const [authUser, setAuthUser] = useState<User | null>(null)
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
   const [profileUsername, setProfileUsername] = useState('')
@@ -180,9 +178,6 @@ export default function App() {
       }
     })
   }, [])
-  useEffect(() => () => {
-    if (registrationPhotoPreview) URL.revokeObjectURL(registrationPhotoPreview)
-  }, [registrationPhotoPreview])
   const uploadPhotoForUser = async (user: User, file: File) => {
     if (!firebaseStorage) throw new Error('Firebase Storage is not available yet. Enable Storage in your Firebase project and try again.')
     if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
@@ -262,8 +257,6 @@ export default function App() {
         setProfileUsername('')
         setRegistrationPassword('')
         setRegistrationConfirm('')
-        setRegistrationPhoto(null)
-        setRegistrationPhotoPreview('')
         setLoginEmail(registrationEmail.trim())
         setLoginPassword('')
         setLoginNotice(`Your account has been created. We sent a verification link to ${registrationEmail.trim()}. Open that email, verify your address, then return here and sign in.`)
@@ -287,11 +280,6 @@ export default function App() {
       }
     }}>
       <p className="dialog-copy">Create a Chater identity. Your email stays private; your username is how people can find you.</p>
-      <div className="registration-photo-row">
-        <ProfileAvatar className="registration-avatar" photoURL={registrationPhotoPreview} displayName={registrationName}/>
-        <label className="photo-picker-button">{registrationPhoto ? 'Change picture' : 'Add profile picture'}<input type="file" accept="image/*" onChange={e=>{const file=e.target.files?.[0];if(file){if(!file.type.startsWith('image/')){setRegistrationNotice('Choose an image file.');return}if(file.size>5*1024*1024){setRegistrationNotice('Your profile picture must be 5 MB or smaller.');return}setRegistrationPhoto(file);setRegistrationPhotoPreview(URL.createObjectURL(file));setRegistrationNotice('')}}}/></label>
-        <small>Optional · JPG, PNG or WebP · up to 5 MB</small>
-      </div>
       <label>Full name<input required autoComplete="name" value={registrationName} onChange={e=>setRegistrationName(e.target.value)} placeholder="Your name" maxLength={60}/></label>
       <label>Email address<input required type="email" autoComplete="email" value={registrationEmail} onChange={e=>setRegistrationEmail(e.target.value)} placeholder="you@example.com"/></label>
       <label>Username<input required autoComplete="username" value={registrationUsername} onChange={e=>{setRegistrationUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''));setRegistrationNotice('')}} placeholder="yourusername" maxLength={20}/><small>3–20 characters: lowercase letters, numbers and underscores.</small></label>
