@@ -1,7 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
+import { runTransaction } from 'firebase/firestore'
 import App from './App'
+
+vi.mock('firebase/firestore', () => ({
+  getFirestore: vi.fn(() => ({})),
+  doc: vi.fn((...parts: unknown[]) => ({ parts })),
+  serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
+  deleteDoc: vi.fn(async () => undefined),
+  runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean }>; set: (...args: unknown[]) => void }) => Promise<void>) => callback({
+    get: vi.fn(async () => ({ exists: () => false })),
+    set: vi.fn()
+  }))
+}))
 
 vi.mock('firebase/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('firebase/auth')>()
