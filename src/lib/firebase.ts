@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app'
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics'
+import { getFirestore, type Firestore } from 'firebase/firestore'
 
 // Firebase Web configuration for the Chater project.
 // These client-side identifiers are intended to be included in the web app.
@@ -32,6 +33,8 @@ export const firebaseApp: FirebaseApp | null = isFirebaseConfigured
     ? getApp()
     : initializeApp(firebaseConfig)
   : null
+
+export const firestoreDb: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null
 
 // Analytics is optional and is enabled only in browsers supported by Firebase.
 const app = firebaseApp
