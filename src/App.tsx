@@ -269,9 +269,10 @@ export default function App() {
     if (normalized.length < 2 || normalized.length > 50) throw new Error('Your profile name must be 2–50 characters.')
     if (normalized === (authUser.displayName || '')) return
     await updateProfile(authUser, { displayName: normalized })
-    if (firestoreDb) {
-      await runTransaction(firestoreDb, async transaction => {
-        transaction.set(doc(firestoreDb, 'users', authUser.uid), {
+    const db = firestoreDb
+    if (db) {
+      await runTransaction(db, async transaction => {
+        transaction.set(doc(db, 'users', authUser.uid), {
           uid: authUser.uid, username: profileUsername, displayName: normalized, updatedAt: serverTimestamp()
         }, { merge: true })
       })
