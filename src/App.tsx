@@ -203,8 +203,12 @@ export default function App() {
         setProfileUsername(resolvedUsername)
         if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${user.uid}`, resolvedUsername)
       } catch {
-        setAuthUser(null)
-        await signOut(firebaseAuth).catch(() => undefined)
+        // Keep the authenticated session if only the Firestore profile lookup is denied.
+        setAuthUser(user)
+        setProfilePhotoUrl(user.photoURL || '')
+        setProfileDetails(emptyProfileDetails)
+        const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
+        setProfileUsername(localUsername)
       }
     })
   }, [])
