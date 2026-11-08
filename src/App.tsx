@@ -6,6 +6,8 @@ import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreH
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
+type ProfileDetails = { about: string; location: string; occupation: string }
+const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
 const accentPresets = [
   { name: 'Cyan', value: '#00fdff' },
   { name: 'Ocean blue', value: '#3b82f6' },
@@ -116,6 +118,7 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null)
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
   const [profileUsername, setProfileUsername] = useState('')
+  const [profileDetails, setProfileDetails] = useState<ProfileDetails>(emptyProfileDetails)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoNotice, setPhotoNotice] = useState('')
   const [accent, setAccent] = useState(readSavedAccent)
@@ -170,6 +173,7 @@ export default function App() {
         setCustomHex(savedAccent)
         setProfilePhotoUrl('')
         setProfileUsername('')
+        setProfileDetails(emptyProfileDetails)
         return
       }
       try {
@@ -177,6 +181,7 @@ export default function App() {
         if (!user.emailVerified) {
           setAuthUser(null)
           setProfilePhotoUrl('')
+          setProfileDetails(emptyProfileDetails)
           await signOut(firebaseAuth)
           return
         }
@@ -186,7 +191,13 @@ export default function App() {
         setCustomHex(savedAccent)
         setProfilePhotoUrl(user.photoURL || '')
         const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
-        const storedUsername = profileSnapshot?.data()?.username
+        const storedProfile = profileSnapshot?.data() || {}
+        const storedUsername = storedProfile.username
+        setProfileDetails({
+          about: typeof storedProfile.about === 'string' ? storedProfile.about : '',
+          location: typeof storedProfile.location === 'string' ? storedProfile.location : '',
+          occupation: typeof storedProfile.occupation === 'string' ? storedProfile.occupation : ''
+        })
         const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
         setProfileUsername(resolvedUsername)
@@ -273,11 +284,32 @@ export default function App() {
     if (db) {
       await runTransaction(db, async transaction => {
         transaction.set(doc(db, 'users', authUser.uid), {
-          uid: authUser.uid, username: profileUsername, displayName: normalized, updatedAt: serverTimestamp()
+          uid: authUser.uid, ...(profileUsername ? { username: profileUsername } : {}), displayName: normalized, updatedAt: serverTimestamp()
         }, { merge: true })
       })
     }
     setAuthUser({ ...authUser, displayName: normalized } as User)
+  }
+  const handleProfileDetailsChange = async (nextDetails: ProfileDetails) => {
+    if (!authUser || !firestoreDb) throw new Error('Sign in and connect to Chater to edit your profile details.')
+    const normalized: ProfileDetails = {
+      about: nextDetails.about.trim().replace(/\s+/g, ' '),
+      location: nextDetails.location.trim().replace(/\s+/g, ' '),
+      occupation: nextDetails.occupation.trim().replace(/\s+/g, ' ')
+    }
+    if (normalized.about.length > 160) throw new Error('Your About description must be 160 characters or fewer.')
+    if (normalized.location.length > 60) throw new Error('Location must be 60 characters or fewer.')
+    if (normalized.occupation.length > 60) throw new Error('Occupation must be 60 characters or fewer.')
+    const db = firestoreDb
+    await runTransaction(db, async transaction => {
+      transaction.set(doc(db, 'users', authUser.uid), {
+        uid: authUser.uid,
+        ...(profileUsername ? { username: profileUsername } : {}),
+        ...normalized,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+    })
+    setProfileDetails(normalized)
   }
   const handleProfilePhotoUpload = async (file: File) => {
     if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
@@ -319,13 +351,14 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload> photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
           if(!firebaseAuth)return
           try {
             await signOut(firebaseAuth)
             setAuthUser(null)
             setProfilePhotoUrl('')
             setProfileUsername('')
+            setProfileDetails(emptyProfileDetails)
             setPhotoNotice('')
             setLoginPassword('')
             setLoginNotice('')
@@ -521,7 +554,7 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   const Icon=data.icon
   return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
 }
-function ProfileScreen({user,photoURL,username,onUsernameChange,onDisplayNameChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;onUsernameChange:(username:string)=>Promise<void>;onDisplayNameChange:(name:string)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
+function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDisplayNameChange,onDetailsChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;details:ProfileDetails;onUsernameChange:(username:string)=>Promise<void>;onDisplayNameChange:(name:string)=>Promise<void>;onDetailsChange:(details:ProfileDetails)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
   const [confirmSignOut,setConfirmSignOut] = useState(false)
   const [editingName,setEditingName] = useState(false)
   const [nameDraft,setNameDraft] = useState(user?.displayName || '')
@@ -533,6 +566,11 @@ function ProfileScreen({user,photoURL,username,onUsernameChange,onDisplayNameCha
   const [usernameBusy,setUsernameBusy] = useState(false)
   const [usernameNotice,setUsernameNotice] = useState('')
   useEffect(() => { setUsernameDraft(username) }, [username])
+  const [editingDetails,setEditingDetails] = useState(false)
+  const [detailsDraft,setDetailsDraft] = useState(details)
+  const [detailsBusy,setDetailsBusy] = useState(false)
+  const [detailsNotice,setDetailsNotice] = useState('')
+  useEffect(() => { setDetailsDraft(details) }, [details])
   return <div className="profile-page">
     <style>{`.profile-avatar-wrap{position:relative;width:max-content;margin:0 auto 1rem}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
     <div className="profile-avatar-wrap">
