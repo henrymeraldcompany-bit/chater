@@ -408,6 +408,32 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('heading', { name: 'Henry Cee' })).toBeInTheDocument()
   })
 
+  it('allows a signed-in user to edit and save their About, occupation and location details', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }))
+    fireEvent.change(screen.getByLabelText('About you'), { target: { value: 'Building useful tools and learning every day.' } })
+    fireEvent.change(screen.getByLabelText('Occupation'), { target: { value: 'Software creator' } })
+    fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Anambra, Nigeria' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your profile details have been saved.'))
+    expect(runTransaction).toHaveBeenCalled()
+    expect(screen.getByText('Building useful tools and learning every day.')).toBeInTheDocument()
+    expect(screen.getByText('Software creator')).toBeInTheDocument()
+    expect(screen.getByText('Anambra, Nigeria')).toBeInTheDocument()
+    expect(screen.getByText(/These details are optional/)).toBeInTheDocument()
+  })
+
   it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
