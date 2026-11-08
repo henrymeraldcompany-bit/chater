@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { createUserWithEmailAndPassword, deleteUser, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, deleteUser, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
 import { runTransaction } from 'firebase/firestore'
 import App from './App'
 
@@ -25,6 +25,7 @@ vi.mock('firebase/auth', async (importOriginal) => {
     onAuthStateChanged: vi.fn((_auth: unknown, callback: (user: null) => void) => { callback(null); return vi.fn() }),
     createUserWithEmailAndPassword: vi.fn(),
     deleteUser: vi.fn(async () => undefined),
+    reauthenticateWithCredential: vi.fn(async () => undefined),
     signInWithEmailAndPassword: vi.fn(),
     reload: vi.fn(),
     signOut: vi.fn(),
@@ -432,6 +433,30 @@ describe('Chater application shell', () => {
     expect(screen.getByText('Software creator')).toBeInTheDocument()
     expect(screen.getByText('Anambra, Nigeria')).toBeInTheDocument()
     expect(screen.getByText(/These details are optional/)).toBeInTheDocument()
+  })
+
+  it('requires the current password before permanently deleting the account', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(reauthenticateWithCredential).mockResolvedValue(user as never)
+    vi.mocked(deleteUser).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('This action is permanent')
+    expect(deleteUser).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Permanently delete' }))
+    await waitFor(() => expect(deleteUser).toHaveBeenCalledWith(user))
+    expect(reauthenticateWithCredential).toHaveBeenCalled()
+    expect(runTransaction).toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument())
   })
 
   it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
