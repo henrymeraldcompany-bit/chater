@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, getAuth, onAuthStateChanged, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
-import { deleteDoc, doc, runTransaction, serverTimestamp } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
@@ -185,7 +185,12 @@ export default function App() {
         setAccent(savedAccent)
         setCustomHex(savedAccent)
         setProfilePhotoUrl(user.photoURL || '')
-        setProfileUsername(window.localStorage.getItem(`chater:profile:username:${user.uid}`) || '')
+        const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
+        const storedUsername = profileSnapshot?.data()?.username
+        const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
+        const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
+        setProfileUsername(resolvedUsername)
+        if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${user.uid}`, resolvedUsername)
       } catch {
         setAuthUser(null)
         await signOut(firebaseAuth).catch(() => undefined)
@@ -231,6 +236,33 @@ export default function App() {
       window.clearTimeout(timeout)
     }
   }
+  const handleUsernameChange = async (nextUsername: string) => {
+    if (!authUser || !firestoreDb) throw new Error('Sign in and connect to Chater to change your username.')
+    const normalized = nextUsername.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
+      throw new Error('Username must be 3–20 characters using lowercase letters, numbers or underscores.')
+    }
+    if (normalized === profileUsername) return
+    const oldUsername = profileUsername
+    const oldRef = oldUsername ? doc(firestoreDb, 'usernames', oldUsername) : null
+    const newRef = doc(firestoreDb, 'usernames', normalized)
+    const userRef = doc(firestoreDb, 'users', authUser.uid)
+    await runTransaction(firestoreDb, async transaction => {
+      const newSnapshot = await transaction.get(newRef)
+      const oldSnapshot = oldRef ? await transaction.get(oldRef) : null
+      if (newSnapshot.exists()) {
+        throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
+      }
+      if (oldSnapshot?.exists() && oldSnapshot.data()?.uid !== authUser.uid) {
+        throw new Error('Your current username is not owned by this account. Contact support before changing it.')
+      }
+      transaction.set(newRef, { uid: authUser.uid, username: normalized, createdAt: serverTimestamp() })
+      if (oldRef && oldSnapshot?.exists()) transaction.delete(oldRef)
+      transaction.set(userRef, { uid: authUser.uid, username: normalized, updatedAt: serverTimestamp() }, { merge: true })
+    })
+    setProfileUsername(normalized)
+    try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
+  }
   const handleProfilePhotoUpload = async (file: File) => {
     if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
     setPhotoBusy(true)
@@ -271,7 +303,7 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onUsernameChange={handleUsernameChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
           if(!firebaseAuth)return
           try {
             await signOut(firebaseAuth)
@@ -382,7 +414,12 @@ export default function App() {
         setAccent(savedAccent)
         setCustomHex(savedAccent)
         setProfilePhotoUrl(credential.user.photoURL || '')
-        setProfileUsername(window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || '')
+        const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', credential.user.uid)) : null
+        const storedUsername = profileSnapshot?.data()?.username
+        const localUsername = window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || ''
+        const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
+        setProfileUsername(resolvedUsername)
+        if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, resolvedUsername)
         setLoginPassword('')
         setDialog(null)
       } catch(error) {
@@ -468,8 +505,13 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   const Icon=data.icon
   return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
 }
-function ProfileScreen({user,photoURL,username,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
+function ProfileScreen({user,photoURL,username,onUsernameChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;onUsernameChange:(username:string)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
   const [confirmSignOut,setConfirmSignOut] = useState(false)
+  const [editingUsername,setEditingUsername] = useState(false)
+  const [usernameDraft,setUsernameDraft] = useState(username)
+  const [usernameBusy,setUsernameBusy] = useState(false)
+  const [usernameNotice,setUsernameNotice] = useState('')
+  useEffect(() => { setUsernameDraft(username) }, [username])
   return <div className="profile-page">
     <style>{`.profile-avatar-wrap{position:relative;width:max-content;margin:0 auto 1rem}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
     <div className="profile-avatar-wrap">
@@ -481,6 +523,23 @@ function ProfileScreen({user,photoURL,username,onPhotoUpload,photoBusy,photoNoti
     </div>
     <h2>{user?.displayName || 'Your name'}</h2>
     <p className="profile-handle">{user ? (username ? `@${username}` : user.email) : '@yourusername'}</p>
+    {user && <div className="profile-username-editor">
+      {!editingUsername ? <button className="secondary-button" type="button" onClick={()=>{setUsernameDraft(username);setUsernameNotice('');setEditingUsername(true)}}>Edit username</button> : <form className="registration-form" onSubmit={async event=>{
+        event.preventDefault()
+        setUsernameNotice('')
+        const normalized=usernameDraft.trim().toLowerCase()
+        if(!/^[a-z0-9_]{3,20}$/.test(normalized)){setUsernameNotice('Username must be 3–20 characters using lowercase letters, numbers or underscores.');return}
+        setUsernameBusy(true)
+        try { await onUsernameChange(normalized); setEditingUsername(false); setUsernameNotice('Your username has been updated.') }
+        catch(error){setUsernameNotice(error instanceof Error?error.message:'We could not update your username. Please try again.')}
+        finally {setUsernameBusy(false)}
+      }}>
+        <label htmlFor="profile-username-edit">Username<input id="profile-username-edit" autoComplete="username" maxLength={20} value={usernameDraft} onChange={event=>{setUsernameDraft(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''));setUsernameNotice('')}} placeholder="yourusername"/></label>
+        <small>3–20 characters: lowercase letters, numbers and underscores.</small>
+        <div className="dialog-actions"><button className="secondary-button" type="button" disabled={usernameBusy} onClick={()=>{setEditingUsername(false);setUsernameDraft(username);setUsernameNotice('')}}>Cancel</button><button className="primary-button" type="submit" disabled={usernameBusy}>{usernameBusy?'Saving…':'Save username'}</button></div>
+      </form>}
+      {usernameNotice&&<p className="dialog-notice" role="status">{usernameNotice}</p>}
+    </div>}
     {(!user || !user.emailVerified) && <p className="profile-about">{user ? 'Please verify your email address.' : 'Add a little about yourself.'}</p>}
     {user ? <>
       {photoNotice&&<p className="dialog-notice profile-photo-notice" role="alert">{photoNotice}</p>}
