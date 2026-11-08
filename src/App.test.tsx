@@ -12,7 +12,8 @@ vi.mock('firebase/firestore', () => ({
   deleteDoc: vi.fn(async () => undefined),
   runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean }>; set: (...args: unknown[]) => void }) => Promise<void>) => callback({
     get: vi.fn(async () => ({ exists: () => false })),
-    set: vi.fn()
+    set: vi.fn(),
+    delete: vi.fn()
   }))
 }))
 
@@ -146,6 +147,26 @@ describe('Chater application shell', () => {
     expect(window.localStorage.getItem('chater:preferences:accent:account-one')).toBe('#eab308')
     expect(window.localStorage.getItem('chater:preferences:accent:account-two')).toBe('#a78bfa')
     expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#00fdff')
+  })
+
+  it('allows a signed-in user to edit and save a globally reserved username', async () => {
+    const user = { uid: 'username-editor', email: 'editor@example.com', emailVerified: true, photoURL: null, displayName: 'Username Editor' }
+    window.localStorage.setItem('chater:profile:username:username-editor', 'old_handle')
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'editor@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Username Editor' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Edit username' }))
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'new_handle' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save username' }))
+    await waitFor(() => expect(screen.getByText('@new_handle')).toBeInTheDocument())
+    expect(window.localStorage.getItem('chater:profile:username:username-editor')).toBe('new_handle')
+    expect(runTransaction).toHaveBeenCalled()
   })
 
   it('ignores an invalid saved accent and safely uses the default cyan', () => {
