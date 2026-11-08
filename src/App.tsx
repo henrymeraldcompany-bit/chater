@@ -351,7 +351,7 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload> photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
           if(!firebaseAuth)return
           try {
             await signOut(firebaseAuth)
@@ -609,6 +609,35 @@ function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDispla
       </form>}
       {usernameNotice&&<p className="dialog-notice" role="status">{usernameNotice}</p>}
     </div>}
+    {user && <section className="profile-details" aria-labelledby="profile-details-title">
+      {!editingDetails ? <>
+        <div className="profile-details-heading"><h3 id="profile-details-title">About you</h3><button className="secondary-button" type="button" onClick={()=>{setDetailsDraft(details);setDetailsNotice('');setEditingDetails(true)}}>Edit details</button></div>
+        {details.about ? <p className="profile-bio">{details.about}</p> : <p className="profile-details-empty">Add a short description to introduce yourself.</p>}
+        {(details.location || details.occupation) && <dl className="profile-detail-list">
+          {details.occupation && <div><dt>Occupation</dt><dd>{details.occupation}</dd></div>}
+          {details.location && <div><dt>Location</dt><dd>{details.location}</dd></div>}
+        </dl>}
+      </> : <form className="registration-form profile-details-form" aria-label="Edit profile details" onSubmit={async event=>{
+        event.preventDefault()
+        setDetailsNotice('')
+        const normalized={about:detailsDraft.about.trim().replace(/\s+/g,' '),location:detailsDraft.location.trim().replace(/\s+/g,' '),occupation:detailsDraft.occupation.trim().replace(/\s+/g,' ')}
+        if(normalized.about.length>160){setDetailsNotice('Your About description must be 160 characters or fewer.');return}
+        if(normalized.location.length>60){setDetailsNotice('Location must be 60 characters or fewer.');return}
+        if(normalized.occupation.length>60){setDetailsNotice('Occupation must be 60 characters or fewer.');return}
+        setDetailsBusy(true)
+        try{await onDetailsChange(normalized);setEditingDetails(false);setDetailsNotice('Your profile details have been saved.')}
+        catch(error){setDetailsNotice(error instanceof Error?error.message:'We could not save your profile details. Please try again.')}
+        finally{setDetailsBusy(false)}
+      }}>
+        <label htmlFor="profile-about-edit">About you<textarea id="profile-about-edit" rows={3} maxLength={160} value={detailsDraft.about} onChange={event=>{setDetailsDraft(current=>({...current,about:event.target.value}));setDetailsNotice('')}} placeholder="A little about yourself…"/></label>
+        <small className="profile-character-count">{detailsDraft.about.length}/160 characters</small>
+        <label htmlFor="profile-occupation-edit">Occupation<input id="profile-occupation-edit" maxLength={60} value={detailsDraft.occupation} onChange={event=>{setDetailsDraft(current=>({...current,occupation:event.target.value}));setDetailsNotice('')}} placeholder="What do you do?"/></label>
+        <label htmlFor="profile-location-edit">Location<input id="profile-location-edit" maxLength={60} value={detailsDraft.location} onChange={event=>{setDetailsDraft(current=>({...current,location:event.target.value}));setDetailsNotice('')}} placeholder="City or general area"/></label>
+        <div className="dialog-actions"><button className="secondary-button" type="button" disabled={detailsBusy} onClick={()=>{setEditingDetails(false);setDetailsDraft(details);setDetailsNotice('')}}>Cancel</button><button className="primary-button" type="submit" disabled={detailsBusy}>{detailsBusy?'Saving…':'Save details'}</button></div>
+      </form>}
+      {detailsNotice&&<p className="dialog-notice" role="status">{detailsNotice}</p>}
+      <p className="profile-details-privacy">These details are optional. Share only what you are comfortable adding to your profile.</p>
+    </section>}
     {(!user || !user.emailVerified) && <p className="profile-about">{user ? 'Please verify your email address.' : 'Add a little about yourself.'}</p>}
     {user ? <>
       {photoNotice&&<p className="dialog-notice profile-photo-notice" role="alert">{photoNotice}</p>}
