@@ -6,6 +6,7 @@ import App from './App'
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
+  getDoc: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
   doc: vi.fn((...parts: unknown[]) => ({ parts })),
   serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   deleteDoc: vi.fn(async () => undefined),
