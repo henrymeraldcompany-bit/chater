@@ -10,8 +10,8 @@ vi.mock('firebase/firestore', () => ({
   doc: vi.fn((...parts: unknown[]) => ({ parts })),
   serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   deleteDoc: vi.fn(async () => undefined),
-  runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean }>; set: (...args: unknown[]) => void }) => Promise<void>) => callback({
-    get: vi.fn(async () => ({ exists: () => false })),
+  runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean; data: () => Record<string, unknown> | undefined }>; set: (...args: unknown[]) => void; delete: (ref: unknown) => void }) => Promise<void>) => callback({
+    get: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
     set: vi.fn(),
     delete: vi.fn()
   }))
