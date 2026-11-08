@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
-import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
 import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
@@ -301,15 +301,21 @@ export default function App() {
     if (normalized.location.length > 60) throw new Error('Location must be 60 characters or fewer.')
     if (normalized.occupation.length > 60) throw new Error('Occupation must be 60 characters or fewer.')
     const db = firestoreDb
-    await runTransaction(db, async transaction => {
-      transaction.set(doc(db, 'users', authUser.uid), {
+    try {
+      await setDoc(doc(db, 'users', authUser.uid), {
         uid: authUser.uid,
         ...(profileUsername ? { username: profileUsername } : {}),
         ...normalized,
         updatedAt: serverTimestamp()
       }, { merge: true })
-    })
-    setProfileDetails(normalized)
+      setProfileDetails(normalized)
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      if (code === 'permission-denied') {
+        throw new Error("Firebase blocked this profile update. The latest Chater Firestore security rules must be published in the chater-8f834 project. Open Firebase Console → Firestore Database → Rules, publish the rules from Chater's firestore.rules file, then try again.")
+      }
+      throw error
+    }
   }
   const handleAccountDeletion = async (password: string) => {
     if (!authUser || !firebaseAuth || !authUser.email) throw new Error('Sign in with an email account before deleting it.')
