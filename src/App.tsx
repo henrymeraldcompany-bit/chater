@@ -263,6 +263,21 @@ export default function App() {
     setProfileUsername(normalized)
     try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
   }
+  const handleDisplayNameChange = async (nextName: string) => {
+    if (!authUser) throw new Error('Sign in to edit your profile name.')
+    const normalized = nextName.trim().replace(/\s+/g, ' ')
+    if (normalized.length < 2 || normalized.length > 50) throw new Error('Your profile name must be 2–50 characters.')
+    if (normalized === (authUser.displayName || '')) return
+    await updateProfile(authUser, { displayName: normalized })
+    if (firestoreDb) {
+      await runTransaction(firestoreDb, async transaction => {
+        transaction.set(doc(firestoreDb, 'users', authUser.uid), {
+          uid: authUser.uid, username: profileUsername, displayName: normalized, updatedAt: serverTimestamp()
+        }, { merge: true })
+      })
+    }
+    setAuthUser({ ...authUser, displayName: normalized } as User)
+  }
   const handleProfilePhotoUpload = async (file: File) => {
     if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
     setPhotoBusy(true)
@@ -303,7 +318,7 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onUsernameChange={handleUsernameChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
           if(!firebaseAuth)return
           try {
             await signOut(firebaseAuth)
@@ -505,8 +520,13 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   const Icon=data.icon
   return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
 }
-function ProfileScreen({user,photoURL,username,onUsernameChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;onUsernameChange:(username:string)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
+function ProfileScreen({user,photoURL,username,onUsernameChange,onDisplayNameChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;onUsernameChange:(username:string)=>Promise<void>;onDisplayNameChange:(name:string)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
   const [confirmSignOut,setConfirmSignOut] = useState(false)
+  const [editingName,setEditingName] = useState(false)
+  const [nameDraft,setNameDraft] = useState(user?.displayName || '')
+  const [nameBusy,setNameBusy] = useState(false)
+  const [nameNotice,setNameNotice] = useState('')
+  useEffect(() => { setNameDraft(user?.displayName || '') }, [user?.displayName])
   const [editingUsername,setEditingUsername] = useState(false)
   const [usernameDraft,setUsernameDraft] = useState(username)
   const [usernameBusy,setUsernameBusy] = useState(false)
@@ -521,7 +541,17 @@ function ProfileScreen({user,photoURL,username,onUsernameChange,onPhotoUpload,ph
         <input type="file" accept="image/*" disabled={photoBusy} onChange={e=>{const file=e.target.files?.[0];if(file)onPhotoUpload(file);e.currentTarget.value=''}}/>
       </label>}
     </div>
-    <h2>{user?.displayName || 'Your name'}</h2>
+    {!user ? <h2>Your name</h2> : !editingName ? <><h2>{user.displayName || 'Your name'}</h2><button className="secondary-button" type="button" onClick={()=>{setNameDraft(user.displayName || '');setNameNotice('');setEditingName(true)}}>Edit profile name</button></> : <form className="registration-form" aria-label="Edit profile name" onSubmit={async event=>{
+      event.preventDefault()
+      setNameNotice('')
+      const normalized=nameDraft.trim().replace(/\s+/g,' ')
+      if(normalized.length<2||normalized.length>50){setNameNotice('Your profile name must be 2–50 characters.');return}
+      setNameBusy(true)
+      try{await onDisplayNameChange(normalized);setEditingName(false);setNameNotice('Your profile name has been updated.')}
+      catch(error){setNameNotice(error instanceof Error?error.message:'We could not update your profile name. Please try again.')}
+      finally{setNameBusy(false)}
+    }}><label htmlFor="profile-name-edit">Profile name<input id="profile-name-edit" autoComplete="name" maxLength={50} value={nameDraft} onChange={event=>{setNameDraft(event.target.value);setNameNotice('')}} placeholder="Your name"/></label><div className="dialog-actions"><button className="secondary-button" type="button" disabled={nameBusy} onClick={()=>{setEditingName(false);setNameDraft(user.displayName||'');setNameNotice('')}}>Cancel</button><button className="primary-button" type="submit" disabled={nameBusy}>{nameBusy?'Saving…':'Save name'}</button></div></form>}
+    {nameNotice&&<p className="dialog-notice" role="status">{nameNotice}</p>}
     <p className="profile-handle">{user ? (username ? `@${username}` : user.email) : '@yourusername'}</p>
     {user && <div className="profile-username-editor">
       {!editingUsername ? <button className="secondary-button" type="button" onClick={()=>{setUsernameDraft(username);setUsernameNotice('');setEditingUsername(true)}}>Edit username</button> : <form className="registration-form" onSubmit={async event=>{
