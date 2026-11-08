@@ -328,7 +328,7 @@ export default function App() {
     })
     try {
       await deleteUser(authUser)
-    } catch (error) {
+    } catch {
       throw new Error('Your profile records were removed, but Firebase could not finish deleting the sign-in account. Sign in again and contact support to complete deletion.')
     }
     try {
