@@ -25,7 +25,15 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.username is string
-        && request.resource.data.username.matches('^[a-z0-9_]{3,20}$');
+        && request.resource.data.username.matches('^[a-z0-9_]{3,20}
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+  }
+})
+        && (!('displayName' in request.resource.data)
+          || (request.resource.data.displayName is string
+            && request.resource.data.displayName.size() >= 2
+            && request.resource.data.displayName.size() <= 50));
       allow delete: if signedIn() && request.auth.uid == userId;
     }
   }
