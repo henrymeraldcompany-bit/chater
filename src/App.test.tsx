@@ -387,6 +387,27 @@ describe('Chater application shell', () => {
     expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1)
   })
 
+  it('allows a signed-in user to edit and save their profile name', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(updateProfile).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Edit profile name' }))
+    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Henry Cee' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your profile name has been updated.'))
+    expect(updateProfile).toHaveBeenCalledWith(user, { displayName: 'Henry Cee' })
+    expect(runTransaction).toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Henry Cee' })).toBeInTheDocument()
+  })
+
   it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
