@@ -8,32 +8,38 @@ service cloud.firestore {
     match /usernames/{username} {
       // Usernames are public identifiers; reads support availability checks.
       allow read: if true;
-      // A username can be created once and permanently belongs to its owner.
+      // A username can be created once and belongs to its owner.
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['uid', 'username', 'createdAt'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.username == username
         && username.matches('^[a-z0-9_]{3,20}$');
-      // Renaming and releasing usernames are handled in a later secured task.
       allow update: if false;
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     match /users/{userId} {
+      // Signed-in users can read profiles; only the owner can create or edit one.
       allow read: if signedIn();
       allow create, update: if signedIn()
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.username is string
-        && request.resource.data.username.matches('^[a-z0-9_]{3,20}
-      allow delete: if signedIn() && request.auth.uid == userId;
-    }
-  }
-})
+        && (!('username' in request.resource.data)
+          || (request.resource.data.username is string
+            && request.resource.data.username.matches('^[a-z0-9_]{3,20}$')))
         && (!('displayName' in request.resource.data)
           || (request.resource.data.displayName is string
             && request.resource.data.displayName.size() >= 2
-            && request.resource.data.displayName.size() <= 50));
+            && request.resource.data.displayName.size() <= 50))
+        && (!('about' in request.resource.data)
+          || (request.resource.data.about is string
+            && request.resource.data.about.size() <= 160))
+        && (!('location' in request.resource.data)
+          || (request.resource.data.location is string
+            && request.resource.data.location.size() <= 60))
+        && (!('occupation' in request.resource.data)
+          || (request.resource.data.occupation is string
+            && request.resource.data.occupation.size() <= 60));
       allow delete: if signedIn() && request.auth.uid == userId;
     }
   }
