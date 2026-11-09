@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
-import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
+import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
@@ -617,88 +617,81 @@ function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDispla
   const [deletePassword,setDeletePassword] = useState('')
   const [deleteBusy,setDeleteBusy] = useState(false)
   const [deleteNotice,setDeleteNotice] = useState('')
-  const [editingName,setEditingName] = useState(false)
+  const [editingProfile,setEditingProfile] = useState(false)
   const [nameDraft,setNameDraft] = useState(user?.displayName || '')
-  const [nameBusy,setNameBusy] = useState(false)
-  const [nameNotice,setNameNotice] = useState('')
-  useEffect(() => { setNameDraft(user?.displayName || '') }, [user?.displayName])
-  const [editingUsername,setEditingUsername] = useState(false)
   const [usernameDraft,setUsernameDraft] = useState(username)
-  const [usernameBusy,setUsernameBusy] = useState(false)
-  const [usernameNotice,setUsernameNotice] = useState('')
-  useEffect(() => { setUsernameDraft(username) }, [username])
-  const [editingDetails,setEditingDetails] = useState(false)
   const [detailsDraft,setDetailsDraft] = useState(details)
-  const [detailsBusy,setDetailsBusy] = useState(false)
-  const [detailsNotice,setDetailsNotice] = useState('')
+  const [profileSaveBusy,setProfileSaveBusy] = useState(false)
+  const [profileEditNotice,setProfileEditNotice] = useState('')
+  useEffect(() => { setNameDraft(user?.displayName || '') }, [user?.displayName])
+  useEffect(() => { setUsernameDraft(username) }, [username])
   useEffect(() => { setDetailsDraft(details) }, [details])
   return <div className="profile-page">
-    <style>{`.profile-avatar-wrap{position:relative;width:max-content;margin:0 auto 1rem}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
-    <div className="profile-avatar-wrap">
-      <ProfileAvatar className="large" photoURL={photoURL} displayName={user?.displayName}/>
-      {user && <label className="profile-avatar-add" aria-label={photoBusy ? 'Uploading profile picture' : 'Add or change profile picture'} title={photoBusy ? 'Uploading picture…' : 'Add or change profile picture'}>
-        {photoBusy ? <span className="profile-avatar-spinner" aria-hidden="true"/> : <Plus size={17} strokeWidth={2.5}/>}
-        <input type="file" accept="image/*" disabled={photoBusy} onChange={e=>{const file=e.target.files?.[0];if(file)onPhotoUpload(file);e.currentTarget.value=''}}/>
-      </label>}
+    <style>{`.profile-card-heading{position:relative;display:flex;align-items:flex-start;justify-content:center}.profile-edit-trigger{position:absolute;right:0;top:0;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--border, #ffffff22);background:var(--surface-raised, #ffffff0a);color:var(--text, inherit);cursor:pointer}.profile-edit-trigger:hover{border-color:var(--accent);color:var(--accent)}.profile-avatar-wrap{position:relative;width:max-content;margin:0 auto 1rem}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
+    <div className="profile-card-heading">
+      <div className="profile-avatar-wrap">
+        <ProfileAvatar className="large" photoURL={photoURL} displayName={user?.displayName}/>
+        {user && <label className="profile-avatar-add" aria-label={photoBusy ? 'Uploading profile picture' : 'Add or change profile picture'} title={photoBusy ? 'Uploading picture…' : 'Add or change profile picture'}>
+          {photoBusy ? <span className="profile-avatar-spinner" aria-hidden="true"/> : <Plus size={17} strokeWidth={2.5}/>}
+          <input type="file" accept="image/*" disabled={photoBusy} onChange={e=>{const file=e.target.files?.[0];if(file)onPhotoUpload(file);e.currentTarget.value=''}}/>
+        </label>}
+      </div>
+      {user && <button className="profile-edit-trigger" type="button" aria-label="Edit your profile" title="Edit your profile" onClick={()=>{
+        setNameDraft(user.displayName || '')
+        setUsernameDraft(username)
+        setDetailsDraft(details)
+        setProfileEditNotice('')
+        setEditingProfile(true)
+      }}><Pencil size={18}/></button>}
     </div>
-    {!user ? <h2>Your name</h2> : !editingName ? <><h2>{user.displayName || 'Your name'}</h2><button className="secondary-button" type="button" onClick={()=>{setNameDraft(user.displayName || '');setNameNotice('');setEditingName(true)}}>Edit profile name</button></> : <form className="registration-form" aria-label="Edit profile name" onSubmit={async event=>{
-      event.preventDefault()
-      setNameNotice('')
-      const normalized=nameDraft.trim().replace(/\s+/g,' ')
-      if(normalized.length<2||normalized.length>50){setNameNotice('Your profile name must be 2–50 characters.');return}
-      setNameBusy(true)
-      try{await onDisplayNameChange(normalized);setEditingName(false);setNameNotice('Your profile name has been updated.')}
-      catch(error){setNameNotice(error instanceof Error?error.message:'We could not update your profile name. Please try again.')}
-      finally{setNameBusy(false)}
-    }}><label htmlFor="profile-name-edit">Profile name<input id="profile-name-edit" autoComplete="name" maxLength={50} value={nameDraft} onChange={event=>{setNameDraft(event.target.value);setNameNotice('')}} placeholder="Your name"/></label><div className="dialog-actions"><button className="secondary-button" type="button" disabled={nameBusy} onClick={()=>{setEditingName(false);setNameDraft(user.displayName||'');setNameNotice('')}}>Cancel</button><button className="primary-button" type="submit" disabled={nameBusy}>{nameBusy?'Saving…':'Save name'}</button></div></form>}
-    {nameNotice&&<p className="dialog-notice" role="status">{nameNotice}</p>}
-    <p className="profile-handle">{user ? (username ? `@${username}` : user.email) : '@yourusername'}</p>
-    {user && <div className="profile-username-editor">
-      {!editingUsername ? <button className="secondary-button" type="button" onClick={()=>{setUsernameDraft(username);setUsernameNotice('');setEditingUsername(true)}}>Edit username</button> : <form className="registration-form" onSubmit={async event=>{
-        event.preventDefault()
-        setUsernameNotice('')
-        const normalized=usernameDraft.trim().toLowerCase()
-        if(!/^[a-z0-9_]{3,20}$/.test(normalized)){setUsernameNotice('Username must be 3–20 characters using lowercase letters, numbers or underscores.');return}
-        setUsernameBusy(true)
-        try { await onUsernameChange(normalized); setEditingUsername(false); setUsernameNotice('Your username has been updated.') }
-        catch(error){setUsernameNotice(error instanceof Error?error.message:'We could not update your username. Please try again.')}
-        finally {setUsernameBusy(false)}
-      }}>
-        <label htmlFor="profile-username-edit">Username<input id="profile-username-edit" autoComplete="username" maxLength={20} value={usernameDraft} onChange={event=>{setUsernameDraft(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''));setUsernameNotice('')}} placeholder="yourusername"/></label>
-        <small>3–20 characters: lowercase letters, numbers and underscores.</small>
-        <div className="dialog-actions"><button className="secondary-button" type="button" disabled={usernameBusy} onClick={()=>{setEditingUsername(false);setUsernameDraft(username);setUsernameNotice('')}}>Cancel</button><button className="primary-button" type="submit" disabled={usernameBusy}>{usernameBusy?'Saving…':'Save username'}</button></div>
-      </form>}
-      {usernameNotice&&<p className="dialog-notice" role="status">{usernameNotice}</p>}
-    </div>}
-    {user && <section className="profile-details" aria-labelledby="profile-details-title">
-      {!editingDetails ? <>
-        <div className="profile-details-heading"><h3 id="profile-details-title">About you</h3><button className="secondary-button" type="button" onClick={()=>{setDetailsDraft(details);setDetailsNotice('');setEditingDetails(true)}}>Edit details</button></div>
+    {!user ? <><h2>Your name</h2><p className="profile-handle">@yourusername</p></> : <>
+      <h2>{user.displayName || 'Your name'}</h2>
+      <p className="profile-handle">{username ? `@${username}` : user.email}</p>
+      {!editingProfile ? <>
         {details.about ? <p className="profile-bio">{details.about}</p> : <p className="profile-details-empty">Add a short description to introduce yourself.</p>}
         {(details.location || details.occupation) && <dl className="profile-detail-list">
           {details.occupation && <div><dt>Occupation</dt><dd>{details.occupation}</dd></div>}
           {details.location && <div><dt>Location</dt><dd>{details.location}</dd></div>}
         </dl>}
-      </> : <form className="registration-form profile-details-form" aria-label="Edit profile details" onSubmit={async event=>{
+      </> : <form className="registration-form profile-details-form profile-edit-form" aria-label="Edit your complete profile" onSubmit={async event=>{
         event.preventDefault()
-        setDetailsNotice('')
-        const normalized={about:detailsDraft.about.trim().replace(/\s+/g,' '),location:detailsDraft.location.trim().replace(/\s+/g,' '),occupation:detailsDraft.occupation.trim().replace(/\s+/g,' ')}
-        if(normalized.about.length>160){setDetailsNotice('Your About description must be 160 characters or fewer.');return}
-        if(normalized.location.length>60){setDetailsNotice('Location must be 60 characters or fewer.');return}
-        if(normalized.occupation.length>60){setDetailsNotice('Occupation must be 60 characters or fewer.');return}
-        setDetailsBusy(true)
-        try{await onDetailsChange(normalized);setEditingDetails(false);setDetailsNotice('Your profile details have been saved.')}
-        catch(error){setDetailsNotice(error instanceof Error?error.message:'We could not save your profile details. Please try again.')}
-        finally{setDetailsBusy(false)}
+        setProfileEditNotice('')
+        const normalizedName=nameDraft.trim().replace(/\\s+/g,' ')
+        const normalizedUsername=usernameDraft.trim().toLowerCase()
+        const normalizedDetails={
+          about:detailsDraft.about.trim().replace(/\\s+/g,' '),
+          location:detailsDraft.location.trim().replace(/\\s+/g,' '),
+          occupation:detailsDraft.occupation.trim().replace(/\\s+/g,' ')
+        }
+        if(normalizedName.length<2||normalizedName.length>50){setProfileEditNotice('Your profile name must be 2–50 characters.');return}
+        if(!/^[a-z0-9_]{3,20}$/.test(normalizedUsername)){setProfileEditNotice('Username must be 3–20 characters using lowercase letters, numbers or underscores.');return}
+        if(normalizedDetails.about.length>160||normalizedDetails.location.length>60||normalizedDetails.occupation.length>60){setProfileEditNotice('Please check the character limits: About 160, Location 60, Occupation 60.');return}
+        setProfileSaveBusy(true)
+        try {
+          await onDisplayNameChange(normalizedName)
+          await onUsernameChange(normalizedUsername)
+          await onDetailsChange(normalizedDetails)
+          setEditingProfile(false)
+          setProfileEditNotice('Your profile has been updated.')
+        } catch(error) {
+          setProfileEditNotice(error instanceof Error?error.message:'We could not save your profile. Please try again.')
+        } finally { setProfileSaveBusy(false) }
       }}>
-        <label htmlFor="profile-about-edit">About you<textarea id="profile-about-edit" rows={3} maxLength={160} value={detailsDraft.about} onChange={event=>{setDetailsDraft(current=>({...current,about:event.target.value}));setDetailsNotice('')}} placeholder="A little about yourself…"/></label>
+        <label htmlFor="profile-name-edit">Profile name<input id="profile-name-edit" autoComplete="name" maxLength={50} value={nameDraft} onChange={event=>{setNameDraft(event.target.value);setProfileEditNotice('')}} placeholder="Your name"/></label>
+        <label htmlFor="profile-username-edit">Username<input id="profile-username-edit" autoComplete="username" maxLength={20} value={usernameDraft} onChange={event=>{setUsernameDraft(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g,''));setProfileEditNotice('')}} placeholder="yourusername"/></label>
+        <small>Username: 3–20 characters, lowercase letters, numbers and underscores.</small>
+        <label htmlFor="profile-about-edit">About you<textarea id="profile-about-edit" rows={3} maxLength={160} value={detailsDraft.about} onChange={event=>{setDetailsDraft(current=>({...current,about:event.target.value}));setProfileEditNotice('')}} placeholder="A little about yourself…"/></label>
         <small className="profile-character-count">{detailsDraft.about.length}/160 characters</small>
-        <label htmlFor="profile-occupation-edit">Occupation<input id="profile-occupation-edit" maxLength={60} value={detailsDraft.occupation} onChange={event=>{setDetailsDraft(current=>({...current,occupation:event.target.value}));setDetailsNotice('')}} placeholder="What do you do?"/></label>
-        <label htmlFor="profile-location-edit">Location<input id="profile-location-edit" maxLength={60} value={detailsDraft.location} onChange={event=>{setDetailsDraft(current=>({...current,location:event.target.value}));setDetailsNotice('')}} placeholder="City or general area"/></label>
-        <div className="dialog-actions"><button className="secondary-button" type="button" disabled={detailsBusy} onClick={()=>{setEditingDetails(false);setDetailsDraft(details);setDetailsNotice('')}}>Cancel</button><button className="primary-button" type="submit" disabled={detailsBusy}>{detailsBusy?'Saving…':'Save details'}</button></div>
+        <label htmlFor="profile-occupation-edit">Occupation<input id="profile-occupation-edit" maxLength={60} value={detailsDraft.occupation} onChange={event=>{setDetailsDraft(current=>({...current,occupation:event.target.value}));setProfileEditNotice('')}} placeholder="What do you do?"/></label>
+        <label htmlFor="profile-location-edit">Location<input id="profile-location-edit" maxLength={60} value={detailsDraft.location} onChange={event=>{setDetailsDraft(current=>({...current,location:event.target.value}));setProfileEditNotice('')}} placeholder="City or general area"/></label>
+        <div className="dialog-actions">
+          <button className="secondary-button" type="button" disabled={profileSaveBusy} onClick={()=>{setEditingProfile(false);setNameDraft(user.displayName||'');setUsernameDraft(username);setDetailsDraft(details);setProfileEditNotice('')}}>Cancel</button>
+          <button className="primary-button" type="submit" disabled={profileSaveBusy}>{profileSaveBusy?'Saving…':'Save profile'}</button>
+        </div>
       </form>}
-      {detailsNotice&&<p className="dialog-notice" role="status">{detailsNotice}</p>}
-      <p className="profile-details-privacy">These details are optional. Share only what you are comfortable adding to your profile.</p>
-    </section>}
+      {profileEditNotice&&<p className="dialog-notice" role="status">{profileEditNotice}</p>}
+      <p className="profile-details-privacy">Your profile picture, name, username, About, occupation and location can all be updated here.</p>
+    </>}
     {(!user || !user.emailVerified) && <p className="profile-about">{user ? 'Please verify your email address.' : 'Add a little about yourself.'}</p>}
     {user ? <>
       {photoNotice&&<p className="dialog-notice profile-photo-notice" role="alert">{photoNotice}</p>}
