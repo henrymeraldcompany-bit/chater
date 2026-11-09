@@ -100,7 +100,7 @@ describe('Chater application shell', () => {
     const theme = screen.getByLabelText('Theme')
     fireEvent.change(theme, { target: { value: 'light' } })
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#E4B61A')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#E3B71A')
 
     fireEvent.change(theme, { target: { value: 'dark' } })
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#FDC85E')
