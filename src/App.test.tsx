@@ -375,7 +375,9 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith(user))
     expect(reauthenticateWithCredential).toHaveBeenCalled()
     expect(runTransaction).toHaveBeenCalled()
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Chats.' })).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument()
   })
 
   it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
