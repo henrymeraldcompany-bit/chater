@@ -105,6 +105,7 @@ function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: s
 export default function App() {
   const [showSplash, setShowSplash] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('Chats')
+  const [slideDirection, setSlideDirection] = useState<'forward' | 'backward'>('forward')
   const [filter, setFilter] = useState<Filter>('All')
   const [query, setQuery] = useState('')
   const [dialog, setDialog] = useState<'new-chat' | 'search' | 'settings' | 'register' | 'login' | 'recover' | 'moment' | 'moment-view' | 'call' | 'schedule' | null>(null)
@@ -478,7 +479,13 @@ export default function App() {
     Calls: { eyebrow: 'CLOSER, WHEREVER YOU ARE', title: 'Calls', description: 'Your voice and video call history will appear here.', action: 'Start a call', icon: Phone }
   }), [])
   if (showSplash) return <SplashScreen />
-  const openTab = (tab: Tab) => { setActiveTab(tab); setDialog(null) }
+  const openTab = (tab: Tab) => {
+    const currentIndex = tabs.findIndex(item => item.label === activeTab)
+    const nextIndex = tabs.findIndex(item => item.label === tab)
+    if (nextIndex !== currentIndex) setSlideDirection(nextIndex > currentIndex ? 'forward' : 'backward')
+    setActiveTab(tab)
+    setDialog(null)
+  }
   return <main className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <aside className="desktop-rail">
@@ -513,7 +520,7 @@ export default function App() {
       {activeTab !== 'Groups' && activeTab !== 'You' && <div className="section-search-wrap">
         <div className="chat-toolbar"><label className="search-box"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search conversations or @username"/>{query&&<button aria-label="Clear search" onClick={()=>setQuery('')}><X size={15}/></button>}</label></div>
       </div>}
-      <div className="content-wrap">
+      <div key={activeTab} className={`content-wrap tab-slide tab-slide-${slideDirection}`}>
         {activeTab==='Chats' && <>
           <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
           <div className="empty-state chat-empty"><h1 className="a11y-heading">Chats</h1><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
