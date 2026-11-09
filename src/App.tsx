@@ -26,14 +26,19 @@ const accentPresets = [
   { name: 'Lime', value: '#a3e635' }
 ]
 const ACCENT_STORAGE_KEY = 'chater:preferences:accent'
+const DEFAULT_ACCENT = '#eab308'
 const isValidHexAccent = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value)
 function readSavedAccent(userId?: string | null): string {
   try {
     const storageKey = userId ? `${ACCENT_STORAGE_KEY}:${userId}` : ACCENT_STORAGE_KEY
     const saved = window.localStorage.getItem(storageKey)
-    return saved && isValidHexAccent(saved) ? saved.toLowerCase() : accentPresets[0].value
+    if (!saved || !isValidHexAccent(saved)) return DEFAULT_ACCENT
+    const normalized = saved.toLowerCase()
+    // Cyan was the former first-run default. Use Gold as the new reference default,
+    // while keeping every preset (including Cyan) available in Appearance settings.
+    return normalized === '#00fdff' ? DEFAULT_ACCENT : normalized
   } catch {
-    return accentPresets[0].value
+    return DEFAULT_ACCENT
   }
 }
 const BUBBLE_STORAGE_KEY = 'chater:preferences:bubble-style'
