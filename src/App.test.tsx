@@ -90,21 +90,59 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('keeps the WhatsApp gold palette fixed across dark and light appearance themes', () => {
-    window.localStorage.setItem('chater:preferences:accent', '#a78bfa')
+  it('offers ten selectable accent colour presets in settings', () => {
     openApp()
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#FDC85E')
-
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
-    expect(screen.getByText('WhatsApp palette')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Choose an accent colour' })).toBeInTheDocument()
+    const cyan = screen.getByRole('button', { name: 'Cyan' })
+    const violet = screen.getByRole('button', { name: 'Violet' })
+    const gold = screen.getByRole('button', { name: 'Gold' })
+    expect(cyan).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(violet)
+    expect(violet).toHaveAttribute('aria-pressed', 'true')
+    expect(cyan).toHaveAttribute('aria-pressed', 'false')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#a78bfa')
+    fireEvent.click(gold)
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
+  })
+
+  it('applies a valid custom HEX accent and rejects incomplete values', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    const hexInput = screen.getByLabelText('Custom HEX colour')
+    const apply = screen.getByRole('button', { name: 'Apply' })
+    fireEvent.change(hexInput, { target: { value: '#12ab' } })
+    expect(apply).toBeDisabled()
+    fireEvent.change(hexInput, { target: { value: '12ABEF' } })
+    expect(apply).toBeEnabled()
+    fireEvent.click(apply)
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#12abef')
+    expect(screen.getByRole('status')).toHaveTextContent('Custom accent colour applied')
+  })
+
+  it('remembers the selected accent colour after the app is reopened', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Gold' }))
+    expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#eab308')
+
+    cleanup()
+    openApp()
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    expect(screen.getByRole('button', { name: 'Gold' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('keeps the selected accent colour when switching between dark and light themes', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Gold' }))
     const theme = screen.getByLabelText('Theme')
     fireEvent.change(theme, { target: { value: 'light' } })
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#E3B71A')
-
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
     fireEvent.change(theme, { target: { value: 'dark' } })
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#FDC85E')
-    expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#a78bfa')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
   })
 
   it('offers dark, light and system appearance choices and persists them', () => {
