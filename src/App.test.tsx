@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { runTransaction } from 'firebase/firestore'
+import { runTransaction, setDoc } from 'firebase/firestore'
 import App from './App'
 
 vi.mock('firebase/firestore', () => ({
@@ -10,6 +10,7 @@ vi.mock('firebase/firestore', () => ({
   doc: vi.fn((...parts: unknown[]) => ({ parts })),
   serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   deleteDoc: vi.fn(async () => undefined),
+  setDoc: vi.fn(async () => undefined),
   runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean; data: () => Record<string, unknown> | undefined }>; set: (...args: unknown[]) => void; delete: (ref: unknown) => void }) => Promise<void>) => callback({
     get: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
     set: vi.fn(),
@@ -317,11 +318,12 @@ describe('Chater application shell', () => {
     expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1)
   })
 
-  it('allows a signed-in user to edit and save their profile name', async () => {
+  it('allows a signed-in user to edit and save the complete profile from the pencil control', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(updateProfile).mockResolvedValue(undefined)
+    vi.mocked(setDoc).mockResolvedValue(undefined)
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -329,42 +331,26 @@ describe('Chater application shell', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Edit profile name' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit your profile' }))
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Henry Cee' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save name' }))
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your profile name has been updated.'))
-    expect(updateProfile).toHaveBeenCalledWith(user, { displayName: 'Henry Cee' })
-    expect(runTransaction).toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: 'Henry Cee' })).toBeInTheDocument()
-  })
-
-  it('allows a signed-in user to edit and save their About, occupation and location details', async () => {
-    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
-    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
-    vi.mocked(reload).mockResolvedValue(undefined)
-    openApp()
-    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'henry@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }))
-    fireEvent.change(screen.getByLabelText('About you'), { target: { value: 'Building useful tools and learning every day.' } })
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'henry_cee' } })
+    fireEvent.change(screen.getByLabelText('About you'), { target: { value: 'Building useful tools every day.' } })
     fireEvent.change(screen.getByLabelText('Occupation'), { target: { value: 'Software creator' } })
     fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Anambra, Nigeria' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }))
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your profile details have been saved.'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Cee' })).toBeInTheDocument())
+    expect(updateProfile).toHaveBeenCalledWith(user, { displayName: 'Henry Cee' })
     expect(runTransaction).toHaveBeenCalled()
-    expect(screen.getByText('Building useful tools and learning every day.')).toBeInTheDocument()
+    expect(setDoc).toHaveBeenCalled()
+    expect(screen.getByText('Building useful tools every day.')).toBeInTheDocument()
     expect(screen.getByText('Software creator')).toBeInTheDocument()
     expect(screen.getByText('Anambra, Nigeria')).toBeInTheDocument()
-    expect(screen.getByText(/These details are optional/)).toBeInTheDocument()
+    expect(screen.queryByText(/These details are optional/)).not.toBeInTheDocument()
   })
 
-  it('requires the current password before permanently deleting the account', async () => {
+  it('requires the current password before permanently deleting the account from Chat settings', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
@@ -377,8 +363,12 @@ describe('Chater application shell', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('This action is permanent')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat settings' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Account' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete account' }))
+    expect(screen.getByRole('heading', { name: 'Delete your account?' })).toBeInTheDocument()
+    expect(screen.getByText(/This action is permanent/)).toBeInTheDocument()
     expect(deleteUser).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'password123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Permanently delete' }))
@@ -440,7 +430,7 @@ describe('Chater application shell', () => {
     expect(screen.getByLabelText('Add or change profile picture')).toBeEnabled()
   })
 
-  it('does not show an email verified label and asks for confirmation before signing out', async () => {
+  it('asks for confirmation before signing out from Chat settings', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
@@ -453,13 +443,17 @@ describe('Chater application shell', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Henry Example' })).toBeInTheDocument())
     expect(screen.queryByText('Email verified')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat settings' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Account' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }))
+    expect(screen.getByRole('heading', { name: 'Sign out?' })).toBeInTheDocument()
+    expect(screen.getByText('Are you sure you want to sign out of your account?')).toBeInTheDocument()
     expect(signOut).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Sign out?' })).not.toBeInTheDocument()
     expect(signOut).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }))
     fireEvent.click(screen.getByRole('button', { name: 'Yes, sign out' }))
     await waitFor(() => expect(signOut).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument())
