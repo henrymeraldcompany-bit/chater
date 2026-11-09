@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, type LucideIcon } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
@@ -437,8 +437,8 @@ export default function App() {
     const db = firestoreDb
     // Remove this account's Moment records while the user is still authenticated.
     // Firestore rules only allow an owner to delete their own Moment documents.
-    const momentsSnapshot = await getDocs(query(collection(db, 'moments'), where('uid', '==', authUser.uid)))
-    const ownedMoments = momentsSnapshot.docs.filter(moment => moment.data().uid === authUser.uid)
+    const momentsSnapshot = await getDocs(firestoreQuery(collection(db, 'moments'), where('uid', '==', authUser.uid)))
+    const ownedMoments = momentsSnapshot.docs
     await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
     const usernameRef = profileUsername ? doc(db, 'usernames', profileUsername) : null
     const profileRef = doc(db, 'users', authUser.uid)
