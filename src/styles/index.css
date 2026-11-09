@@ -524,3 +524,21 @@ body,.app-shell{background:var(--page);color:var(--text)}
 :root[data-theme="dark"] .desktop-rail .rail-link.active span{
   color:var(--accent)!important;
 }
+
+
+/* Selected chat filters use the same accent-colour pill treatment as navigation. */
+.filter-row .filter-chip.selected{
+  background:color-mix(in srgb,var(--accent) 24%,var(--panel))!important;
+  background-image:none!important;
+  border:1px solid color-mix(in srgb,var(--accent) 72%,transparent)!important;
+  color:var(--accent)!important;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 12%,transparent),
+             0 0 14px color-mix(in srgb,var(--accent) 20%,transparent)!important;
+  font-weight:750;
+}
+:root[data-theme="dark"] .filter-row .filter-chip.selected{
+  background:color-mix(in srgb,var(--accent) 28%,var(--nav))!important;
+  background-image:none!important;
+  border-color:color-mix(in srgb,var(--accent) 72%,transparent)!important;
+  color:var(--accent)!important;
+}
