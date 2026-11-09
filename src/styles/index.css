@@ -602,3 +602,56 @@ body,.app-shell{background:var(--page);color:var(--text)}
 
 /* Accessible page labels remain available to assistive technology without changing the visual layout. */
 .a11y-heading{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+
+/* Requested refinements: compact Moments rail, working action surfaces, and tab-specific controls. */
+.moments-screen{padding-top:10px}
+.moments-section-heading{margin-bottom:14px}
+.status-strip{gap:10px;overscroll-behavior-x:contain}
+.status-card{flex-basis:108px;height:198px;padding:11px 9px;border-radius:20px;text-align:left;color:var(--text-strong);font:inherit;cursor:pointer}
+.status-card-photo video{width:100%;height:100%;object-fit:cover}
+.status-card-photo .profile-avatar{width:58px;height:58px}
+.status-card>span:not(.status-card-photo){position:relative;z-index:1;font-size:14px}
+.status-card>small{position:relative;z-index:1;font-size:9px}
+.status-card>i{width:32px;height:32px;font-size:25px}
+.status-placeholder{flex-basis:118px;min-height:198px;padding:12px;border-radius:20px}
+.status-placeholder-ring{width:44px;height:44px;margin-bottom:10px}
+.status-placeholder strong{font-size:14px}
+.status-placeholder small{font-size:9px;max-width:110px}
+.status-user-card:focus-visible,.my-status:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.calls-screen{padding-top:25px}
+.call-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 42px}
+.call-shortcut{min-height:112px;padding:0;border:0;background:transparent;cursor:pointer}
+.call-shortcut>span{width:clamp(64px,17vw,88px);height:clamp(64px,17vw,88px);border-radius:50%;background:var(--panel-raised);border:1px solid var(--border);display:grid;place-items:center;color:var(--text-strong);transition:border-color .15s,background .15s}
+.call-shortcut:hover>span,.call-shortcut:focus-visible>span{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel-raised))}
+.call-shortcut strong{font-size:clamp(12px,3vw,15px)}
+.recent-calls-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px}
+.recent-calls-heading h2{margin:0}
+.recent-calls-empty{min-height:230px}
+.scheduled-calls-list{margin-top:18px;padding:16px;border:1px solid var(--border);border-radius:16px;background:var(--panel)}
+.scheduled-calls-list h3{margin:0 0 10px;color:var(--text-strong);font-family:var(--font-display);font-size:17px}
+.scheduled-call-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--border);color:var(--accent)}
+.scheduled-call-item span{display:grid;gap:4px}
+.scheduled-call-item strong{color:var(--text-strong);font-size:12px}
+.scheduled-call-item small{color:var(--text-muted);font-size:10px}
+.compose-button{display:flex;align-items:center;justify-content:center;position:fixed}
+.compose-button .compose-plus{position:absolute;right:11px;top:9px;width:17px;height:17px;display:grid;place-items:center;border-radius:50%;background:var(--on-accent);color:var(--accent)}
+.compose-moment,.compose-call{gap:0}
+.compose-moment svg:first-child,.compose-call svg:first-child{flex:0 0 auto}
+.compose-button.compose-call{background:var(--accent);color:var(--on-accent)}
+.compose-button.compose-moment{background:var(--accent);color:var(--on-accent)}
+.moment-file-picker{display:flex;align-items:center;justify-content:center;min-height:48px;padding:12px;border:1px dashed var(--accent);border-radius:12px;background:var(--panel-raised);color:var(--text-strong);cursor:pointer}
+.moment-file-picker input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.moment-file-name{margin:-5px 0 5px;color:var(--accent);font-size:11px;overflow-wrap:anywhere}
+.moment-composer textarea{width:100%;min-height:80px;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--field);color:var(--text-strong);font:inherit;font-size:12px;resize:vertical}
+.moment-viewer{display:grid;gap:10px}
+.moment-viewer img,.moment-viewer video{display:block;width:100%;max-height:62vh;object-fit:contain;border-radius:13px;background:#050708}
+.moment-viewer strong{color:var(--text-strong);font-size:14px}
+.moment-viewer p{margin:0;color:var(--text);font-size:13px;line-height:1.5}
+.moment-viewer small{color:var(--text-muted);font-size:10px}
+.disabled-link{opacity:.45;pointer-events:none}
+@media(min-width:760px){
+ .status-card{flex-basis:118px;height:212px}
+ .status-placeholder{flex-basis:128px;min-height:212px}
+ .call-shortcuts{max-width:560px;margin:0 auto 56px;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
