@@ -554,3 +554,47 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .section-search-wrap .chat-toolbar{width:100%;margin:0}
 .section-search-wrap .search-box{width:100%;min-width:0;flex:1}
 .content-wrap{padding-top:18px}
+
+
+/* Moments and Calls layouts follow the supplied status/channel and call-history patterns. */
+.moments-screen,.calls-screen{width:100%;max-width:980px;margin:0 auto}
+.moments-screen{display:grid;gap:38px;padding-top:12px}
+.moments-section-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px}
+.moments-section-heading h2,.recent-calls h2{margin:0;color:var(--text-strong);font-family:var(--font-display);font-size:clamp(25px,5vw,32px);line-height:1.2}
+.status-strip{display:flex;gap:13px;overflow-x:auto;padding:0 0 7px;scrollbar-width:none}
+.status-strip::-webkit-scrollbar{display:none}
+.status-card{position:relative;flex:0 0 142px;height:254px;overflow:hidden;border-radius:25px;background:linear-gradient(160deg,var(--panel-raised),var(--field));border:1px solid var(--border);display:flex;flex-direction:column;justify-content:flex-end;padding:14px 12px;isolation:isolate}
+.status-card:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,#000b 100%);z-index:-1}
+.status-card-photo{position:absolute;inset:0;z-index:-2;display:grid;place-items:center;background:var(--panel-raised)}
+.status-card-photo img{width:100%;height:100%;object-fit:cover}
+.status-card-photo .profile-avatar{width:76px;height:76px;border:3px solid var(--accent)}
+.status-card>span{color:var(--text-strong);font-family:var(--font-display);font-size:16px;line-height:1.25;overflow-wrap:anywhere}
+.status-card>small{color:#e1e3e1;font-size:10px;margin-top:5px}
+.status-card>i{position:absolute;left:50%;top:53%;transform:translate(-50%,-50%);width:37px;height:37px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-size:29px;font-style:normal;font-weight:500;border:3px solid var(--page);box-shadow:0 3px 14px #0005}
+.status-placeholder{flex:0 0 190px;min-height:254px;border:1px dashed var(--border);border-radius:25px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;background:var(--panel)}
+.status-placeholder-ring{width:58px;height:58px;border:2px solid var(--accent);border-radius:50%;display:grid;place-items:center;color:var(--accent);margin-bottom:14px}
+.status-placeholder strong,.channels-empty strong,.recent-calls-empty strong{color:var(--text-strong);font-family:var(--font-display);font-size:16px}
+.status-placeholder small{max-width:150px;color:var(--text-muted);font-size:10px;line-height:1.55;margin-top:7px}
+.explore-button{display:inline-flex;align-items:center;gap:6px;min-height:43px;padding:0 17px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--text-strong);font-family:var(--font-display);font-size:14px}
+.explore-button:hover{border-color:var(--accent);color:var(--accent)}
+.channels-empty{display:flex;align-items:center;gap:15px;padding:19px 16px;border:1px solid var(--border);border-radius:19px;background:var(--panel);min-height:100px}
+.channels-empty-icon,.recent-calls-icon{width:54px;height:54px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:var(--panel-raised);color:var(--accent)}
+.channels-empty p,.recent-calls-empty p{margin:5px 0 0;color:var(--text-muted);font-size:11px;line-height:1.55}
+.calls-screen{padding-top:28px}
+.call-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 52px}
+.call-shortcut{min-width:0;display:flex;align-items:center;flex-direction:column;gap:12px}
+.call-shortcut>span{width:clamp(64px,16vw,100px);height:clamp(64px,16vw,100px);border-radius:50%;display:grid;place-items:center;background:var(--panel-raised);color:var(--text-strong);border:1px solid var(--border)}
+.call-shortcut strong{color:var(--text-muted);font-family:var(--font-display);font-size:clamp(12px,3vw,16px);font-weight:600}
+.recent-calls h2{margin-bottom:22px}
+.recent-calls-empty{min-height:260px;display:flex;align-items:center;flex-direction:column;justify-content:center;text-align:center;padding:26px 18px;border:1px solid var(--border);border-radius:20px;background:var(--panel)}
+.recent-calls-icon{width:62px;height:62px;margin-bottom:15px}
+.recent-calls-empty p{max-width:260px;margin:7px 0 17px}
+.recent-calls-empty .secondary-button{min-height:40px;padding:9px 14px}
+@media(min-width:760px){
+ .moments-screen{gap:46px;padding-top:18px}
+ .status-card{flex-basis:158px;height:280px}
+ .status-placeholder{min-height:280px}
+ .calls-screen{padding-top:35px}
+ .call-shortcuts{max-width:640px;margin:0 auto 62px}
+ .recent-calls-empty{min-height:220px}
+}
