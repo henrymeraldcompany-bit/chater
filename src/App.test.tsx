@@ -7,6 +7,9 @@ import App from './App'
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
   getDoc: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
+  getDocs: vi.fn(async () => ({ docs: [] })),
+  collection: vi.fn((...parts: unknown[]) => ({ parts })),
+  addDoc: vi.fn(async () => ({ id: 'test-moment' })),
   doc: vi.fn((...parts: unknown[]) => ({ parts })),
   serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   deleteDoc: vi.fn(async () => undefined),
@@ -521,6 +524,51 @@ describe('Chater application shell', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
     expect(screen.getByRole('heading', { name: /Moments/ })).toBeInTheDocument()
-    expect(screen.getByText(/disappear after 24 hours/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
+    expect(screen.getByText('Share a moment')).toBeInTheDocument()
+    expect(screen.getByText('Your moments')).toBeInTheDocument()
+    expect(screen.queryByText('Channels')).not.toBeInTheDocument()
+  })
+
+  it('hides the shared search field on Groups and You', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Groups' })[0])
+    expect(screen.queryByPlaceholderText('Search conversations or @username')).not.toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    expect(screen.queryByPlaceholderText('Search conversations or @username')).not.toBeInTheDocument()
+  })
+
+  it('removes the keypad shortcut and keeps the Calls actions interactive', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Calls' })[0])
+    expect(screen.queryByText('Keypad')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    expect(screen.getByRole('heading', { name: 'Schedule a call' })).toBeInTheDocument()
+  })
+
+  it('opens the phone call action from the Calls floating button', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Calls' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Make a call' }))
+    expect(screen.getByRole('heading', { name: 'Make a call' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Phone number')).toBeInTheDocument()
+  })
+
+  it('moves between tabs with a horizontal swipe', () => {
+    openApp()
+    const mainColumn = document.querySelector('#main-content')!
+    fireEvent.touchStart(mainColumn, { touches: [{ clientX: 300, clientY: 300 }] })
+    fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 190, clientY: 305 }] })
+    expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
+    fireEvent.touchStart(mainColumn, { touches: [{ clientX: 180, clientY: 300 }] })
+    fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 295, clientY: 302 }] })
+    expect(screen.getByText('Your conversations')).toBeInTheDocument()
+  })
+
+  it('opens the sign-in flow when a signed-out user tries to add a Moment', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Add a moment' }))
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
   })
 })
