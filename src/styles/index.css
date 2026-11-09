@@ -319,10 +319,10 @@ body,.app-shell{background:var(--page);color:var(--text)}
   --selected:#FFF0D3;
   --selected-text:#80610B;
   --nav-selected:#FFF0D3;
-  --accent:#E4B61A;
-  --accent-bright:#E4B61A;
-  --accent-soft:#E4B61A33;
-  --gold-light:#E4B61A;
+  --accent:#E3B71A;
+  --accent-bright:#E3B71A;
+  --accent-soft:#E3B71A33;
+  --gold-light:#E3B71A;
   --on-accent:#17130B;
   --chat-wallpaper-background:#F6F5F3;
   background:var(--page);
