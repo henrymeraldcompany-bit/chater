@@ -21,17 +21,17 @@ Do not put either value in GitHub, source code, a browser build, or a chat messa
 
 ## Deploy through the Cloudflare dashboard
 
-The connected Cloudflare API session did not permit the automated Worker deployment, so the Worker source is committed here but has not been deployed. To deploy it safely:
+The Worker has now been created through the Cloudflare API as a separate Worker named `chater-account-deletion`. No existing GOZIE or Henry Worker was modified. Its deployed entry point is `worker.js`, with compatibility date `2026-11-09` and observability enabled.
 
-1. Open the Cloudflare dashboard and go to **Workers & Pages**.
-2. Create a new Worker named exactly `chater-account-deletion`. Do not edit or replace any existing GOZIE or Henry Worker.
-3. Open the new Worker’s code editor and replace its starter code with the complete contents of `worker.js` in this folder. Save and deploy.
-4. Open the Worker’s **Settings → Variables and Secrets**.
-5. Add `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` as **Secret** values. Enter them privately in Cloudflare; never paste them into GitHub or ChatGPT.
-6. Under **Settings → Domains & Routes**, enable its `workers.dev` subdomain. The expected URL is `https://chater-account-deletion.henrymeraldcompany.workers.dev`.
-7. Test `GET https://chater-account-deletion.henrymeraldcompany.workers.dev/health`. It should return JSON with `ok: true`.
+## Required next step: add Cloudinary secrets
 
-Do not test `POST /delete-media` using a real account until the frontend integration and account-deletion test are ready.
+1. Open **Workers & Pages** in Cloudflare and select `chater-account-deletion`.
+2. Open **Settings → Variables and Secrets**.
+3. Add `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` as **Secret** values. Obtain them from the Cloudinary Console → Settings → Access Keys. Enter them privately in Cloudflare; never paste them into GitHub or ChatGPT.
+4. Save/deploy the secret changes.
+5. Open `https://chater-account-deletion.henrymeraldcompany.workers.dev/health`. It should return JSON with `ok: true`.
+
+The Chater frontend has been updated to call `/delete-media` after password reauthentication and before removing Firestore or Firebase Auth records. If the Worker cannot confirm media cleanup, account deletion stops so it can be retried. Do not test `POST /delete-media` against a real account until the secrets are configured and the health check succeeds.
 
 ## Routes
 
