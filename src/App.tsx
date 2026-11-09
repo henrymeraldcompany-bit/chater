@@ -399,24 +399,7 @@ export default function App() {
         {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} onDeleteAccount={handleAccountDeletion} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}} onSignOut={async()=>{
-          if(!firebaseAuth)return
-          try {
-            await signOut(firebaseAuth)
-            setAuthUser(null)
-            setProfilePhotoUrl('')
-            setProfileUsername('')
-            setProfileDetails(emptyProfileDetails)
-            setPhotoNotice('')
-            setLoginPassword('')
-            setLoginNotice('')
-            const savedAccent=readSavedAccent()
-            setAccent(savedAccent)
-            setCustomHex(savedAccent)
-          } catch {
-            setPhotoNotice('We could not sign you out. Check your connection and try again.')
-          }
-        }}/>}
+        {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}}}
       </div>
     </section>
     <button className="compose-button" aria-label="Start a new chat" onClick={()=>setDialog('new-chat')}><Plus size={25}/></button>
@@ -615,12 +598,7 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   const Icon=data.icon
   return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
 }
-function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDisplayNameChange,onDetailsChange,onPhotoUpload,onDeleteAccount,photoBusy,photoNotice,onSettings,onRegister,onLogin,onSignOut}:{user:User|null;photoURL:string;username:string;details:ProfileDetails;onUsernameChange:(username:string)=>Promise<void>;onDisplayNameChange:(name:string)=>Promise<void>;onDetailsChange:(details:ProfileDetails)=>Promise<void>;onPhotoUpload:(file:File)=>void;onDeleteAccount:(password:string)=>Promise<void>;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;onSignOut:()=>void}) {
-  const [confirmSignOut,setConfirmSignOut] = useState(false)
-  const [confirmDelete,setConfirmDelete] = useState(false)
-  const [deletePassword,setDeletePassword] = useState('')
-  const [deleteBusy,setDeleteBusy] = useState(false)
-  const [deleteNotice,setDeleteNotice] = useState('')
+function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDisplayNameChange,onDetailsChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin}:{user:User|null;photoURL:string;username:string;details:ProfileDetails;onUsernameChange:(username:string)=>Promise<void>;onDisplayNameChange:(name:string)=>Promise<void>;onDetailsChange:(details:ProfileDetails)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;}) {
   const [editingProfile,setEditingProfile] = useState(false)
   const [nameDraft,setNameDraft] = useState(user?.displayName || '')
   const [usernameDraft,setUsernameDraft] = useState(username)
@@ -699,8 +677,6 @@ function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDispla
     {user ? <>
       {photoNotice&&<p className="dialog-notice profile-photo-notice" role="alert">{photoNotice}</p>}
       <button className="secondary-button profile-settings-button" onClick={onSettings}><Settings size={16}/> Chat settings</button>
-      {confirmDelete && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!deleteBusy)setConfirmDelete(false)}}><section className="dialog-card" role="alertdialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-description"><div className="dialog-head"><div><p className="eyebrow">ACCOUNT CONTROL</p><h2 id="delete-account-title">Delete your account?</h2></div><button className="icon-button" aria-label="Close confirmation" disabled={deleteBusy} onClick={()=>setConfirmDelete(false)}><X size={18}/></button></div><p className="dialog-copy" id="delete-account-description">This action is permanent. Chater will remove your profile and username reservation, then delete your Firebase sign-in account. This cannot be undone. Enter your current password to confirm.</p><form className="registration-form" onSubmit={async event=>{event.preventDefault();setDeleteNotice('');if(!deletePassword){setDeleteNotice('Enter your current password to continue.');return}setDeleteBusy(true);try{await onDeleteAccount(deletePassword);setConfirmDelete(false);setDeletePassword('')}catch(error){setDeleteNotice(error instanceof Error?error.message:'We could not delete your account. Please try again.')}finally{setDeleteBusy(false)}}}><label htmlFor="delete-account-password">Current password<input id="delete-account-password" type="password" autoComplete="current-password" required value={deletePassword} onChange={event=>{setDeletePassword(event.target.value);setDeleteNotice('')}}/></label>{deleteNotice&&<p className="dialog-notice" role="alert">{deleteNotice}</p>}<div className="dialog-actions"><button className="secondary-button" type="button" disabled={deleteBusy} onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="primary-button" type="submit" disabled={deleteBusy}>{deleteBusy?'Deleting…':'Permanently delete'}</button></div></form></section></div>}
-      {confirmSignOut && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setConfirmSignOut(false)}}><section className="dialog-card" role="alertdialog" aria-modal="true" aria-labelledby="signout-title" aria-describedby="signout-description"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="signout-title">Sign out?</h2></div><button className="icon-button" aria-label="Close confirmation" onClick={()=>setConfirmSignOut(false)}><X size={18}/></button></div><p className="dialog-copy" id="signout-description">Are you sure you want to sign out of your account?</p><div className="dialog-actions"><button className="secondary-button" onClick={()=>setConfirmSignOut(false)}>Cancel</button><button className="primary-button" onClick={onSignOut}>Yes, sign out</button></div></section></div>}
     </> : <>
       <button className="primary-button profile-create-button" onClick={onRegister}>Create account</button>
       <button className="secondary-button profile-settings-button" onClick={onLogin}>Sign in</button>
