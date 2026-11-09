@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
-import { MessageCircle, CirclePlay, Users, Phone, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight } from 'lucide-react'
+import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Grid3X3, Heart, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
@@ -406,9 +406,9 @@ export default function App() {
           <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
           <div className="empty-state chat-empty"><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
         </>}
-        {activeTab==='Moments'&&<FeatureEmpty data={pageCopy.Moments} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Moments'&&<MomentsScreen photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My status'} onExplore={()=>setDialog('search')}/>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
-        {activeTab==='Calls'&&<FeatureEmpty data={pageCopy.Calls} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Calls'&&<CallsScreen onFindContacts={()=>setDialog('search')}/>}
         {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}}/>}
       </div>
     </section>
@@ -604,9 +604,48 @@ export default function App() {
   </main>
 }
 
-function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;description:string;action:string;icon:typeof MessageCircle};onAction:()=>void}) {
-  const Icon=data.icon
-  return <div className="feature-page"><div className="page-heading"><div><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}<span className="heading-dot">.</span></h1><p className="subheading">{data.description}</p></div></div><div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><h2>Make this space<br/>your own.</h2><p className="empty-description">This is where your {data.title.toLowerCase()} will live. Get started when you're ready.</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div></div>
+function MomentsScreen({photoURL,displayName,onExplore}:{photoURL:string;displayName:string;onExplore:()=>void}) {
+  return <div className="moments-screen">
+    <section className="moments-section" aria-labelledby="status-heading">
+      <div className="moments-section-heading"><h2 id="status-heading">Status</h2></div>
+      <div className="status-strip">
+        <div className="status-card my-status">
+          <div className="status-card-photo">{photoURL ? <img src={photoURL} alt="" /> : <ProfileAvatar displayName={displayName}/>}</div>
+          <span>My status</span><small>Share an update</small><i aria-hidden="true">+</i>
+        </div>
+        <div className="status-placeholder"><div className="status-placeholder-ring"><CirclePlay size={25}/></div><strong>Your updates</strong><small>Moments from people you follow will appear here</small></div>
+      </div>
+    </section>
+    <section className="moments-section channels-section" aria-labelledby="channels-heading">
+      <div className="moments-section-heading"><h2 id="channels-heading">Channels</h2><button type="button" className="explore-button" onClick={onExplore}>Explore <ChevronRight size={16}/></button></div>
+      <div className="channels-empty">
+        <div className="channels-empty-icon"><Users size={25}/></div>
+        <div><strong>Discover channels</strong><p>Follow channels to see updates from communities and creators you like.</p></div>
+      </div>
+    </section>
+  </div>
+}
+function CallsScreen({onFindContacts}:{onFindContacts:()=>void}) {
+  const actions = [
+    {label:'Call',icon:PhoneCall,description:'Start a call'},
+    {label:'Schedule',icon:CalendarDays,description:'Plan a call'},
+    {label:'Keypad',icon:Grid3X3,description:'Dial a number'},
+    {label:'Favorites',icon:Heart,description:'Favorite contacts'}
+  ]
+  return <div className="calls-screen">
+    <section className="call-shortcuts" aria-label="Call shortcuts">
+      {actions.map(({label,icon:Icon,description})=><div className="call-shortcut" key={label} title={description}><span><Icon size={28} strokeWidth={2}/></span><strong>{label}</strong></div>)}
+    </section>
+    <section className="recent-calls" aria-labelledby="recent-calls-heading">
+      <h2 id="recent-calls-heading">Recent</h2>
+      <div className="recent-calls-empty">
+        <div className="recent-calls-icon"><Phone size={26}/></div>
+        <strong>No recent calls</strong>
+        <p>Your incoming, outgoing and missed calls will appear here.</p>
+        <button type="button" className="secondary-button" onClick={onFindContacts}>Find someone to call</button>
+      </div>
+    </section>
+  </div>
 }
 function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDisplayNameChange,onDetailsChange,onPhotoUpload,photoBusy,photoNotice,onSettings,onRegister,onLogin}:{user:User|null;photoURL:string;username:string;details:ProfileDetails;onUsernameChange:(username:string)=>Promise<void>;onDisplayNameChange:(name:string)=>Promise<void>;onDetailsChange:(details:ProfileDetails)=>Promise<void>;onPhotoUpload:(file:File)=>void;photoBusy:boolean;photoNotice:string;onSettings:()=>void;onRegister:()=>void;onLogin:()=>void;}) {
   const [editingProfile,setEditingProfile] = useState(false)
