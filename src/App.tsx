@@ -94,6 +94,7 @@ function EmptyIllustration({ icon: Icon }: { icon: LucideIcon }) {
 const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'amzak6nf'
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'chater_profiles'
+const CHATER_ACCOUNT_DELETION_URL = 'https://chater-account-deletion.henrymeraldcompany.workers.dev'
 
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
@@ -434,6 +435,22 @@ export default function App() {
     if (!firestoreDb) throw new Error('Chater cannot connect to the account database. Try again when connected.')
     const credential = EmailAuthProvider.credential(authUser.email, password)
     await reauthenticateWithCredential(authUser, credential)
+    // Delete this user's Cloudinary media first. If cleanup fails, stop here so
+    // the Firestore profile and Firebase sign-in account remain available for retry.
+    const idToken = await authUser.getIdToken(true)
+    let cleanupResponse: Response
+    try {
+      cleanupResponse = await fetch(CHATER_ACCOUNT_DELETION_URL + '/delete-media', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + idToken }
+      })
+    } catch {
+      throw new Error('Chater could not reach its secure media-cleanup service. Your account has not been deleted. Check your connection and try again.')
+    }
+    const cleanupResult = await cleanupResponse.json().catch(() => ({})) as { error?: string; success?: boolean }
+    if (!cleanupResponse.ok || cleanupResult.success !== true) {
+      throw new Error(cleanupResult.error || 'Chater could not confirm deletion of your profile pictures and Moments. Your account has not been deleted. Please try again later.')
+    }
     const db = firestoreDb
     // Remove this account's Moment records while the user is still authenticated.
     // Firestore rules only allow an owner to delete their own Moment documents.
