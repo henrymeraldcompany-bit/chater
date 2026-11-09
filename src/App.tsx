@@ -111,7 +111,7 @@ export default function App() {
       const resolved = theme === 'system' ? (media?.matches ? 'dark' : 'light') : theme
       const palette = resolved === 'dark'
         ? { accent: '#FDC85E', themeColor: '#0B1014' }
-        : { accent: '#E4B61A', themeColor: '#FFFFFF' }
+        : { accent: '#E3B71A', themeColor: '#FFFFFF' }
       root.dataset.theme = resolved
       root.dataset.themePreference = theme
       root.style.setProperty('--accent', palette.accent)
