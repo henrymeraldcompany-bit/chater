@@ -20,8 +20,8 @@ export default defineConfig({
         scope: './',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#101010',
-        theme_color: '#101010',
+        background_color: '#0B1014',
+        theme_color: '#0B1014',
         icons: [
           { src: 'icons/chater.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
         ]
