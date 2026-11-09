@@ -560,9 +560,11 @@ describe('Chater application shell', () => {
     fireEvent.touchStart(mainColumn, { touches: [{ clientX: 300, clientY: 300 }] })
     fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 190, clientY: 305 }] })
     expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
+    expect(document.querySelector('.content-wrap')).toHaveClass('tab-slide-forward')
     fireEvent.touchStart(mainColumn, { touches: [{ clientX: 180, clientY: 300 }] })
     fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 295, clientY: 302 }] })
     expect(screen.getAllByRole('button', { name: 'Chats' })[0]).toHaveAttribute('aria-current', 'page')
+    expect(document.querySelector('.content-wrap')).toHaveClass('tab-slide-backward')
   })
 
   it('opens the sign-in flow when a signed-out user tries to add a Moment', () => {
