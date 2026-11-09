@@ -549,7 +549,7 @@ describe('Chater application shell', () => {
   it('opens the phone call action from the Calls floating button', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Calls' })[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Make a call' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Make a call' }).find(button => button.classList.contains('compose-button'))!)
     expect(screen.getByRole('heading', { name: 'Make a call' })).toBeInTheDocument()
     expect(screen.getByLabelText('Phone number')).toBeInTheDocument()
   })
@@ -562,7 +562,7 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
     fireEvent.touchStart(mainColumn, { touches: [{ clientX: 180, clientY: 300 }] })
     fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 295, clientY: 302 }] })
-    expect(screen.getByText('Your conversations')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Chats' })[0]).toHaveAttribute('aria-current', 'page')
   })
 
   it('opens the sign-in flow when a signed-out user tries to add a Moment', () => {
