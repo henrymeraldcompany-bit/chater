@@ -358,6 +358,7 @@ export default function App() {
     setAccent(savedAccent)
     setCustomHex(savedAccent)
     setProfilePhotoUrl('')
+    setProfileUsername('')
     setProfileDetails(emptyProfileDetails)
     setPhotoNotice('')
     setActiveTab('Chats')
