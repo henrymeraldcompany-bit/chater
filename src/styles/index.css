@@ -487,3 +487,14 @@ body,.app-shell{background:var(--page);color:var(--text)}
 
 /* The default wallpaper follows the selected theme; the other five presets remain intact. */
 :root[data-wallpaper="default"]{--chat-wallpaper-background:var(--page)}
+
+
+/* Active navigation follows the user's selected accent colour. */
+.nav-item.active,
+.rail-link.active{
+  background:var(--accent)!important;
+  border-color:var(--accent)!important;
+  color:var(--page)!important;
+}
+.nav-item.active svg,
+.rail-link.active svg{color:inherit!important;filter:none!important}
