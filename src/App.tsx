@@ -507,11 +507,24 @@ export default function App() {
         setAccent(savedAccent)
         setCustomHex(savedAccent)
         setProfilePhotoUrl(credential.user.photoURL || '')
-        const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', credential.user.uid)) : null
-        const storedUsername = profileSnapshot?.data()?.username
+        // Authentication has already succeeded. A profile-read failure must never
+        // keep the sign-in dialog open or make a successful sign-in look unsuccessful.
+        let storedProfile: Record<string, unknown> = {}
+        try {
+          const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', credential.user.uid)) : null
+          storedProfile = (profileSnapshot?.data() || {}) as Record<string, unknown>
+        } catch {
+          // The profile can be repaired/loaded later; Firebase Auth remains valid.
+        }
+        const storedUsername = storedProfile.username
         const localUsername = window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
         setProfileUsername(resolvedUsername)
+        setProfileDetails({
+          about: typeof storedProfile.about === 'string' ? storedProfile.about : '',
+          location: typeof storedProfile.location === 'string' ? storedProfile.location : '',
+          occupation: typeof storedProfile.occupation === 'string' ? storedProfile.occupation : ''
+        })
         if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${credential.user.uid}`, resolvedUsername)
         setLoginPassword('')
         setDialog(null)
