@@ -246,7 +246,7 @@ body,.app-shell{background:var(--page);color:var(--text)}
 @media(max-width:480px){.profile-details{padding:14px}.profile-detail-list>div{grid-template-columns:76px minmax(0,1fr)}}
 
 
-/* Screenshot-matched WhatsApp theme palettes — all app surfaces use these tokens */
+/* WhatsApp-matched dark surfaces; light mode and accent choices remain independent */
 :root{
   color-scheme:dark;
   --page:#0B1014;
@@ -263,68 +263,36 @@ body,.app-shell{background:var(--page);color:var(--text)}
   --hover:#161B1F;
   --dialog:#161B1F;
   --selected:#362F1F;
-  --selected-text:#FDC85E;
+  --selected-text:var(--accent);
   --nav-selected:#362F1F;
-  --accent:#FDC85E;
-  --accent-bright:#FDC85E;
-  --accent-soft:#FDC85E33;
-  --gold-light:#FDC85E;
+  --gold-light:var(--accent);
   --on-accent:#17130B;
   --chat-wallpaper-background:#161B1F;
   background:var(--page);
   color:var(--text);
 }
-:root[data-theme="dark"]{
-  color-scheme:dark;
-  --page:#0B1014;
-  --panel:#0B1014;
-  --panel-raised:#161B1F;
-  --surface:#0B1014;
-  --surface-raised:#161B1F;
-  --text:#D9DAD1;
-  --text-strong:#F4F5F1;
-  --text-muted:#7E8386;
-  --border:#202629;
-  --field:#23282C;
-  --nav:#0B1014;
-  --hover:#161B1F;
-  --dialog:#161B1F;
-  --selected:#362F1F;
-  --selected-text:#FDC85E;
-  --nav-selected:#362F1F;
-  --accent:#FDC85E;
-  --accent-bright:#FDC85E;
-  --accent-soft:#FDC85E33;
-  --gold-light:#FDC85E;
-  --on-accent:#17130B;
-  --chat-wallpaper-background:#161B1F;
-  background:var(--page);
-  color:var(--text);
-}
+:root[data-theme="dark"]{color-scheme:dark}
 :root[data-theme="light"]{
   color-scheme:light;
-  --page:#FFFFFF;
+  --page:#f5f6f8;
   --panel:#FFFFFF;
-  --panel-raised:#F6F5F3;
+  --panel-raised:#eef1f4;
   --surface:#FFFFFF;
-  --surface-raised:#F6F5F3;
-  --text:#565D61;
-  --text-strong:#0B1014;
-  --text-muted:#7B8184;
-  --border:#E8E8E8;
-  --field:#F6F5F3;
-  --nav:#FFFFFF;
-  --hover:#F6F5F3;
+  --surface-raised:#eef1f4;
+  --text:#252a31;
+  --text-strong:#171b22;
+  --text-muted:#68717d;
+  --border:#dce1e7;
+  --field:#FFFFFF;
+  --nav:#ffffffed;
+  --hover:#edf1f5;
   --dialog:#FFFFFF;
-  --selected:#FFF0D3;
-  --selected-text:#80610B;
-  --nav-selected:#FFF0D3;
-  --accent:#E3B71A;
-  --accent-bright:#E3B71A;
-  --accent-soft:#E3B71A33;
-  --gold-light:#E3B71A;
+  --selected:#e5f7f7;
+  --selected-text:#087f82;
+  --nav-selected:#e5f7f7;
+  --gold-light:var(--accent);
   --on-accent:#17130B;
-  --chat-wallpaper-background:#F6F5F3;
+  --chat-wallpaper-background:#f5f6f8;
   background:var(--page);
   color:var(--text);
 }
@@ -396,7 +364,7 @@ body{background:var(--page)!important;color:var(--text)}
 .profile-details-form label small,.profile-details-form textarea,
 .profile-details-form input{color:var(--text)!important}
 .profile-detail-list,.profile-details,.registration-photo-row,
-.theme-palette-note,.accent-settings,.bubble-preview{
+.accent-settings,.bubble-preview{
   background:var(--panel-raised)!important;
   border-color:var(--border)!important;
 }
@@ -535,11 +503,15 @@ body{background:var(--page)!important;color:var(--text)}
   outline-color:var(--accent)!important;
 }
 ::selection{background:var(--selected)!important;color:var(--text-strong)!important}
-:root[data-theme="light"] .dialog-backdrop{background:#17212B55!important}
+:root[data-theme="light"] .splash-screen{background:radial-gradient(ellipse at 50% 42%,#d9f5f5 0%,#edf5f6 42%,#f5f6f8 78%)!important}
+:root[data-theme="light"] .splash-screen p{color:#68717d!important}
 :root[data-theme="light"] .empty-icon{
-  background:var(--panel-raised)!important;
+  background:linear-gradient(145deg,#e5f7f7,#f5fbfb)!important;
+  border-color:var(--accent)!important;
   color:var(--accent)!important;
 }
+:root[data-theme="light"] .empty-orbit{border-color:color-mix(in srgb,var(--accent) 45%,transparent)!important}
+:root[data-theme="light"] .dialog-backdrop{background:#18212b66!important}
 :root[data-theme="light"] .profile-avatar:not(:has(img)){
   color:var(--on-accent)!important;
 }
