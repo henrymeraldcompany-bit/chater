@@ -598,3 +598,7 @@ body,.app-shell{background:var(--page);color:var(--text)}
  .call-shortcuts{max-width:640px;margin:0 auto 62px}
  .recent-calls-empty{min-height:220px}
 }
+
+
+/* Accessible page labels remain available to assistive technology without changing the visual layout. */
+.a11y-heading{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
