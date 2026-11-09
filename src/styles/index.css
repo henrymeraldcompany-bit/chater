@@ -542,3 +542,15 @@ body,.app-shell{background:var(--page);color:var(--text)}
   border-color:color-mix(in srgb,var(--accent) 72%,transparent)!important;
   color:var(--accent)!important;
 }
+
+/* Shared full-width search bar sits directly below the top header on every tab. */
+.section-search-wrap{
+  width:100%;
+  max-width:1020px;
+  box-sizing:border-box;
+  margin:0 auto;
+  padding:16px 20px 0;
+}
+.section-search-wrap .chat-toolbar{width:100%;margin:0}
+.section-search-wrap .search-box{width:100%;min-width:0;flex:1}
+.content-wrap{padding-top:18px}
