@@ -97,13 +97,25 @@ describe('Chater application shell', () => {
     const cyan = screen.getByRole('button', { name: 'Cyan' })
     const violet = screen.getByRole('button', { name: 'Violet' })
     const gold = screen.getByRole('button', { name: 'Gold' })
-    expect(cyan).toHaveAttribute('aria-pressed', 'true')
+    expect(gold).toHaveAttribute('aria-pressed', 'true')
+    expect(cyan).toHaveAttribute('aria-pressed', 'false')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
     fireEvent.click(violet)
     expect(violet).toHaveAttribute('aria-pressed', 'true')
-    expect(cyan).toHaveAttribute('aria-pressed', 'false')
+    expect(gold).toHaveAttribute('aria-pressed', 'false')
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#a78bfa')
+    fireEvent.click(cyan)
+    expect(cyan).toHaveAttribute('aria-pressed', 'true')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#00fdff')
     fireEvent.click(gold)
     expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
+  })
+
+  it('migrates the former default cyan to the restored Gold default', () => {
+    window.localStorage.setItem('chater:preferences:accent', '#00fdff')
+    openApp()
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#eab308')
+    expect(window.localStorage.getItem('chater:preferences:accent')).toBe('#eab308')
   })
 
   it('applies a valid custom HEX accent and rejects incomplete values', () => {
