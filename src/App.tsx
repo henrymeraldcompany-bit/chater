@@ -36,7 +36,7 @@ function readSavedAccent(userId?: string | null): string {
     const normalized = saved.toLowerCase()
     // The previous update incorrectly saved Gold as the default. Restore the original
     // translucent cyan default while retaining other explicitly selected colours.
-    return normalized === '#eab308' ? DEFAULT_ACCENT : normalized
+    return normalized
   } catch {
     return DEFAULT_ACCENT
   }
@@ -404,9 +404,9 @@ export default function App() {
       <div className="content-wrap">
         {activeTab==='Chats' && <>
           <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
-          <div className="empty-state chat-empty"><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
+          <div className="empty-state chat-empty"><h1 className="a11y-heading">Chats</h1><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
         </>}
-        {activeTab==='Moments'&&<MomentsScreen photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My status'} onExplore={()=>setDialog('search')}/>}
+        {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share a little piece of your day. Moments disappear after 24 hours.</p><MomentsScreen photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My status'} onExplore={()=>setDialog('search')}/></>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<CallsScreen onFindContacts={()=>setDialog('search')}/>}
         {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}}/>}
@@ -604,6 +604,10 @@ export default function App() {
   </main>
 }
 
+function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;description:string;action:string;icon:React.ElementType};onAction:()=>void}) {
+  const Icon=data.icon
+  return <div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}</h1><p className="empty-description">{data.description}</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div>
+}
 function MomentsScreen({photoURL,displayName,onExplore}:{photoURL:string;displayName:string;onExplore:()=>void}) {
   return <div className="moments-screen">
     <section className="moments-section" aria-labelledby="status-heading">
