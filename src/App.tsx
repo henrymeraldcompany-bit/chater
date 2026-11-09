@@ -33,12 +33,17 @@ const isValidHexAccent = (value: string): boolean => /^#[0-9a-fA-F]{6}(?:[0-9a-f
 function readSavedAccent(userId?: string | null): string {
   try {
     const storageKey = userId ? `${ACCENT_STORAGE_KEY}:${userId}` : ACCENT_STORAGE_KEY
+    const migrationKey = `${storageKey}:migration-v1`
     const saved = window.localStorage.getItem(storageKey)
-    if (!saved || !isValidHexAccent(saved)) return DEFAULT_ACCENT
-    const normalized = saved.toLowerCase()
-    // The previous update incorrectly saved Gold as the default. Restore the original
-    // translucent cyan default while retaining other explicitly selected colours.
-    return normalized === '#eab308' ? DEFAULT_ACCENT : normalized
+    const normalized = saved && isValidHexAccent(saved) ? saved.toLowerCase() : ''
+    const migrationDone = window.localStorage.getItem(migrationKey) === 'done'
+    if (!migrationDone) {
+      window.localStorage.setItem(migrationKey, 'done')
+      // Only migrate the legacy Gold value once. A user who chooses Gold afterwards
+      // keeps that choice across launches.
+      if (normalized === '#eab308') return DEFAULT_ACCENT
+    }
+    return normalized || DEFAULT_ACCENT
   } catch {
     return DEFAULT_ACCENT
   }
