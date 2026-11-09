@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore'
-import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Grid3X3, Heart, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight } from 'lucide-react'
+import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Grid3X3, Heart, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, type LucideIcon } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
@@ -36,7 +36,7 @@ function readSavedAccent(userId?: string | null): string {
     const normalized = saved.toLowerCase()
     // The previous update incorrectly saved Gold as the default. Restore the original
     // translucent cyan default while retaining other explicitly selected colours.
-    return normalized
+    return normalized === '#eab308' ? DEFAULT_ACCENT : normalized
   } catch {
     return DEFAULT_ACCENT
   }
@@ -80,7 +80,7 @@ function BrandLogo({ className }: { className: string }) {
 function SplashScreen() {
   return <div className="splash-screen" aria-label="Chater from GOZIE"><div className="splash-brand"><BrandLogo className="brand-logo" /><span>Chater</span></div><p>from <strong>GOZIE</strong></p></div>
 }
-function EmptyIllustration({ icon: Icon }: { icon: typeof MessageCircle }) {
+function EmptyIllustration({ icon: Icon }: { icon: LucideIcon }) {
   return <div className="empty-art"><div className="empty-orbit orbit-one"/><div className="empty-orbit orbit-two"/><div className="empty-icon"><Icon size={34} strokeWidth={1.5}/></div><span className="sparkle sparkle-a">✦</span><span className="sparkle sparkle-b">✧</span></div>
 }
 
@@ -604,7 +604,7 @@ export default function App() {
   </main>
 }
 
-function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;description:string;action:string;icon:React.ElementType};onAction:()=>void}) {
+function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;description:string;action:string;icon:LucideIcon};onAction:()=>void}) {
   const Icon=data.icon
   return <div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}</h1><p className="empty-description">{data.description}</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div>
 }
