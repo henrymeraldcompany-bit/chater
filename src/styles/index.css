@@ -489,12 +489,21 @@ body,.app-shell{background:var(--page);color:var(--text)}
 :root[data-wallpaper="default"]{--chat-wallpaper-background:var(--page)}
 
 
-/* Active navigation follows the user's selected accent colour. */
-.nav-item.active,
-.rail-link.active{
-  background:var(--accent)!important;
-  border-color:var(--accent)!important;
-  color:var(--page)!important;
+/* Active navigation highlight: a soft accent-colour halo around the selected tab. */
+.bottom-nav .nav-item.active,
+.desktop-rail .rail-link.active{
+  position:relative;
+  background:color-mix(in srgb,var(--accent) 19%,var(--nav))!important;
+  border:1px solid color-mix(in srgb,var(--accent) 62%,transparent)!important;
+  border-radius:16px!important;
+  color:var(--accent)!important;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 12%,transparent),
+             0 0 16px color-mix(in srgb,var(--accent) 22%,transparent)!important;
 }
-.nav-item.active svg,
-.rail-link.active svg{color:inherit!important;filter:none!important}
+.bottom-nav .nav-item.active svg,
+.desktop-rail .rail-link.active svg{
+  color:var(--accent)!important;
+  filter:drop-shadow(0 0 5px color-mix(in srgb,var(--accent) 45%,transparent))!important;
+}
+.bottom-nav .nav-item.active span,
+.desktop-rail .rail-link.active span{color:var(--accent)!important}
