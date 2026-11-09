@@ -19,27 +19,12 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Signed-in users can read profiles; only the owner can create or edit one.
+      // Signed-in members can read profiles. Only the matching account owner
+      // can create, update, or delete this user's profile document.
       allow read: if signedIn();
       allow create, update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.uid == request.auth.uid
-        && (!('username' in request.resource.data)
-          || (request.resource.data.username is string
-            && request.resource.data.username.matches('^[a-z0-9_]{3,20}$')))
-        && (!('displayName' in request.resource.data)
-          || (request.resource.data.displayName is string
-            && request.resource.data.displayName.size() >= 2
-            && request.resource.data.displayName.size() <= 50))
-        && (!('about' in request.resource.data)
-          || (request.resource.data.about is string
-            && request.resource.data.about.size() <= 160))
-        && (!('location' in request.resource.data)
-          || (request.resource.data.location is string
-            && request.resource.data.location.size() <= 60))
-        && (!('occupation' in request.resource.data)
-          || (request.resource.data.occupation is string
-            && request.resource.data.occupation.size() <= 60));
+        && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && request.auth.uid == userId;
     }
   }
