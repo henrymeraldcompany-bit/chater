@@ -672,7 +672,7 @@ function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDispla
           await onUsernameChange(normalizedUsername)
           await onDetailsChange(normalizedDetails)
           setEditingProfile(false)
-          setProfileEditNotice('Your profile has been updated.')
+          setProfileEditNotice('')
         } catch(error) {
           setProfileEditNotice(error instanceof Error?error.message:'We could not save your profile. Please try again.')
         } finally { setProfileSaveBusy(false) }
@@ -690,7 +690,6 @@ function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDispla
         </div>
       </form>}
       {profileEditNotice&&<p className="dialog-notice" role="status">{profileEditNotice}</p>}
-      <p className="profile-details-privacy">Your profile picture, name, username, About, occupation and location can all be updated here.</p>
     </>}
     {(!user || !user.emailVerified) && <p className="profile-about">{user ? 'Please verify your email address.' : 'Add a little about yourself.'}</p>}
     {user ? <>
