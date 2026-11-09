@@ -434,6 +434,8 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith(user))
     expect(reauthenticateWithCredential).toHaveBeenCalled()
     expect(getDocs).toHaveBeenCalled()
+    expect(query).toHaveBeenCalled()
+    expect(where).toHaveBeenCalledWith('uid', '==', user.uid)
     expect(runTransaction).toHaveBeenCalled()
     await waitFor(() => expect(screen.getByRole('heading', { name: /Chats/ })).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
