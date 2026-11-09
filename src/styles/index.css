@@ -507,3 +507,20 @@ body,.app-shell{background:var(--page);color:var(--text)}
 }
 .bottom-nav .nav-item.active span,
 .desktop-rail .rail-link.active span{color:var(--accent)!important}
+
+
+/* Keep the selected navigation fill tied to the user's accent in both themes.
+   This higher-specificity rule replaces the legacy gold dark-theme fill. */
+:root[data-theme="dark"] .bottom-nav .nav-item.active,
+:root[data-theme="dark"] .desktop-rail .rail-link.active{
+  background:color-mix(in srgb,var(--accent) 28%,var(--nav))!important;
+  background-image:none!important;
+  border-color:color-mix(in srgb,var(--accent) 72%,transparent)!important;
+  color:var(--accent)!important;
+}
+:root[data-theme="dark"] .bottom-nav .nav-item.active svg,
+:root[data-theme="dark"] .desktop-rail .rail-link.active svg,
+:root[data-theme="dark"] .bottom-nav .nav-item.active span,
+:root[data-theme="dark"] .desktop-rail .rail-link.active span{
+  color:var(--accent)!important;
+}
