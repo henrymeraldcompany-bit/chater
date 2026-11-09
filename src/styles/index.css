@@ -244,3 +244,302 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .profile-details-form .dialog-actions{margin-top:4px}
 .profile-details-privacy{margin:12px 0 0;color:var(--text-muted);font-size:9px;line-height:1.5}
 @media(max-width:480px){.profile-details{padding:14px}.profile-detail-list>div{grid-template-columns:76px minmax(0,1fr)}}
+
+
+/* Screenshot-matched WhatsApp theme palettes — all app surfaces use these tokens */
+:root{
+  color-scheme:dark;
+  --page:#0B1014;
+  --panel:#0B1014;
+  --panel-raised:#161B1F;
+  --surface:#0B1014;
+  --surface-raised:#161B1F;
+  --text:#D9DAD1;
+  --text-strong:#F4F5F1;
+  --text-muted:#7E8386;
+  --border:#202629;
+  --field:#23282C;
+  --nav:#0B1014;
+  --hover:#161B1F;
+  --dialog:#161B1F;
+  --selected:#362F1F;
+  --selected-text:#FDC85E;
+  --nav-selected:#362F1F;
+  --accent:#FDC85E;
+  --accent-bright:#FDC85E;
+  --accent-soft:#FDC85E33;
+  --gold-light:#FDC85E;
+  --on-accent:#17130B;
+  --chat-wallpaper-background:#161B1F;
+  background:var(--page);
+  color:var(--text);
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#0B1014;
+  --panel:#0B1014;
+  --panel-raised:#161B1F;
+  --surface:#0B1014;
+  --surface-raised:#161B1F;
+  --text:#D9DAD1;
+  --text-strong:#F4F5F1;
+  --text-muted:#7E8386;
+  --border:#202629;
+  --field:#23282C;
+  --nav:#0B1014;
+  --hover:#161B1F;
+  --dialog:#161B1F;
+  --selected:#362F1F;
+  --selected-text:#FDC85E;
+  --nav-selected:#362F1F;
+  --accent:#FDC85E;
+  --accent-bright:#FDC85E;
+  --accent-soft:#FDC85E33;
+  --gold-light:#FDC85E;
+  --on-accent:#17130B;
+  --chat-wallpaper-background:#161B1F;
+  background:var(--page);
+  color:var(--text);
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --page:#FFFFFF;
+  --panel:#FFFFFF;
+  --panel-raised:#F6F5F3;
+  --surface:#FFFFFF;
+  --surface-raised:#F6F5F3;
+  --text:#565D61;
+  --text-strong:#0B1014;
+  --text-muted:#7B8184;
+  --border:#E8E8E8;
+  --field:#F6F5F3;
+  --nav:#FFFFFF;
+  --hover:#F6F5F3;
+  --dialog:#FFFFFF;
+  --selected:#FFF0D3;
+  --selected-text:#80610B;
+  --nav-selected:#FFF0D3;
+  --accent:#E4B61A;
+  --accent-bright:#E4B61A;
+  --accent-soft:#E4B61A33;
+  --gold-light:#E4B61A;
+  --on-accent:#17130B;
+  --chat-wallpaper-background:#F6F5F3;
+  background:var(--page);
+  color:var(--text);
+}
+html,body,#root,.app-shell,.main-column,.content-wrap{
+  background-color:var(--page);
+  color:var(--text);
+}
+body{background:var(--page)!important;color:var(--text)}
+.topbar,.bottom-nav,.desktop-rail{
+  background:var(--page)!important;
+  border-color:var(--border)!important;
+}
+.topbar{backdrop-filter:none}
+.mobile-brand,.rail-brand,.topbar-title strong,.page-heading h1,
+.profile-page>h1,.empty-state h2,.profile-card h2,.dialog-head h2,
+.accent-settings-heading h3,.profile-details-heading h3{
+  color:var(--text-strong)!important;
+}
+.topbar-title .eyebrow,.eyebrow,.heading-dot,.profile-handle,
+.dialog-notice,.custom-accent-notice,.text-button,.sparkle{
+  color:var(--accent)!important;
+}
+.icon-button{color:var(--text-muted)}
+.icon-button:hover,.rail-link:hover{background:var(--hover)!important;color:var(--accent)!important}
+.search-box,.filter-button{
+  background:var(--field)!important;
+  border-color:var(--border)!important;
+  color:var(--text-muted)!important;
+}
+.search-box input{background:transparent!important;color:var(--text-strong)!important}
+.search-box input::placeholder{color:var(--text-muted)!important;opacity:1}
+.filter-chip{
+  background:var(--page)!important;
+  border-color:var(--border)!important;
+  color:var(--text-muted)!important;
+}
+.filter-chip.selected,.rail-link.active{
+  background:var(--selected)!important;
+  border-color:var(--selected)!important;
+  color:var(--selected-text)!important;
+}
+.profile-card{
+  background:var(--panel-raised)!important;
+  border-color:var(--border)!important;
+  box-shadow:none!important;
+}
+.profile-card h2{color:var(--text-strong)!important}
+.profile-options,.settings-list{
+  background:var(--panel)!important;
+  border-color:var(--border)!important;
+}
+.profile-options button,.settings-list button{
+  background:var(--panel)!important;
+  border-color:var(--border)!important;
+  color:var(--text)!important;
+}
+.profile-options button>svg:first-child,.settings-list button>svg:first-child{
+  color:var(--accent)!important;
+}
+.profile-options button>svg:last-child,.settings-list button>svg:last-child{
+  color:var(--text-muted)!important;
+}
+.profile-options small,.rail-profile small,.subheading,.empty-description,
+.profile-about,.profile-details-empty,.profile-character-count,
+.accent-help,.registration-footnote{
+  color:var(--text-muted)!important;
+}
+.profile-bio,.profile-detail-list dd,.profile-details-form label,
+.profile-details-form label small,.profile-details-form textarea,
+.profile-details-form input{color:var(--text)!important}
+.profile-detail-list,.profile-details,.registration-photo-row,
+.theme-palette-note,.accent-settings,.bubble-preview{
+  background:var(--panel-raised)!important;
+  border-color:var(--border)!important;
+}
+.profile-details,.registration-photo-row{background:var(--panel-raised)!important}
+.primary-button,.compose-button{
+  background:var(--accent)!important;
+  background-image:none!important;
+  border:1px solid var(--accent)!important;
+  color:var(--on-accent)!important;
+  box-shadow:none!important;
+}
+.primary-button:hover,.compose-button:hover{filter:brightness(1.04)}
+.secondary-button{
+  background:var(--panel-raised)!important;
+  background-image:none!important;
+  border:1px solid var(--border)!important;
+  color:var(--accent)!important;
+  box-shadow:none!important;
+}
+.bottom-nav{border-top:1px solid var(--border)!important}
+.nav-item{color:var(--text-muted)!important}
+.nav-item.active{
+  color:var(--accent)!important;
+  background:var(--nav-selected)!important;
+  border-radius:999px;
+  filter:none!important;
+}
+.nav-item.active svg{filter:none!important}
+.dialog-backdrop{background:#0009!important}
+.dialog-card,.account-settings-panel{
+  background:var(--dialog)!important;
+  border-color:var(--border)!important;
+  color:var(--text)!important;
+  box-shadow:0 24px 80px #0006!important;
+}
+.dialog-head h2,.dialog-head h3{color:var(--text-strong)!important}
+.dialog-copy{color:var(--text-muted)!important}
+.registration-form>label,.registration-form label{
+  color:var(--text)!important;
+}
+.registration-form input,.registration-form textarea,
+.profile-details-form input,.profile-details-form textarea,
+.theme-select,.custom-accent-controls input{
+  background:var(--field)!important;
+  border-color:var(--border)!important;
+  color:var(--text-strong)!important;
+}
+.registration-form input::placeholder,.registration-form textarea::placeholder,
+.profile-details-form input::placeholder,.profile-details-form textarea::placeholder{
+  color:var(--text-muted)!important;
+  opacity:1;
+}
+.registration-form input:focus,.registration-form textarea:focus,
+.profile-details-form input:focus,.profile-details-form textarea:focus,
+.theme-select:focus,.custom-accent-controls input:focus{
+  border-color:var(--accent)!important;
+}
+.theme-settings,.wallpaper-settings,.bubble-settings,.custom-accent{
+  border-color:var(--border)!important;
+}
+.theme-select-label,.custom-accent>label{color:var(--text)!important}
+.accent-settings-heading>span{color:var(--accent)!important}
+.accent-settings{border-color:var(--border)!important}
+.wallpaper-option,.bubble-style-option{
+  background:var(--panel)!important;
+  border-color:var(--border)!important;
+  color:var(--text-muted)!important;
+}
+.wallpaper-option.selected,.bubble-style-option.selected{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 1px var(--accent-soft)!important;
+}
+.wallpaper-swatch{background:var(--panel-raised)!important}
+.chat-wallpaper-preview{
+  background:var(--chat-wallpaper-background)!important;
+  border-color:var(--border)!important;
+}
+.preview-message,.preview-message.received{
+  background:var(--field)!important;
+  color:var(--text)!important;
+}
+.preview-message.sent{
+  background:var(--accent)!important;
+  color:var(--on-accent)!important;
+}
+.bubble-preview-incoming{
+  background:var(--field)!important;
+  color:var(--text)!important;
+}
+.bubble-preview-outgoing{
+  background:var(--accent)!important;
+  color:var(--on-accent)!important;
+}
+.bubble-style-sample i{background:var(--field)!important}
+.bubble-style-sample b{background:var(--accent)!important}
+.profile-avatar:not(:has(img)){
+  background:linear-gradient(140deg,var(--accent),var(--panel-raised))!important;
+  color:var(--on-accent)!important;
+}
+.profile-avatar-add{
+  background:var(--accent)!important;
+  color:var(--on-accent)!important;
+  border-color:var(--panel)!important;
+}
+.profile-edit-trigger{
+  background:var(--panel-raised)!important;
+  border-color:var(--border)!important;
+  color:var(--text)!important;
+}
+.profile-edit-trigger:hover{border-color:var(--accent)!important;color:var(--accent)!important}
+.empty-icon{
+  background:var(--panel-raised)!important;
+  border-color:var(--accent)!important;
+  color:var(--accent)!important;
+  box-shadow:none!important;
+}
+.empty-orbit{border-color:var(--accent-soft)!important}
+.sparkle-a,.sparkle-b{color:var(--accent)!important}
+.splash-screen{
+  background:var(--page)!important;
+}
+.splash-brand span{
+  background:linear-gradient(110deg,var(--text-strong),var(--accent))!important;
+  background-clip:text!important;
+  color:transparent!important;
+}
+.splash-screen p{color:var(--text-muted)!important}
+.rail-link{color:var(--text-muted)!important}
+.rail-profile{border-color:var(--border)!important}
+.photo-picker-button{
+  background:var(--panel-raised)!important;
+  border-color:var(--border)!important;
+  color:var(--accent)!important;
+}
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{
+  outline-color:var(--accent)!important;
+}
+::selection{background:var(--selected)!important;color:var(--text-strong)!important}
+:root[data-theme="light"] .dialog-backdrop{background:#17212B55!important}
+:root[data-theme="light"] .empty-icon{
+  background:var(--panel-raised)!important;
+  color:var(--accent)!important;
+}
+:root[data-theme="light"] .profile-avatar:not(:has(img)){
+  color:var(--on-accent)!important;
+}
