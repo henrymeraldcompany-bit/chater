@@ -13,6 +13,29 @@ const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
   { label: 'Groups', icon: Users }, { label: 'Calls', icon: Phone }, { label: 'You', icon: UserRound }
 ]
 const filters: Filter[] = ['All', 'Unread', 'Favorites', 'Groups']
+const accentPresets = [
+  { name: 'Cyan', value: '#00fdff' },
+  { name: 'Ocean blue', value: '#3b82f6' },
+  { name: 'Violet', value: '#a78bfa' },
+  { name: 'Pink', value: '#f472b6' },
+  { name: 'Rose', value: '#fb7185' },
+  { name: 'Red', value: '#ef4444' },
+  { name: 'Amber', value: '#f59e0b' },
+  { name: 'Gold', value: '#eab308' },
+  { name: 'Green', value: '#22c55e' },
+  { name: 'Lime', value: '#a3e635' }
+]
+const ACCENT_STORAGE_KEY = 'chater:preferences:accent'
+const isValidHexAccent = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value)
+function readSavedAccent(userId?: string | null): string {
+  try {
+    const storageKey = userId ? `${ACCENT_STORAGE_KEY}:${userId}` : ACCENT_STORAGE_KEY
+    const saved = window.localStorage.getItem(storageKey)
+    return saved && isValidHexAccent(saved) ? saved.toLowerCase() : accentPresets[0].value
+  } catch {
+    return accentPresets[0].value
+  }
+}
 const BUBBLE_STORAGE_KEY = 'chater:preferences:bubble-style'
 type BubbleStyle = 'rounded' | 'soft' | 'square'
 const bubbleStyles: { id: BubbleStyle; name: string }[] = [
@@ -101,23 +124,33 @@ export default function App() {
   const [profileDetails, setProfileDetails] = useState<ProfileDetails>(emptyProfileDetails)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoNotice, setPhotoNotice] = useState('')
+  const [accent, setAccent] = useState(readSavedAccent)
+  const [customHex, setCustomHex] = useState(readSavedAccent)
+  const [customHexNotice, setCustomHexNotice] = useState('')
+  const normalizedCustomHex = /^#?[0-9a-fA-F]{6}$/.test(customHex.trim()) ? (customHex.trim().startsWith('#') ? customHex.trim() : `#${customHex.trim()}`) : ''
   const [theme, setTheme] = useState<ThemePreference>(readSavedTheme)
   const [wallpaper, setWallpaper] = useState<Wallpaper>(readSavedWallpaper)
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyle>(readSavedBubbleStyle)
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent', accent)
+    document.documentElement.style.setProperty('--accent-bright', accent)
+    document.documentElement.style.setProperty('--accent-soft', `${accent}22`)
+  }, [accent])
+  useEffect(() => {
+    try {
+      const storageKey = authUser?.uid ? `${ACCENT_STORAGE_KEY}:${authUser.uid}` : ACCENT_STORAGE_KEY
+      window.localStorage.setItem(storageKey, accent)
+    } catch { /* Accent remains active for this session. */ }
+  }, [accent, authUser?.uid])
   useEffect(() => {
     const root = document.documentElement
     let media: MediaQueryList | undefined
     const applyTheme = () => {
       const resolved = theme === 'system' ? (media?.matches ? 'dark' : 'light') : theme
-      const palette = resolved === 'dark'
-        ? { accent: '#FDC85E', themeColor: '#0B1014' }
-        : { accent: '#E3B71A', themeColor: '#FFFFFF' }
+      const themeColor = resolved === 'dark' ? '#0B1014' : '#f5f6f8'
       root.dataset.theme = resolved
       root.dataset.themePreference = theme
-      root.style.setProperty('--accent', palette.accent)
-      root.style.setProperty('--accent-bright', palette.accent)
-      root.style.setProperty('--accent-soft', palette.accent + '33')
-      document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', palette.themeColor)
+      document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', themeColor)
     }
     try { media = window.matchMedia?.('(prefers-color-scheme: dark)') } catch { media = undefined }
     applyTheme()
@@ -140,6 +173,9 @@ export default function App() {
       if (registrationInProgress.current || loginInProgress.current) return
       if (!user) {
         setAuthUser(null)
+        const savedAccent = readSavedAccent()
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl('')
         setProfileUsername('')
         setProfileDetails(emptyProfileDetails)
@@ -155,6 +191,9 @@ export default function App() {
           return
         }
         setAuthUser(user)
+        const savedAccent = readSavedAccent(user.uid)
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl(user.photoURL || '')
         const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
         const storedProfile = profileSnapshot?.data() || {}
@@ -171,6 +210,9 @@ export default function App() {
       } catch {
         // Keep the authenticated session if only the Firestore profile lookup is denied.
         setAuthUser(user)
+        const savedAccent = readSavedAccent(user.uid)
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl(user.photoURL || '')
         setProfileDetails(emptyProfileDetails)
         const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
@@ -309,10 +351,13 @@ export default function App() {
     }
     try {
       window.localStorage.removeItem(`chater:profile:username:${authUser.uid}`)
+      window.localStorage.removeItem(`${ACCENT_STORAGE_KEY}:${authUser.uid}`)
     } catch { /* Account deletion remains complete even if local cleanup is unavailable. */ }
     setAuthUser(null)
+    const savedAccent = readSavedAccent()
+    setAccent(savedAccent)
+    setCustomHex(savedAccent)
     setProfilePhotoUrl('')
-    setProfileUsername('')
     setProfileDetails(emptyProfileDetails)
     setPhotoNotice('')
     setActiveTab('Chats')
@@ -362,7 +407,7 @@ export default function App() {
     </section>
     <button className="compose-button" aria-label="Start a new chat" onClick={()=>setDialog('new-chat')}><Plus size={25}/></button>
     <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
-    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings theme-palette-note" aria-label="Theme colour palette"><div className="accent-settings-heading"><h3>Theme colours</h3><span>WhatsApp palette</span></div><p className="accent-help">Chater automatically uses the matching gold accents and surfaces for the selected dark or light theme.</p></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div>{accountPanel!=='closed'&&<section className="account-settings-panel" aria-label="Account actions"><div className="dialog-head"><div><p className="eyebrow">ACCOUNT CONTROL</p><h3>{accountPanel==='choices'?'Account actions':accountPanel==='signout'?'Sign out?':'Delete your account?'}</h3></div><button className="icon-button" aria-label="Back to settings" onClick={()=>{setAccountPanel('closed');setAccountNotice('');setAccountPassword('')}}><X size={18}/></button></div>{accountPanel==='choices'?<div className="settings-list"><button onClick={()=>setAccountPanel('signout')}>Sign out <ChevronRight/></button><button onClick={()=>setAccountPanel('delete')}>Delete account <ChevronRight/></button></div>:accountPanel==='signout'?<><p className="dialog-copy">Are you sure you want to sign out of your account?</p><div className="dialog-actions"><button className="secondary-button" onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" disabled={accountBusy} onClick={async()=>{if(!firebaseAuth)return;setAccountBusy(true);setAccountNotice('');try{await signOut(firebaseAuth);setAuthUser(null);setProfilePhotoUrl('');setProfileUsername('');setProfileDetails(emptyProfileDetails);setPhotoNotice('');setLoginPassword('');setLoginNotice('');setAccountPanel('closed');setDialog(null);}catch{setAccountNotice('We could not sign you out. Check your connection and try again.')}finally{setAccountBusy(false)}}}>{accountBusy?'Signing out…':'Yes, sign out'}</button></div></>:<><p className="dialog-copy">This action is permanent. Chater will remove your profile and username reservation, then delete your sign-in account. Enter your current password to confirm.</p><form className="registration-form" onSubmit={async event=>{event.preventDefault();setAccountNotice('');if(!accountPassword){setAccountNotice('Enter your current password to continue.');return}setAccountBusy(true);try{await handleAccountDeletion(accountPassword);setAccountPanel('closed');setDialog(null);setAccountPassword('')}catch(error){setAccountNotice(error instanceof Error?error.message:'We could not delete your account. Please try again.')}finally{setAccountBusy(false)}}}><label htmlFor="settings-delete-password">Current password<input id="settings-delete-password" type="password" autoComplete="current-password" required value={accountPassword} onChange={event=>{setAccountPassword(event.target.value);setAccountNotice('')}}/></label><div className="dialog-actions"><button className="secondary-button" type="button" disabled={accountBusy} onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" type="submit" disabled={accountBusy}>{accountBusy?'Deleting…':'Permanently delete'}</button></div></form></>}{accountNotice&&<p className="dialog-notice" role="alert">{accountNotice}</p>}</section>}</>:dialog==='register'?<form className="registration-form" onSubmit={async e=>{
+    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={7} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div>{accountPanel!=='closed'&&<section className="account-settings-panel" aria-label="Account actions"><div className="dialog-head"><div><p className="eyebrow">ACCOUNT CONTROL</p><h3>{accountPanel==='choices'?'Account actions':accountPanel==='signout'?'Sign out?':'Delete your account?'}</h3></div><button className="icon-button" aria-label="Back to settings" onClick={()=>{setAccountPanel('closed');setAccountNotice('');setAccountPassword('')}}><X size={18}/></button></div>{accountPanel==='choices'?<div className="settings-list"><button onClick={()=>setAccountPanel('signout')}>Sign out <ChevronRight/></button><button onClick={()=>setAccountPanel('delete')}>Delete account <ChevronRight/></button></div>:accountPanel==='signout'?<><p className="dialog-copy">Are you sure you want to sign out of your account?</p><div className="dialog-actions"><button className="secondary-button" onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" disabled={accountBusy} onClick={async()=>{if(!firebaseAuth)return;setAccountBusy(true);setAccountNotice('');try{await signOut(firebaseAuth);setAuthUser(null);setProfilePhotoUrl('');setProfileUsername('');setProfileDetails(emptyProfileDetails);setPhotoNotice('');setLoginPassword('');setLoginNotice('');setAccountPanel('closed');setDialog(null);const savedAccent=readSavedAccent();setAccent(savedAccent);setCustomHex(savedAccent);}catch{setAccountNotice('We could not sign you out. Check your connection and try again.')}finally{setAccountBusy(false)}}}>{accountBusy?'Signing out…':'Yes, sign out'}</button></div></>:<><p className="dialog-copy">This action is permanent. Chater will remove your profile and username reservation, then delete your sign-in account. Enter your current password to confirm.</p><form className="registration-form" onSubmit={async event=>{event.preventDefault();setAccountNotice('');if(!accountPassword){setAccountNotice('Enter your current password to continue.');return}setAccountBusy(true);try{await handleAccountDeletion(accountPassword);setAccountPanel('closed');setDialog(null);setAccountPassword('')}catch(error){setAccountNotice(error instanceof Error?error.message:'We could not delete your account. Please try again.')}finally{setAccountBusy(false)}}}><label htmlFor="settings-delete-password">Current password<input id="settings-delete-password" type="password" autoComplete="current-password" required value={accountPassword} onChange={event=>{setAccountPassword(event.target.value);setAccountNotice('')}}/></label><div className="dialog-actions"><button className="secondary-button" type="button" disabled={accountBusy} onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" type="submit" disabled={accountBusy}>{accountBusy?'Deleting…':'Permanently delete'}</button></div></form></>}{accountNotice&&<p className="dialog-notice" role="alert">{accountNotice}</p>}</section>}</>:dialog==='register'?<form className="registration-form" onSubmit={async e=>{
       e.preventDefault()
       setRegistrationNotice('')
       const validUsername=/^[a-z0-9_]{3,20}$/.test(registrationUsername)
@@ -448,6 +493,9 @@ export default function App() {
           return
         }
         setAuthUser(credential.user)
+        const savedAccent = readSavedAccent(credential.user.uid)
+        setAccent(savedAccent)
+        setCustomHex(savedAccent)
         setProfilePhotoUrl(credential.user.photoURL || '')
         // Authentication has already succeeded. A profile-read failure must never
         // keep the sign-in dialog open or make a successful sign-in look unsuccessful.
