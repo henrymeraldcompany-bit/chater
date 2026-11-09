@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { runTransaction, setDoc } from 'firebase/firestore'
+import { getDocs, runTransaction, setDoc } from 'firebase/firestore'
 import App from './App'
 
 vi.mock('firebase/firestore', () => ({
@@ -431,6 +431,7 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Permanently delete' }))
     await waitFor(() => expect(deleteUser).toHaveBeenCalledWith(user))
     expect(reauthenticateWithCredential).toHaveBeenCalled()
+    expect(getDocs).toHaveBeenCalled()
     expect(runTransaction).toHaveBeenCalled()
     await waitFor(() => expect(screen.getByRole('heading', { name: /Chats/ })).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
