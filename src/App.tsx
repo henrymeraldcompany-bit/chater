@@ -656,12 +656,12 @@ function ProfileScreen({user,photoURL,username,details,onUsernameChange,onDispla
       </> : <form className="registration-form profile-details-form profile-edit-form" aria-label="Edit your complete profile" onSubmit={async event=>{
         event.preventDefault()
         setProfileEditNotice('')
-        const normalizedName=nameDraft.trim().replace(/\\s+/g,' ')
+        const normalizedName=nameDraft.trim().replace(/\s+/g,' ')
         const normalizedUsername=usernameDraft.trim().toLowerCase()
         const normalizedDetails={
-          about:detailsDraft.about.trim().replace(/\\s+/g,' '),
-          location:detailsDraft.location.trim().replace(/\\s+/g,' '),
-          occupation:detailsDraft.occupation.trim().replace(/\\s+/g,' ')
+          about:detailsDraft.about.trim().replace(/\s+/g,' '),
+          location:detailsDraft.location.trim().replace(/\s+/g,' '),
+          occupation:detailsDraft.occupation.trim().replace(/\s+/g,' ')
         }
         if(normalizedName.length<2||normalizedName.length>50){setProfileEditNotice('Your profile name must be 2–50 characters.');return}
         if(!/^[a-z0-9_]{3,20}$/.test(normalizedUsername)){setProfileEditNotice('Username must be 3–20 characters using lowercase letters, numbers or underscores.');return}
