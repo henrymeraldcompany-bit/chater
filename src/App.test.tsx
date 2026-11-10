@@ -525,14 +525,47 @@ describe('Chater application shell', () => {
     expect(screen.queryByText('Henry Example')).not.toBeInTheDocument()
   })
 
-  it('switches to the Moments screen from bottom navigation', () => {
+  it('switches to the grouped Moments status list from bottom navigation', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
     expect(screen.getByRole('heading', { name: /Moments/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
-    expect(screen.getByText('Share a moment')).toBeInTheDocument()
-    expect(screen.getByText('Your moments')).toBeInTheDocument()
+    expect(screen.getByText('Tap to add your first update')).toBeInTheDocument()
+    expect(screen.getByText('No recent updates')).toBeInTheDocument()
     expect(screen.queryByText('Channels')).not.toBeInTheDocument()
+  })
+
+  it('groups one person’s Moments together and opens the full-screen story viewer', async () => {
+    const user = { uid: 'my-user', email: 'me@example.com', emailVerified: true, photoURL: null, displayName: 'My Name' }
+    const timestamp = (value: number) => ({ toMillis: () => value })
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDocs).mockResolvedValue({
+      docs: [
+        { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://media.example/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
+        { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://media.example/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
+      ]
+    } as never)
+
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'me@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'My Name' })).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
+
+    const otherStatus = await screen.findByRole('button', { name: /Other Person/ })
+    expect(otherStatus).toHaveTextContent('2 updates')
+    expect(screen.getAllByText('Other Person')).toHaveLength(1)
+    fireEvent.click(otherStatus)
+    expect(screen.getByRole('dialog', { name: 'Moment from Other Person' })).toBeInTheDocument()
+    expect(screen.getByText('1 of 2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next update' }))
+    expect(screen.getByText('2 of 2')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Moment from Other Person' })).not.toBeInTheDocument()
   })
 
   it('hides the shared search field on Groups and You', () => {
