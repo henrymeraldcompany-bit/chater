@@ -594,8 +594,10 @@ describe('Chater application shell', () => {
     }
     fireEvent.click(screen.getByRole('button', { name: /Text/ }))
     expect(screen.getByPlaceholderText('Type a Moment')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Share Moment/ }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Write something before sharing')
+    const shareTextMoment = screen.getByRole('button', { name: /Share Moment/ })
+    expect(shareTextMoment).toBeDisabled()
+    fireEvent.change(screen.getByPlaceholderText('Type a Moment'), { target: { value: 'Hello from Chater' } })
+    expect(shareTextMoment).toBeEnabled()
   })
 
   it('hides the shared search field on Groups and You', () => {
