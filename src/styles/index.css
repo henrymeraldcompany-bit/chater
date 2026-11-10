@@ -848,3 +848,5 @@ body,.app-shell{background:var(--page);color:var(--text)}
   .moment-create-action>span{width:48px;height:48px}
   .moment-create-action strong{font-size:10px}
 }
+
+@media(min-width:760px){.moments-top-title{display:none}}
