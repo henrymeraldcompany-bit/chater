@@ -7,7 +7,7 @@ import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
 type ProfileDetails = { about: string; location: string; occupation: string }
-type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video'; caption: string; createdAt: number; expiresAt: number }
+type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video' | 'audio'; caption: string; createdAt: number; expiresAt: number }
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
@@ -259,7 +259,7 @@ export default function App() {
           uid: typeof data.uid === 'string' ? data.uid : '',
           displayName: typeof data.displayName === 'string' ? data.displayName : 'Chater member',
           mediaUrl: typeof data.mediaUrl === 'string' ? data.mediaUrl : '',
-          mediaType: data.mediaType === 'video' ? 'video' as const : 'image' as const,
+          mediaType: data.mediaType === 'audio' ? 'audio' as const : data.mediaType === 'video' ? 'video' as const : 'image' as const,
           caption: typeof data.caption === 'string' ? data.caption : '',
           createdAt: savedAt || (expiresAt ? expiresAt - 86400000 : 0),
           expiresAt
@@ -277,13 +277,12 @@ export default function App() {
     }
     const isImage = file.type.startsWith('image/')
     const isVideo = file.type.startsWith('video/')
-    if (!isImage && !isVideo) { setMomentNotice('Choose an image or video file.'); return }
-    const sizeLimit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024
-    if (file.size > sizeLimit) { setMomentNotice(isVideo ? 'Videos must be 25 MB or smaller.' : 'Images must be 5 MB or smaller.'); return }
+    const isAudio = file.type.startsWith('audio/')
+    if (!isImage && !isVideo && !isAudio) { setMomentNotice('Choose an image, video or audio file.'); return }
     setMomentBusy(true)
     setMomentNotice('')
     const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 60000)
+    const timeout = window.setTimeout(() => controller.abort(), 10 * 60 * 1000)
     let stage: 'Cloudinary upload' | 'Firestore save' = 'Cloudinary upload'
     try {
       const formData = new FormData()
@@ -291,13 +290,13 @@ export default function App() {
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
       formData.append('folder', 'chater/moments/' + authUser.uid)
       const response = await fetch(
-        'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD_NAME + '/' + (isVideo ? 'video' : 'image') + '/upload',
+        'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD_NAME + '/' + (isVideo || isAudio ? 'video' : 'image') + '/upload',
         { method: 'POST', body: formData, signal: controller.signal }
       )
       const uploaded = await response.json().catch(() => ({})) as { secure_url?: string; error?: { message?: string } }
       if (!response.ok || !uploaded.secure_url) throw new Error(uploaded.error?.message || 'The Moment could not be uploaded. Please try again.')
       const expiresAt = Date.now() + 24 * 60 * 60 * 1000
-      const mediaType: MomentEntry['mediaType'] = isVideo ? 'video' : 'image'
+      const mediaType: MomentEntry['mediaType'] = isAudio ? 'audio' : isVideo ? 'video' : 'image'
       const data = {
         uid: authUser.uid,
         displayName: authUser.displayName || 'Chater member',
@@ -855,35 +854,7 @@ function MomentsScreen({groups,photoURL,displayName,onAdd,onView}:{groups:Moment
         })}
       </div>
     </section>
-    <section className="moments-recent-section" aria-labelledby="recent-moments-heading">
-      <div className="moments-recent-heading">
-        <h2 id="recent-moments-heading">Recent Moments</h2>
-        <span>{people.length} {people.length===1?'person':'people'}</span>
-      </div>
-      <div className="moment-people-panel">
-        {people.length===0
-          ? <div className="moment-empty-row">
-              <span className="moment-empty-icon"><CirclePlay size={21}/></span>
-              <span><strong>No recent Moments yet</strong><small>When people share Moments, you will see each person here once, with all their Moments grouped together.</small></span>
-            </div>
-          : people.map((group,index)=>{
-              const latest=previewOf(group)
-              const groupIndex=index+1
-              const avatarURL=group.photoURL || latest?.mediaUrl || group.previewURL
-              return <button type="button" className="moment-person-row" key={group.uid} onClick={()=>onView(groupIndex)}>
-                <span className="moment-row-avatar">
-                  {avatarURL ? <img src={avatarURL} alt=""/> : <ProfileAvatar displayName={group.displayName}/>}
-                </span>
-                <span className="moment-row-copy">
-                  <strong>{group.displayName}</strong>
-                  <small>{formatMomentTime(latest?.createdAt || 0)} · {group.moments.length} {group.moments.length===1?'Moment':'Moments'}</small>
-                  <small className="moment-row-preview">{latest?.caption || (latest?.mediaType==='video'?'Shared a video Moment':'Shared a photo Moment')}</small>
-                </span>
-                <ChevronRight className="moment-row-chevron" size={19}/>
-              </button>
-            })}
-      </div>
-    </section>
+
   </div>
 }
 
@@ -980,7 +951,12 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
             const video=event.currentTarget
             if(video.duration>0)setProgress((video.currentTime/video.duration)*100)
           }} onEnded={nextStory}/>
-        : <img src={moment.mediaUrl} alt={moment.caption || `Moment from ${group.displayName}`}/>}
+        : moment.mediaType==='audio'
+          ? <div className="moment-audio-playback"><audio key={moment.id} src={moment.mediaUrl} autoPlay controls onTimeUpdate={event=>{
+              const audio=event.currentTarget
+              if(audio.duration>0)setProgress((audio.currentTime/audio.duration)*100)
+            }} onEnded={nextStory}/><span>Audio Moment</span></div>
+          : <img src={moment.mediaUrl} alt={moment.caption || `Moment from ${group.displayName}`}/>}
     </div>
     <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous Moment" onClick={previousStory}/>
     <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next Moment" onClick={nextStory}/>
@@ -1130,7 +1106,7 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
         {actions.map(({id,label,icon:Icon})=><button type="button" key={id} className="moment-create-action" onClick={()=>{setMode(id);setLocalNotice('')}}><span><Icon size={21}/></span><strong>{label}</strong></button>)}
       </div>
       <div className="moment-gallery-heading"><strong>Recent</strong><button type="button" onClick={()=>galleryInput.current?.click()}>Choose from gallery <ChevronRight size={15}/></button></div>
-      <input ref={galleryInput} className="moment-hidden-input" type="file" accept="image/*,video/*" onChange={event=>{setFile(event.target.files?.[0]||null);setMode('gallery')}}/>
+      <input ref={galleryInput} className="moment-hidden-input" type="file" accept="image/*,video/*,audio/*" onChange={event=>{setFile(event.target.files?.[0]||null);setMode('gallery')}}/>
       <div className="moment-gallery-grid">
         <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>galleryInput.current?.click()}><ImagePlus size={28}/><strong>Gallery</strong><small>Select a photo or video</small></button>
         <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>{const input=document.getElementById('moment-camera-capture') as HTMLInputElement|null;input?.click()}}><Camera size={28}/><strong>Camera</strong><small>Take a new photo</small></button>
