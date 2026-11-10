@@ -410,7 +410,7 @@ describe('Chater application shell', () => {
   })
 
   it('requires the current password before permanently deleting the account from Chat settings', async () => {
-    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example', getIdToken: vi.fn(async () => 'test-firebase-id-token') }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(reauthenticateWithCredential).mockResolvedValue(user as never)
