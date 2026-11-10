@@ -415,6 +415,10 @@ describe('Chater application shell', () => {
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(reauthenticateWithCredential).mockResolvedValue(user as never)
     vi.mocked(deleteUser).mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true })
+    }))
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
