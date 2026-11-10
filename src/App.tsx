@@ -565,7 +565,7 @@ export default function App() {
         const start=touchStartRef.current
         touchStartRef.current=null
         if(!start)return
-        if(start.target.closest('button,a,input,textarea,select,label,[contenteditable="true"],.status-strip'))return
+        if(start.target.closest('button,a,input,textarea,select,label,[contenteditable="true"],.status-strip,.moment-story-overlay'))return
         const touch=event.changedTouches[0]
         const dx=touch.clientX-start.x
         const dy=touch.clientY-start.y
