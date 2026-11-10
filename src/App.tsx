@@ -538,8 +538,8 @@ export default function App() {
       return rightLatest - leftLatest
     })
     const ownGroup = groups.find(group => group.uid === authUser?.uid) || {
-      uid: authUser?.uid || 'my-status',
-      displayName: authUser?.displayName || 'My status',
+      uid: authUser?.uid || 'my-moments',
+      displayName: authUser?.displayName || 'My Moments',
       photoURL: profilePhotoUrl,
       previewURL: '',
       moments: []
@@ -966,7 +966,7 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
       if(Math.abs(dx)>65 && Math.abs(dx)>Math.abs(dy)*1.2){if(dx<0)nextStory();else previousStory()}
       else if(dy>90 && Math.abs(dy)>Math.abs(dx))onClose()
     }}>
-    <div className="moment-story-progress" aria-label={`Update ${momentIndex+1} of ${group.moments.length}`}>
+    <div className="moment-story-progress" aria-label={`Moment ${momentIndex+1} of ${group.moments.length}`}>
       {group.moments.map((item,index)=><span className="moment-story-track" key={item.id}><i style={{width:index<momentIndex?'100%':index===momentIndex?`${progress}%`:'0%'}}/></span>)}
     </div>
     <header className="moment-story-header">
@@ -982,8 +982,8 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
           }} onEnded={nextStory}/>
         : <img src={moment.mediaUrl} alt={moment.caption || `Moment from ${group.displayName}`}/>}
     </div>
-    <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous update" onClick={previousStory}/>
-    <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next update" onClick={nextStory}/>
+    <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous Moment" onClick={previousStory}/>
+    <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next Moment" onClick={nextStory}/>
     {moment.caption && <div className="moment-story-caption">{moment.caption}</div>}
     <div className="moment-story-footer"><span>{momentIndex+1} of {group.moments.length}</span><span>Available for 24 hours after sharing</span></div>
   </div>
@@ -1131,7 +1131,6 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
       </div>
       <div className="moment-gallery-heading"><strong>Recent</strong><button type="button" onClick={()=>galleryInput.current?.click()}>Choose from gallery <ChevronRight size={15}/></button></div>
       <input ref={galleryInput} className="moment-hidden-input" type="file" accept="image/*,video/*" onChange={event=>{setFile(event.target.files?.[0]||null);setMode('gallery')}}/>
-      <input className="moment-hidden-input" type="file" accept="image/*" capture="environment" onChange={event=>{setFile(event.target.files?.[0]||null);setMode('gallery')}} aria-label="Take a photo"/>
       <div className="moment-gallery-grid">
         <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>galleryInput.current?.click()}><ImagePlus size={28}/><strong>Gallery</strong><small>Select a photo or video</small></button>
         <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>{const input=document.getElementById('moment-camera-capture') as HTMLInputElement|null;input?.click()}}><Camera size={28}/><strong>Camera</strong><small>Take a new photo</small></button>
