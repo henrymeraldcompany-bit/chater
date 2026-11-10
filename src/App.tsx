@@ -993,13 +993,6 @@ function MomentComposer({busy,notice,onShare}:{busy:boolean;notice:string;onShar
     {notice&&<p className="dialog-notice" role="status">{notice}</p>}
   </form>
 }
-function MomentViewer({moment}:{moment:MomentEntry}) {
-  return <div className="moment-viewer">
-    {moment.mediaType==='video'?<video src={moment.mediaUrl} controls autoPlay playsInline/>:<img src={moment.mediaUrl} alt={moment.caption || 'Shared moment'}/>}
-    <strong>{moment.displayName}</strong>{moment.caption&&<p>{moment.caption}</p>}
-    <small>Available for 24 hours after sharing</small>
-  </div>
-}
 function CallComposer() {
   const [phone,setPhone]=useState('')
   const normalized=phone.replace(/[^+0-9]/g,'')
