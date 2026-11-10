@@ -284,6 +284,7 @@ export default function App() {
     setMomentNotice('')
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 60000)
+    let stage: 'Cloudinary upload' | 'Firestore save' = 'Cloudinary upload'
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -306,14 +307,21 @@ export default function App() {
         createdAt: serverTimestamp(),
         expiresAt
       }
+      stage = 'Firestore save'
       const saved = await addDoc(collection(firestoreDb, 'moments'), data)
       setMoments(current => [{ id: saved.id, ...data, createdAt: Date.now() }, ...current])
       setDialog(null)
       setMomentNotice('')
     } catch (error) {
+      const errorCode = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : ''
+      const detail = error instanceof Error ? error.message : 'Please try again.'
       setMomentNotice(error instanceof Error && error.name === 'AbortError'
         ? 'The upload took too long. Check your connection and try again.'
-        : error instanceof Error ? error.message : 'The Moment could not be shared. Please try again.')
+        : stage === 'Firestore save'
+          ? `Cloudinary upload succeeded, but Firestore could not save the Moment${errorCode ? ` (${errorCode})` : ''}: ${detail}`
+          : detail)
     } finally {
       window.clearTimeout(timeout)
       setMomentBusy(false)
