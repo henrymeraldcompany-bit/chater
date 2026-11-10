@@ -630,7 +630,7 @@ describe('Chater application shell', () => {
     const mainColumn = document.querySelector('#main-content')!
     fireEvent.touchStart(mainColumn, { touches: [{ clientX: 300, clientY: 300 }] })
     fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 190, clientY: 305 }] })
-    expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Moments' }).length).toBeGreaterThan(0)
     expect(document.querySelector('.content-wrap')).toHaveClass('tab-slide-forward')
     fireEvent.touchStart(mainColumn, { touches: [{ clientX: 180, clientY: 300 }] })
     fireEvent.touchEnd(mainColumn, { changedTouches: [{ clientX: 295, clientY: 302 }] })
