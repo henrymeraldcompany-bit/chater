@@ -268,7 +268,7 @@ export default function App() {
       if (active) setMoments(entries)
     }).catch(() => { if (active) setMoments([]) })
     return () => { active = false }
-  }, [authUser?.uid])
+  }, [authUser])
 
   const handleShareMoment = async (file: File, caption: string) => {
     if (!authUser || !firestoreDb) {
@@ -816,7 +816,6 @@ function MomentsScreen({groups,photoURL,displayName,onAdd,onView}:{groups:Moment
         <span className="moments-expiry-note">Updates disappear after 24 hours</span>
       </div>
       <div className="status-list-panel">
-        <div className="status-list-label">My status</div>
         <div className="status-row-shell">
           <button type="button" className="status-row-main" onClick={()=>ownCount ? onView(0) : onAdd()}>
             <span className="status-ring status-ring-own">
@@ -907,9 +906,11 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose, nextStory, previousStory])
 
+  const currentMomentId = moment?.id
+  const currentMomentType = moment?.mediaType
   useEffect(() => {
     setProgress(0)
-    if (!moment || moment.mediaType !== 'image') return
+    if (!currentMomentId || currentMomentType !== 'image') return
     const startedAt = Date.now()
     const duration = 6000
     const timer = window.setInterval(() => {
@@ -921,7 +922,7 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
       }
     }, 80)
     return () => window.clearInterval(timer)
-  }, [moment?.id, moment?.mediaType, nextStory])
+  }, [currentMomentId, currentMomentType, nextStory])
 
   if (!group || !moment) return null
   return <div className="moment-story-overlay" role="dialog" aria-modal="true" aria-label={`Moment from ${group.displayName}`}
