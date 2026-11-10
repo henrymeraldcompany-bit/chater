@@ -844,7 +844,9 @@ function MomentsScreen({groups,photoURL,displayName,onAdd,onView}:{groups:Moment
             <span className="moment-person-image">
               {latest?.mediaType==='video'
                 ? <video src={latest.mediaUrl} muted playsInline preload="metadata"/>
-                : latest?.mediaUrl ? <img src={latest.mediaUrl} alt=""/> : <ProfileAvatar displayName={group.displayName}/>}
+                : latest?.mediaType==='audio'
+                  ? <span className="moment-audio-card-icon"><Mic size={30}/></span>
+                  : latest?.mediaUrl ? <img src={latest.mediaUrl} alt=""/> : <ProfileAvatar displayName={group.displayName}/>}
             </span>
             <span className="moment-card-shade"/>
             <span className="moment-person-ring"><span>{group.displayName.slice(0,1).toUpperCase()}</span></span>
