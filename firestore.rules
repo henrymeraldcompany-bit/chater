@@ -31,7 +31,7 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.displayName is string
         && request.resource.data.mediaUrl is string
-        && request.resource.data.mediaType in ['image', 'video']
+        && request.resource.data.mediaType in ['image', 'video', 'audio']
         && request.resource.data.caption is string
         && request.resource.data.caption.size() <= 180
         && (request.resource.data.expiresAt is int
