@@ -529,13 +529,14 @@ describe('Chater application shell', () => {
     expect(screen.queryByText('Henry Example')).not.toBeInTheDocument()
   })
 
-  it('shows the Moments carousel and grouped Recent Moments panel', () => {
+  it('shows only the horizontal Moments cards with blank space below', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
     expect(screen.getAllByRole('heading', { name: 'Moments' }).length).toBeGreaterThan(0)
     expect(screen.getByText('My Moments')).toBeInTheDocument()
     expect(screen.getByText('Share a Moment')).toBeInTheDocument()
-    expect(screen.getByText('No recent Moments yet')).toBeInTheDocument()
+    expect(screen.queryByText('Recent Moments')).not.toBeInTheDocument()
+    expect(screen.queryByText('No recent Moments yet')).not.toBeInTheDocument()
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
     expect(screen.queryByText('Updates')).not.toBeInTheDocument()
     expect(screen.queryByText('Channels')).not.toBeInTheDocument()
