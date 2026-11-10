@@ -529,14 +529,17 @@ describe('Chater application shell', () => {
     expect(screen.queryByText('Henry Example')).not.toBeInTheDocument()
   })
 
-  it('switches to the grouped Moments status list from bottom navigation', () => {
+  it('shows the Moments carousel and grouped Recent Moments panel', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
-    expect(screen.getByRole('heading', { name: /Moments/ })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Moment' })).toBeInTheDocument()
-    expect(screen.getByText('Tap to add your first update')).toBeInTheDocument()
-    expect(screen.getByText('No recent updates')).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Moments' }).length).toBeGreaterThan(0)
+    expect(screen.getByText('My Moments')).toBeInTheDocument()
+    expect(screen.getByText('Share a Moment')).toBeInTheDocument()
+    expect(screen.getByText('No recent Moments yet')).toBeInTheDocument()
+    expect(screen.queryByText('Status')).not.toBeInTheDocument()
+    expect(screen.queryByText('Updates')).not.toBeInTheDocument()
     expect(screen.queryByText('Channels')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Search conversations or @username')).not.toBeInTheDocument()
   })
 
   it('groups one person’s Moments together and opens the full-screen story viewer', async () => {
@@ -561,15 +564,38 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
 
     const otherStatus = await screen.findByRole('button', { name: /Other Person/ })
-    expect(otherStatus).toHaveTextContent('2 updates')
+    expect(otherStatus).toHaveTextContent('2 Moments')
     expect(screen.getAllByText('Other Person')).toHaveLength(1)
     fireEvent.click(otherStatus)
     expect(screen.getByRole('dialog', { name: 'Moment from Other Person' })).toBeInTheDocument()
     expect(screen.getByText('1 of 2')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Next update' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next Moment' }))
     expect(screen.getByText('2 of 2')).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: 'Moment from Other Person' })).not.toBeInTheDocument()
+  })
+
+  it('opens the full-screen Moment creation flow with Text, Music, Layout and Voice choices', async () => {
+    const user = { uid: 'create-user', email: 'create@example.com', emailVerified: true, photoURL: null, displayName: 'Creator' }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'create@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Creator' })).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Add a moment' }))
+    expect(screen.getByRole('dialog', { name: 'Add Moments' })).toBeInTheDocument()
+    for (const label of ['Text', 'Music', 'Layout', 'Voice']) {
+      expect(screen.getByRole('button', { name: new RegExp(label) })).toBeInTheDocument()
+    }
+    fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+    expect(screen.getByPlaceholderText('Type a Moment')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Share Moment/ }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Write something before sharing')
   })
 
   it('hides the shared search field on Groups and You', () => {
