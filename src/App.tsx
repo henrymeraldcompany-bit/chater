@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
@@ -7,7 +7,8 @@ import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
 type ProfileDetails = { about: string; location: string; occupation: string }
-type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video'; caption: string; expiresAt: number }
+type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video'; caption: string; createdAt: number; expiresAt: number }
+type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
 const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
@@ -109,9 +110,9 @@ export default function App() {
   const [slideDirection, setSlideDirection] = useState<'forward' | 'backward'>('forward')
   const [filter, setFilter] = useState<Filter>('All')
   const [query, setQuery] = useState('')
-  const [dialog, setDialog] = useState<'new-chat' | 'search' | 'settings' | 'register' | 'login' | 'recover' | 'moment' | 'moment-view' | 'call' | 'schedule' | null>(null)
+  const [dialog, setDialog] = useState<'new-chat' | 'search' | 'settings' | 'register' | 'login' | 'recover' | 'moment' | 'call' | 'schedule' | null>(null)
   const [moments, setMoments] = useState<MomentEntry[]>([])
-  const [selectedMoment, setSelectedMoment] = useState<MomentEntry | null>(null)
+  const [momentViewerIndex, setMomentViewerIndex] = useState<number | null>(null)
   const [momentBusy, setMomentBusy] = useState(false)
   const [momentNotice, setMomentNotice] = useState('')
   const [scheduledCalls, setScheduledCalls] = useState<ScheduledCall[]>(() => {
@@ -249,6 +250,10 @@ export default function App() {
       const now = Date.now()
       const entries = snapshot.docs.map(item => {
         const data = item.data()
+        const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : 0
+        const savedAt = data.createdAt && typeof data.createdAt.toMillis === 'function'
+          ? data.createdAt.toMillis()
+          : typeof data.createdAt === 'number' ? data.createdAt : 0
         return {
           id: item.id,
           uid: typeof data.uid === 'string' ? data.uid : '',
@@ -256,9 +261,10 @@ export default function App() {
           mediaUrl: typeof data.mediaUrl === 'string' ? data.mediaUrl : '',
           mediaType: data.mediaType === 'video' ? 'video' as const : 'image' as const,
           caption: typeof data.caption === 'string' ? data.caption : '',
-          expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : 0
+          createdAt: savedAt || (expiresAt ? expiresAt - 86400000 : 0),
+          expiresAt
         }
-      }).filter(item => item.mediaUrl && item.expiresAt > now).sort((left, right) => right.expiresAt - left.expiresAt)
+      }).filter(item => item.mediaUrl && item.expiresAt > now).sort((left, right) => right.createdAt - left.createdAt)
       if (active) setMoments(entries)
     }).catch(() => { if (active) setMoments([]) })
     return () => { active = false }
@@ -301,7 +307,7 @@ export default function App() {
         expiresAt
       }
       const saved = await addDoc(collection(firestoreDb, 'moments'), data)
-      setMoments(current => [{ id: saved.id, ...data }, ...current])
+      setMoments(current => [{ id: saved.id, ...data, createdAt: Date.now() }, ...current])
       setDialog(null)
       setMomentNotice('')
     } catch (error) {
@@ -500,6 +506,39 @@ export default function App() {
     Groups: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Groups', description: 'Create group chats, bring people together, and share with everyone in the group.', action: 'Create a group', icon: Users },
     Calls: { eyebrow: 'CLOSER, WHEREVER YOU ARE', title: 'Calls', description: 'Your voice and video call history will appear here.', action: 'Start a call', icon: Phone }
   }), [])
+  const momentGroups = useMemo<MomentGroup[]>(() => {
+    const byOwner = new Map<string, MomentEntry[]>()
+    moments.forEach(moment => {
+      const ownerMoments = byOwner.get(moment.uid) || []
+      ownerMoments.push(moment)
+      byOwner.set(moment.uid, ownerMoments)
+    })
+    const groups = Array.from(byOwner.entries()).map(([uid, entries]) => {
+      const ordered = [...entries].sort((left, right) => left.createdAt - right.createdAt)
+      const latest = ordered[ordered.length - 1]
+      const imagePreview = [...ordered].reverse().find(item => item.mediaType === 'image')
+      return {
+        uid,
+        displayName: latest?.displayName || 'Chater member',
+        photoURL: uid === authUser?.uid ? profilePhotoUrl : '',
+        previewURL: imagePreview?.mediaUrl || '',
+        moments: ordered
+      }
+    }).sort((left, right) => {
+      const leftLatest = left.moments[left.moments.length - 1]?.createdAt || 0
+      const rightLatest = right.moments[right.moments.length - 1]?.createdAt || 0
+      return rightLatest - leftLatest
+    })
+    const ownGroup = groups.find(group => group.uid === authUser?.uid) || {
+      uid: authUser?.uid || 'my-status',
+      displayName: authUser?.displayName || 'My status',
+      photoURL: profilePhotoUrl,
+      previewURL: '',
+      moments: []
+    }
+    return [ownGroup, ...groups.filter(group => group.uid !== authUser?.uid)]
+  }, [moments, authUser?.uid, authUser?.displayName, profilePhotoUrl])
+  const closeMomentViewer = useCallback(() => setMomentViewerIndex(null), [])
   if (showSplash) return <SplashScreen />
   const openTab = (tab: Tab) => {
     const currentIndex = tabs.findIndex(item => item.label === activeTab)
@@ -507,6 +546,7 @@ export default function App() {
     if (nextIndex !== currentIndex) setSlideDirection(nextIndex > currentIndex ? 'forward' : 'backward')
     setActiveTab(tab)
     setDialog(null)
+    setMomentViewerIndex(null)
   }
   return <main className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -547,7 +587,7 @@ export default function App() {
           <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
           <div className="empty-state chat-empty"><h1 className="a11y-heading">Chats</h1><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
         </>}
-        {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share a little piece of your day. Moments disappear after 24 hours.</p><MomentsScreen photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My moment'} moments={moments} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={moment=>{setSelectedMoment(moment);setDialog('moment-view')}}/></>}
+        {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share a little piece of your day. Moments disappear after 24 hours.</p><MomentsScreen groups={momentGroups} photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My status'} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={groupIndex=>setMomentViewerIndex(groupIndex)}/></>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<CallsScreen scheduledCalls={scheduledCalls} onStartCall={()=>setDialog('call')} onScheduleCall={()=>setDialog('schedule')}/>}
         {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>setDialog('settings')} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}}/>}
@@ -557,7 +597,7 @@ export default function App() {
     {activeTab==='Moments'&&<button className="compose-button compose-moment" aria-label="Add a moment" onClick={()=>{setMomentNotice('');setDialog(authUser?'moment':'login')}}><Camera size={24}/><span className="compose-plus"><Plus size={15}/></span></button>}
     {activeTab==='Calls'&&<button className="compose-button compose-call" aria-label="Make a call" onClick={()=>setDialog('call')}><Phone size={24}/><span className="compose-plus"><Plus size={15}/></span></button>}
     <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
-    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='moment'?'Share a moment':dialog==='moment-view'?'Moment':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='moment'?<MomentComposer busy={momentBusy} notice={momentNotice} onShare={handleShareMoment}/>:dialog==='moment-view'&&selectedMoment?<MomentViewer moment={selectedMoment}/>:dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div>{accountPanel!=='closed'&&<section className="account-settings-panel" aria-label="Account actions"><div className="dialog-head"><div><p className="eyebrow">ACCOUNT CONTROL</p><h3>{accountPanel==='choices'?'Account actions':accountPanel==='signout'?'Sign out?':'Delete your account?'}</h3></div><button className="icon-button" aria-label="Back to settings" onClick={()=>{setAccountPanel('closed');setAccountNotice('');setAccountPassword('')}}><X size={18}/></button></div>{accountPanel==='choices'?<div className="settings-list"><button onClick={()=>setAccountPanel('signout')}>Sign out <ChevronRight/></button><button onClick={()=>setAccountPanel('delete')}>Delete account <ChevronRight/></button></div>:accountPanel==='signout'?<><p className="dialog-copy">Are you sure you want to sign out of your account?</p><div className="dialog-actions"><button className="secondary-button" onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" disabled={accountBusy} onClick={async()=>{if(!firebaseAuth)return;setAccountBusy(true);setAccountNotice('');try{await signOut(firebaseAuth);setAuthUser(null);setProfilePhotoUrl('');setProfileUsername('');setProfileDetails(emptyProfileDetails);setPhotoNotice('');setLoginPassword('');setLoginNotice('');setAccountPanel('closed');setDialog(null);const savedAccent=readSavedAccent();setAccent(savedAccent);setCustomHex(savedAccent);}catch{setAccountNotice('We could not sign you out. Check your connection and try again.')}finally{setAccountBusy(false)}}}>{accountBusy?'Signing out…':'Yes, sign out'}</button></div></>:<><p className="dialog-copy">This action is permanent. Chater will remove your profile, username reservation, and Moment records, then delete your sign-in account. Enter your current password to confirm.</p><form className="registration-form" onSubmit={async event=>{event.preventDefault();setAccountNotice('');if(!accountPassword){setAccountNotice('Enter your current password to continue.');return}setAccountBusy(true);try{await handleAccountDeletion(accountPassword);setAccountPanel('closed');setDialog(null);setAccountPassword('')}catch(error){setAccountNotice(error instanceof Error?error.message:'We could not delete your account. Please try again.')}finally{setAccountBusy(false)}}}><label htmlFor="settings-delete-password">Current password<input id="settings-delete-password" type="password" autoComplete="current-password" required value={accountPassword} onChange={event=>{setAccountPassword(event.target.value);setAccountNotice('')}}/></label><div className="dialog-actions"><button className="secondary-button" type="button" disabled={accountBusy} onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" type="submit" disabled={accountBusy}>{accountBusy?'Deleting…':'Permanently delete'}</button></div></form></>}{accountNotice&&<p className="dialog-notice" role="alert">{accountNotice}</p>}</section>}</>:dialog==='register'?<form className="registration-form" onSubmit={async e=>{
+    {dialog&&<div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='moment'?'Share a moment':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='moment'?<MomentComposer busy={momentBusy} notice={momentNotice} onShare={handleShareMoment}/>:dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div>{accountPanel!=='closed'&&<section className="account-settings-panel" aria-label="Account actions"><div className="dialog-head"><div><p className="eyebrow">ACCOUNT CONTROL</p><h3>{accountPanel==='choices'?'Account actions':accountPanel==='signout'?'Sign out?':'Delete your account?'}</h3></div><button className="icon-button" aria-label="Back to settings" onClick={()=>{setAccountPanel('closed');setAccountNotice('');setAccountPassword('')}}><X size={18}/></button></div>{accountPanel==='choices'?<div className="settings-list"><button onClick={()=>setAccountPanel('signout')}>Sign out <ChevronRight/></button><button onClick={()=>setAccountPanel('delete')}>Delete account <ChevronRight/></button></div>:accountPanel==='signout'?<><p className="dialog-copy">Are you sure you want to sign out of your account?</p><div className="dialog-actions"><button className="secondary-button" onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" disabled={accountBusy} onClick={async()=>{if(!firebaseAuth)return;setAccountBusy(true);setAccountNotice('');try{await signOut(firebaseAuth);setAuthUser(null);setProfilePhotoUrl('');setProfileUsername('');setProfileDetails(emptyProfileDetails);setPhotoNotice('');setLoginPassword('');setLoginNotice('');setAccountPanel('closed');setDialog(null);const savedAccent=readSavedAccent();setAccent(savedAccent);setCustomHex(savedAccent);}catch{setAccountNotice('We could not sign you out. Check your connection and try again.')}finally{setAccountBusy(false)}}}>{accountBusy?'Signing out…':'Yes, sign out'}</button></div></>:<><p className="dialog-copy">This action is permanent. Chater will remove your profile, username reservation, and Moment records, then delete your sign-in account. Enter your current password to confirm.</p><form className="registration-form" onSubmit={async event=>{event.preventDefault();setAccountNotice('');if(!accountPassword){setAccountNotice('Enter your current password to continue.');return}setAccountBusy(true);try{await handleAccountDeletion(accountPassword);setAccountPanel('closed');setDialog(null);setAccountPassword('')}catch(error){setAccountNotice(error instanceof Error?error.message:'We could not delete your account. Please try again.')}finally{setAccountBusy(false)}}}><label htmlFor="settings-delete-password">Current password<input id="settings-delete-password" type="password" autoComplete="current-password" required value={accountPassword} onChange={event=>{setAccountPassword(event.target.value);setAccountNotice('')}}/></label><div className="dialog-actions"><button className="secondary-button" type="button" disabled={accountBusy} onClick={()=>setAccountPanel('choices')}>Cancel</button><button className="primary-button" type="submit" disabled={accountBusy}>{accountBusy?'Deleting…':'Permanently delete'}</button></div></form></>}{accountNotice&&<p className="dialog-notice" role="alert">{accountNotice}</p>}</section>}</>:dialog==='register'?<form className="registration-form" onSubmit={async e=>{
       e.preventDefault()
       setRegistrationNotice('')
       const validUsername=/^[a-z0-9_]{3,20}$/.test(registrationUsername)
@@ -744,6 +784,7 @@ export default function App() {
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
     </form>:<><p className="dialog-copy">Search with someone's unique username. Their email address stays private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="@username"/><button aria-label="Clear username" onClick={()=>setUsername('')}><X size={15}/></button></label><button className="primary-button dialog-action" onClick={()=>setSearchNotice('Username discovery will be connected when account and discovery services are implemented.')} disabled={!username.trim()}><Search size={17}/> Search username</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
+    {activeTab==='Moments' && momentViewerIndex !== null && <MomentViewer groups={momentGroups} initialGroupIndex={momentViewerIndex} onClose={closeMomentViewer}/>}
   </main>
 }
 
@@ -751,23 +792,170 @@ function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;descrip
   const Icon=data.icon
   return <div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}</h1><p className="empty-description">{data.description}</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div>
 }
-function MomentsScreen({photoURL,displayName,moments,onAdd,onView}:{photoURL:string;displayName:string;moments:MomentEntry[];onAdd:()=>void;onView:(moment:MomentEntry)=>void}) {
+function formatMomentTime(timestamp: number) {
+  if (!timestamp) return 'Recently'
+  const date = new Date(timestamp)
+  const now = new Date()
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  }
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
+function MomentsScreen({groups,photoURL,displayName,onAdd,onView}:{groups:MomentGroup[];photoURL:string;displayName:string;onAdd:()=>void;onView:(groupIndex:number)=>void}) {
+  const myGroup = groups[0]
+  const recentGroups = groups.slice(1)
+  const ownCount = myGroup?.moments.length || 0
   return <div className="moments-screen">
     <section className="moments-section" aria-labelledby="moment-heading">
-      <div className="moments-section-heading"><h2 id="moment-heading">Moment</h2></div>
-      <div className="status-strip">
-        <button type="button" className="status-card my-status" onClick={onAdd}>
-          <span className="status-card-photo">{photoURL ? <img src={photoURL} alt=""/> : <ProfileAvatar displayName={displayName}/>}</span>
-          <span>My moment</span><small>Share a moment</small><i aria-hidden="true">+</i>
-        </button>
-        {moments.length===0
-          ? <div className="status-placeholder"><div className="status-placeholder-ring"><CirclePlay size={22}/></div><strong>Your moments</strong><small>Your shared moments will appear here for 24 hours</small></div>
-          : moments.map(moment=><button key={moment.id} type="button" className="status-card status-user-card" onClick={()=>onView(moment)}>
-              <span className="status-card-photo">{moment.mediaType==='video'?<video src={moment.mediaUrl} muted playsInline/>:<img src={moment.mediaUrl} alt=""/>}</span>
-              <span>{moment.displayName}</span><small>{moment.caption || 'View moment'}</small>
-            </button>)}
+      <div className="moments-section-heading">
+        <h2 id="moment-heading">Moment</h2>
+        <span className="moments-expiry-note">Updates disappear after 24 hours</span>
+      </div>
+      <div className="status-list-panel">
+        <div className="status-list-label">My status</div>
+        <div className="status-row-shell">
+          <button type="button" className="status-row-main" onClick={()=>ownCount ? onView(0) : onAdd()}>
+            <span className="status-ring status-ring-own">
+              <span className="status-avatar">
+                {photoURL ? <img src={photoURL} alt=""/> : <ProfileAvatar displayName={displayName}/>}
+              </span>
+            </span>
+            <span className="status-row-copy">
+              <strong>My status</strong>
+              <small>{ownCount ? `${ownCount} update${ownCount===1?'':'s'} · Tap to view` : 'Tap to add your first update'}</small>
+              {ownCount > 0 && myGroup?.moments[myGroup.moments.length - 1]?.caption && <small className="status-row-caption">{myGroup.moments[myGroup.moments.length - 1].caption}</small>}
+            </span>
+          </button>
+          <button type="button" className="status-add-button" onClick={onAdd} aria-label="Add to my status" title="Add to my status"><Plus size={20}/></button>
+        </div>
+        <div className="status-list-divider"/>
+        <div className="status-list-label recent-label">Recent updates</div>
+        {recentGroups.length === 0
+          ? <div className="status-empty-row"><span className="status-empty-icon"><CirclePlay size={21}/></span><span><strong>No recent updates</strong><small>When people share Moments, each person's updates will be grouped here.</small></span></div>
+          : recentGroups.map((group,index) => {
+              const latest = group.moments[group.moments.length - 1]
+              const avatarURL = group.photoURL || group.previewURL
+              const groupIndex = index + 1
+              return <button type="button" className="status-row" key={group.uid} onClick={()=>onView(groupIndex)}>
+                <span className="status-ring">
+                  <span className="status-avatar">
+                    {avatarURL ? <img src={avatarURL} alt=""/> : <ProfileAvatar displayName={group.displayName}/>}
+                  </span>
+                </span>
+                <span className="status-row-copy">
+                  <strong>{group.displayName}</strong>
+                  <small>{formatMomentTime(latest?.createdAt || 0)} · {group.moments.length} update{group.moments.length===1?'':'s'}</small>
+                  {latest?.caption && <small className="status-row-caption">{latest.caption}</small>}
+                </span>
+                <ChevronRight className="status-row-chevron" size={18}/>
+              </button>
+            })}
       </div>
     </section>
+  </div>
+}
+
+function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];initialGroupIndex:number;onClose:()=>void}) {
+  const [groupIndex,setGroupIndex] = useState(initialGroupIndex)
+  const [momentIndex,setMomentIndex] = useState(0)
+  const [progress,setProgress] = useState(0)
+  const touchStart = useRef<{x:number;y:number}|null>(null)
+  const group = groups[groupIndex]
+  const moment = group?.moments[momentIndex]
+  const avatarURL = group?.photoURL || group?.previewURL || ''
+
+  const nextStory = useCallback(() => {
+    if (group && momentIndex < group.moments.length - 1) {
+      setMomentIndex(current => current + 1)
+      return
+    }
+    for (let index = groupIndex + 1; index < groups.length; index += 1) {
+      if (groups[index].moments.length > 0) {
+        setGroupIndex(index)
+        setMomentIndex(0)
+        return
+      }
+    }
+    onClose()
+  }, [group, momentIndex, groupIndex, groups, onClose])
+
+  const previousStory = useCallback(() => {
+    if (momentIndex > 0) {
+      setMomentIndex(current => current - 1)
+      return
+    }
+    for (let index = groupIndex - 1; index >= 0; index -= 1) {
+      if (groups[index].moments.length > 0) {
+        setGroupIndex(index)
+        setMomentIndex(groups[index].moments.length - 1)
+        return
+      }
+    }
+  }, [momentIndex, groupIndex, groups])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+      if (event.key === 'ArrowRight') nextStory()
+      if (event.key === 'ArrowLeft') previousStory()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, nextStory, previousStory])
+
+  useEffect(() => {
+    setProgress(0)
+    if (!moment || moment.mediaType !== 'image') return
+    const startedAt = Date.now()
+    const duration = 6000
+    const timer = window.setInterval(() => {
+      const nextProgress = Math.min(((Date.now() - startedAt) / duration) * 100, 100)
+      setProgress(nextProgress)
+      if (nextProgress >= 100) {
+        window.clearInterval(timer)
+        nextStory()
+      }
+    }, 80)
+    return () => window.clearInterval(timer)
+  }, [moment?.id, moment?.mediaType, nextStory])
+
+  if (!group || !moment) return null
+  return <div className="moment-story-overlay" role="dialog" aria-modal="true" aria-label={`Moment from ${group.displayName}`}
+    onTouchStart={event=>{const touch=event.touches[0];touchStart.current={x:touch.clientX,y:touch.clientY}}}
+    onTouchEnd={event=>{
+      const start=touchStart.current
+      touchStart.current=null
+      if(!start)return
+      const touch=event.changedTouches[0]
+      const dx=touch.clientX-start.x
+      const dy=touch.clientY-start.y
+      if(Math.abs(dx)>65 && Math.abs(dx)>Math.abs(dy)*1.2){if(dx<0)nextStory();else previousStory()}
+      else if(dy>90 && Math.abs(dy)>Math.abs(dx))onClose()
+    }}>
+    <div className="moment-story-progress" aria-label={`Update ${momentIndex+1} of ${group.moments.length}`}>
+      {group.moments.map((item,index)=><span className="moment-story-track" key={item.id}><i style={{width:index<momentIndex?'100%':index===momentIndex?`${progress}%`:'0%'}}/></span>)}
+    </div>
+    <header className="moment-story-header">
+      <span className="moment-story-avatar">{avatarURL ? <img src={avatarURL} alt=""/> : <ProfileAvatar displayName={group.displayName}/>}</span>
+      <span className="moment-story-identity"><strong>{group.displayName}</strong><small>{formatMomentTime(moment.createdAt)}</small></span>
+      <button type="button" className="moment-story-close" onClick={onClose} aria-label="Close Moments viewer"><X size={25}/></button>
+    </header>
+    <div className="moment-story-media">
+      {moment.mediaType==='video'
+        ? <video key={moment.id} src={moment.mediaUrl} autoPlay controls playsInline onTimeUpdate={event=>{
+            const video=event.currentTarget
+            if(video.duration>0)setProgress((video.currentTime/video.duration)*100)
+          }} onEnded={nextStory}/>
+        : <img src={moment.mediaUrl} alt={moment.caption || `Moment from ${group.displayName}`}/>}
+    </div>
+    <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous update" onClick={previousStory}/>
+    <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next update" onClick={nextStory}/>
+    {moment.caption && <div className="moment-story-caption">{moment.caption}</div>}
+    <div className="moment-story-footer"><span>{momentIndex+1} of {group.moments.length}</span><span>Available for 24 hours after sharing</span></div>
   </div>
 }
 function CallsScreen({scheduledCalls,onStartCall,onScheduleCall}:{scheduledCalls:ScheduledCall[];onStartCall:()=>void;onScheduleCall:()=>void}) {
