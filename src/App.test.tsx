@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
 import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
-import App, { extractChaterUsernameFromQR } from './App'
+import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
@@ -68,6 +68,32 @@ describe('Chater QR profile codes', () => {
     expect(extractChaterUsernameFromQR('@Mee_Maw')).toBe('mee_maw')
     expect(extractChaterUsernameFromQR('https://example.com/not-a-chater-profile')).toBe('')
     expect(extractChaterUsernameFromQR('ab')).toBe('')
+  })
+})
+
+describe('Chater contact discovery', () => {
+  it('normalizes selected contact names consistently', () => {
+    expect(normalizeContactDisplayName('  Ada   Lovelace  ')).toBe('ada lovelace')
+    expect(normalizeContactDisplayName('Élodie  Example')).toBe('élodie example')
+  })
+
+  it('returns exact display-name candidates, deduplicates selected names and excludes the signed-in account', () => {
+    const profiles = [
+      { uid: 'self', username: 'henry_cee', displayName: 'Henry Cee', photoURL: '' },
+      { uid: 'ada-1', username: 'ada_lovelace', displayName: 'Ada Lovelace', photoURL: '' },
+      { uid: 'ada-2', username: 'ada_example', displayName: 'ADA LOVELACE', photoURL: '' },
+      { uid: 'grace', username: 'grace_hopper', displayName: 'Grace Hopper', photoURL: '' }
+    ]
+    const matches = matchChaterContactsByName(
+      [' Ada Lovelace ', 'ada   lovelace', 'Grace Hopper', 'Ada'],
+      profiles,
+      'self'
+    )
+    expect(matches).toHaveLength(3)
+    expect(matches[0].contactName).toBe('Ada Lovelace')
+    expect(matches[0].matches.map(profile => profile.uid)).toEqual(['ada-1', 'ada-2'])
+    expect(matches[1].matches.map(profile => profile.uid)).toEqual(['grace'])
+    expect(matches[2].matches).toEqual([])
   })
 })
 
