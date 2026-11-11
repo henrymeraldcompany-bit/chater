@@ -1161,7 +1161,8 @@ export default function App() {
             userId={authUser?.uid || null}
             search={query}
             onOpen={user=>setConversationTarget(user)}
-            onStartConversation={()=>setDialog(authUser?'new-chat':'login')}
+            onStartConversation={()=>setDialog('new-chat')}
+            onFindPeople={()=>setDialog('search')}
           />
         </>}
         {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share photos and videos that disappear after 24 hours.</p><MomentsScreen groups={momentGroups} userId={authUser?.uid || ''} photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My Moments'} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={groupIndex=>setMomentViewerIndex(groupIndex)}/></>}
