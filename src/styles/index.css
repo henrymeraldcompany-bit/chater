@@ -725,7 +725,6 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .moment-story-tap-left{left:0;width:31%}
 .moment-story-tap-right{right:0;width:69%}
 .moment-story-tap{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.moment-story-paused{position:absolute;z-index:7;top:50%;left:50%;display:flex;align-items:center;gap:9px;transform:translate(-50%,-50%);padding:12px 17px;border:1px solid #ffffff38;border-radius:999px;background:#0009;color:#fff;pointer-events:none;backdrop-filter:blur(8px)}
 .moment-story-paused span{font-size:21px;font-weight:700;line-height:1}
 .moment-story-paused small{font-size:13px;font-weight:600;letter-spacing:.2px}
 .moment-story-caption{position:absolute;z-index:4;right:16px;bottom:calc(env(safe-area-inset-bottom) + 55px);left:16px;max-height:30%;overflow:auto;padding:22px 12px 8px;color:#fff;font-size:15px;line-height:1.45;text-align:center;text-shadow:0 1px 5px #000;background:linear-gradient(transparent,#0005);pointer-events:none}
@@ -1326,3 +1325,109 @@ body,.app-shell{background:var(--page);color:var(--text)}
 @media (min-width: 700px) {
   .public-profile-content { padding-top: 52px; }
 }
+
+
+/* Step 46 — Chater QR profile discovery. */
+.people-qr-scan {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+}
+.chater-qr-overlay {
+  position: fixed;
+  z-index: 180;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 22px 16px max(22px, env(safe-area-inset-bottom));
+  background: #000b;
+  backdrop-filter: blur(8px);
+}
+.chater-qr-card {
+  width: min(100%, 420px);
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--page, #101010);
+  color: var(--text-strong);
+  box-shadow: 0 20px 70px #0008;
+}
+.chater-qr-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.chater-qr-card > header strong { font-size: 16px; }
+.chater-qr-image {
+  display: block;
+  width: min(100%, 280px);
+  aspect-ratio: 1;
+  object-fit: contain;
+  margin: 18px auto;
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+}
+.chater-qr-card > h2 {
+  margin: 12px 0 5px;
+  text-align: center;
+  font-size: 21px;
+}
+.chater-qr-card > p {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: center;
+  font-size: 13px;
+}
+.chater-qr-card > .secondary-button { width: 100%; justify-content: center; }
+.chater-qr-camera {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border-radius: 17px;
+  background: #050708;
+}
+.chater-qr-camera video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chater-qr-scan-frame {
+  position: absolute;
+  inset: 17%;
+  border: 2px solid var(--accent);
+  border-radius: 18px;
+  box-shadow: 0 0 0 999px #0003;
+  pointer-events: none;
+}
+.chater-qr-status {
+  min-height: 38px;
+  margin: 12px 0 !important;
+}
+.chater-qr-manual {
+  display: grid;
+  gap: 9px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.chater-qr-manual > label { color: var(--text-muted); font-size: 13px; }
+.chater-qr-manual > div { display: flex; gap: 8px; }
+.chater-qr-manual input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--text-strong);
+}
+.chater-qr-manual button { width: 82px; justify-content: center; }
