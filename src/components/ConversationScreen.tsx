@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, Download,
-  FileText, Flag, FolderOpen, MoreVertical, Palette, Search, ShieldBan,
+  Flag, FolderOpen, MoreVertical, Palette, Search, ShieldBan,
   ShieldCheck, Smartphone, Trash2, UserRound, Volume2, VolumeX, X
 } from 'lucide-react'
 import {
