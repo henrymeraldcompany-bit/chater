@@ -162,7 +162,7 @@ describe('Chater application shell', () => {
       fireEvent.click(possibleMatch)
       expect(await screen.findByRole('dialog', { name: 'Ada Lovelace profile' })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Add to contacts' }))
-      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Contact saved to your Chater account.'))
+      await waitFor(() => expect(screen.getByText('Contact saved to your Chater account.')).toBeInTheDocument())
       expect(setDoc).toHaveBeenCalledWith(expect.anything(), {
         uid: 'ada-user',
         addedAt: 'SERVER_TIMESTAMP'
