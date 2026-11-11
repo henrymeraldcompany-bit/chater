@@ -960,3 +960,132 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .people-search-screen .dialog-search input {
   min-width: 0;
 }
+
+
+/* Compact, familiar people-search layout: one input row and lightweight results. */
+.people-search-screen .dialog-head,
+.new-chat-screen .dialog-head {
+  flex: 0 0 auto;
+}
+.people-search-screen .people-search-input,
+.new-chat-screen .people-search-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  height: 52px;
+  margin: 8px 0 0;
+  padding: 0 7px 0 16px;
+  border: 1px solid var(--line, rgba(255,255,255,.14));
+  border-radius: 14px;
+  background: var(--surface-2, rgba(255,255,255,.045));
+  box-sizing: border-box;
+}
+.people-search-screen .people-search-input > svg,
+.new-chat-screen .people-search-input > svg {
+  display: none;
+}
+.people-search-screen .people-search-input input,
+.new-chat-screen .people-search-input input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 15px;
+}
+.people-search-screen .people-search-input input:focus,
+.new-chat-screen .people-search-input input:focus {
+  outline: 0;
+  box-shadow: none;
+}
+.people-search-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  color: var(--accent-bright, var(--accent));
+  background: transparent;
+}
+.people-search-icon:disabled {
+  opacity: .45;
+}
+.people-search-screen .username-search-results,
+.new-chat-screen .username-search-results {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 0;
+  width: 100%;
+  margin: 16px 0 0;
+  padding: 0;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+.people-search-screen .username-search-result,
+.new-chat-screen .username-search-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  margin: 0;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line, rgba(255,255,255,.09));
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  box-shadow: none;
+}
+.people-search-screen .username-search-result .username-search-avatar,
+.new-chat-screen .username-search-result .username-search-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  font-size: 15px;
+}
+.people-search-screen .username-search-result > div,
+.new-chat-screen .username-search-result > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 3px;
+}
+.people-search-screen .username-search-result strong,
+.new-chat-screen .username-search-result strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.people-search-screen .username-search-result span:not(.profile-avatar),
+.new-chat-screen .username-search-result span:not(.profile-avatar) {
+  color: var(--muted, #858d96);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.people-search-screen .people-search-more,
+.new-chat-screen .people-search-more {
+  align-self: flex-start;
+  width: auto;
+  margin-top: 12px;
+}
+.people-search-screen .search-progress,
+.new-chat-screen .search-progress {
+  margin: 14px 2px 0;
+}
