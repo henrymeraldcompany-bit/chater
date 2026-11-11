@@ -53,6 +53,15 @@ function readMutedPreference(conversationId: string): boolean {
   }
 }
 
+function readChatClearBefore(conversationId: string): number {
+  try {
+    const stored = Number(window.localStorage.getItem('chater:chat-cleared-at:' + conversationId) || 0)
+    return Number.isFinite(stored) && stored > 0 ? stored : 0
+  } catch {
+    return 0
+  }
+}
+
 export default function ConversationScreen({
   currentUserId,
   target,
@@ -80,6 +89,7 @@ export default function ConversationScreen({
   const [clearBusy, setClearBusy] = useState(false)
   const [chatTheme, setChatTheme] = useState<ChatTheme>(() => readChatTheme(createConversationId(currentUserId, target.uid)))
   const [muted, setMuted] = useState(() => readMutedPreference(createConversationId(currentUserId, target.uid)))
+  const [clearBefore, setClearBefore] = useState(() => readChatClearBefore(createConversationId(currentUserId, target.uid)))
   const messageEndRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const conversationId = createConversationId(currentUserId, target.uid)
@@ -87,6 +97,7 @@ export default function ConversationScreen({
   useEffect(() => {
     setChatTheme(readChatTheme(conversationId))
     setMuted(readMutedPreference(conversationId))
+    setClearBefore(readChatClearBefore(conversationId))
   }, [conversationId])
 
   useEffect(() => {
@@ -247,20 +258,19 @@ export default function ConversationScreen({
   }
 
   const handleClearChat = async () => {
-    if (!firestoreDb || clearBusy) return
+    if (clearBusy) return
     setClearBusy(true)
     setMessageNotice('')
     try {
-      const db = firestoreDb
-      await Promise.all(messages.map(message =>
-        deleteDoc(doc(db, 'conversations', conversationId, 'messages', message.id))
-      ))
-      await deleteDoc(doc(db, 'conversations', conversationId))
-      setMessages([])
+      // Clear only this member's local view. Never delete the shared message
+      // documents or erase the other participant's copy of the conversation.
+      const clearedAt = Date.now()
+      window.localStorage.setItem('chater:chat-cleared-at:' + conversationId, String(clearedAt))
+      setClearBefore(clearedAt)
       setClearConfirmOpen(false)
-      setMessageNotice('Chat cleared.')
+      setMessageNotice('Chat cleared on this device. The other participant keeps their copy.')
     } catch {
-      setMessageNotice('The chat could not be cleared. Check your connection and try again.')
+      setMessageNotice('This device could not save the cleared-chat preference. Check your browser storage and try again.')
     } finally {
       setClearBusy(false)
     }
@@ -309,9 +319,10 @@ export default function ConversationScreen({
       : 'Chat unmuted. Push notifications are not active in Chater yet.')
   }
 
+  const visibleMessages = messages.filter(message => timestampToMillis(message.createdAt) > clearBefore)
   const filteredMessages = searchOpen && messageSearch.trim()
-    ? messages.filter(message => message.text.toLowerCase().includes(messageSearch.trim().toLowerCase()))
-    : messages
+    ? visibleMessages.filter(message => message.text.toLowerCase().includes(messageSearch.trim().toLowerCase()))
+    : visibleMessages
 
   return <section className="public-profile-screen conversation-entry-screen live-conversation-screen" role="dialog" aria-modal="true" aria-label={'Conversation with ' + target.displayName} data-chat-theme={chatTheme}>
     <header className="public-profile-toolbar conversation-entry-toolbar">
@@ -378,7 +389,7 @@ export default function ConversationScreen({
     </div>}
 
     {clearConfirmOpen && <div className="conversation-block-confirm" role="group" aria-label="Confirm clear chat">
-      <div><strong>Clear this chat?</strong><p>This removes all messages in this conversation for both participants. This cannot be undone.</p></div>
+      <div><strong>Clear this chat?</strong><p>This clears the messages from your view on this device only. The other participant keeps their copy, and new messages will appear here.</p></div>
       <div className="conversation-block-actions">
         <button type="button" className="secondary-button" disabled={clearBusy} onClick={() => setClearConfirmOpen(false)}>Cancel</button>
         <button type="button" className="primary-button" disabled={clearBusy} onClick={() => void handleClearChat()}>{clearBusy ? 'Clearing…' : 'Clear chat'}</button>
