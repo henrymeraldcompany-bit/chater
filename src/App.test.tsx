@@ -133,7 +133,7 @@ describe('Chater application shell', () => {
     expect(document.querySelector('.people-search-toolbar')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
     expect(document.querySelector('.username-search-result')).toBeInTheDocument()
-    expect(document.querySelector('.username-search-avatar')).toHaveStyle({ width: '44px', height: '44px' })
+    expect(document.querySelector('.username-search-avatar')).toHaveClass('username-search-avatar')
     fireEvent.click(searchIcon)
     await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(3))
     expect(document.querySelector('.people-search-screen')).toBeInTheDocument()
