@@ -87,12 +87,12 @@ describe('Chater application shell', () => {
 
   it('finds a Chater member by their exact global username', async () => {
     const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
-    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { callback(user as never); return vi.fn() })
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(getDoc)
       .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
       .mockResolvedValueOnce({ exists: () => true, data: () => ({ uid: 'target-user', username: 'target_user' }) } as never)
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ displayName: 'Target Person' }) } as never)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ displayName: 'Target Person', photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg' }) } as never)
     openApp()
     await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
@@ -101,6 +101,7 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByText('Target Person')).toBeInTheDocument())
     expect(screen.getByText('@target_user')).toBeInTheDocument()
     expect(screen.getByText('Chater member')).toBeInTheDocument()
+    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
   })
 
   it('offers ten selectable accent colour presets in settings', () => {
