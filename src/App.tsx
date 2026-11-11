@@ -756,11 +756,12 @@ export default function App() {
 
   useEffect(() => {
     if (!contactSyncExpanded || !authUser || !firestoreDb) return
+    const db = firestoreDb
     let active = true
     setSavedContactsBusy(true)
     void (async () => {
       try {
-        const links = await getDocs(collection(firestoreDb, 'users', authUser.uid, 'contacts'))
+        const links = await getDocs(collection(db, 'users', authUser.uid, 'contacts'))
         const targetIds = [...new Set(links.docs
           .map(link => {
             const data = link.data() as Record<string, unknown>
@@ -769,7 +770,7 @@ export default function App() {
           .filter(uid => uid && uid !== authUser.uid)
         )].slice(0, 100)
         const profiles = await Promise.all(targetIds.map(async uid => {
-          const snapshot = await getDoc(doc(firestoreDb, 'users', uid))
+          const snapshot = await getDoc(doc(db, 'users', uid))
           if (!snapshot.exists()) return null
           const data = snapshot.data() as Record<string, unknown>
           const username = typeof data.username === 'string' ? data.username.trim().toLowerCase() : ''
