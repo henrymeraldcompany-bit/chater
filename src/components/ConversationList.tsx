@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Plus } from 'lucide-react'
 import { collection, doc, getDoc, onSnapshot, query as firestoreQuery, where } from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
-import { timestampToMillis, type ChatConversation, type ChatUser } from '../lib/chat'
+import { createConversationId, timestampToMillis, type ChatConversation, type ChatUser } from '../lib/chat'
 
 type ConversationListProps = {
   userId: string | null
@@ -29,6 +29,15 @@ function formatConversationTime(value: unknown): string {
     return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
   }
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
+}
+
+function readChatClearBefore(conversationId: string): number {
+  try {
+    const stored = Number(window.localStorage.getItem('chater:chat-cleared-at:' + conversationId) || 0)
+    return Number.isFinite(stored) && stored > 0 ? stored : 0
+  } catch {
+    return 0
+  }
 }
 
 function ConversationAvatar({ user }: { user: ChatUser }) {
@@ -78,6 +87,9 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
           const displayName = typeof profile.displayName === 'string' && profile.displayName.trim()
             ? profile.displayName.trim()
             : username || 'Chater member'
+          const clearedBefore = readChatClearBefore(createConversationId(userId, otherUid))
+          const messageTime = timestampToMillis(data.lastMessageAt)
+          const isClearedOnThisDevice = clearedBefore > 0 && messageTime <= clearedBefore
           return {
             id: item.id,
             user: {
@@ -86,9 +98,9 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
               displayName,
               photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
             },
-            lastMessageText: typeof data.lastMessageText === 'string' ? data.lastMessageText : '',
-            lastMessageSenderId: typeof data.lastMessageSenderId === 'string' ? data.lastMessageSenderId : '',
-            lastMessageAt: data.lastMessageAt
+            lastMessageText: isClearedOnThisDevice ? '' : typeof data.lastMessageText === 'string' ? data.lastMessageText : '',
+            lastMessageSenderId: isClearedOnThisDevice ? '' : typeof data.lastMessageSenderId === 'string' ? data.lastMessageSenderId : '',
+            lastMessageAt: isClearedOnThisDevice ? null : data.lastMessageAt
           } satisfies ChatConversation
         }))
         if (!active) return
@@ -171,22 +183,20 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
     }
   }, [userId])
 
-  const inboxItems = useMemo<InboxItem[]>(() => {
-    const conversationUserIds = new Set(conversations.map(item => item.user.uid))
-    const contactOnlyItems: InboxItem[] = contacts
-      .filter(contact => !conversationUserIds.has(contact.uid))
-      .map(contact => ({
-        id: 'contact:' + contact.uid,
-        user: contact,
-        lastMessageText: '',
-        lastMessageSenderId: '',
-        lastMessageAt: null
-      }))
-    return [...conversations, ...contactOnlyItems].sort((left, right) => {
-      const recentDifference = timestampToMillis(right.lastMessageAt) - timestampToMillis(left.lastMessageAt)
-      return recentDifference || left.user.displayName.localeCompare(right.user.displayName)
-    })
-  }, [conversations, contacts])
+  const conversationUserIds = new Set(conversations.map(item => item.user.uid))
+  const contactOnlyItems: InboxItem[] = contacts
+    .filter(contact => !conversationUserIds.has(contact.uid))
+    .map(contact => ({
+      id: 'contact:' + contact.uid,
+      user: contact,
+      lastMessageText: '',
+      lastMessageSenderId: '',
+      lastMessageAt: null
+    }))
+  const inboxItems = [...conversations, ...contactOnlyItems].sort((left, right) => {
+    const recentDifference = timestampToMillis(right.lastMessageAt) - timestampToMillis(left.lastMessageAt)
+    return recentDifference || left.user.displayName.localeCompare(right.user.displayName)
+  })
 
   const filteredItems = useMemo(() => {
     const term = search.trim().replace(/^@/, '').toLowerCase()
