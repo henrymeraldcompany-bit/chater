@@ -409,6 +409,15 @@ describe('Chater application shell', () => {
     expect(screen.queryByText(/These details are optional/)).not.toBeInTheDocument()
   })
 
+  it('opens the privacy and security panel from settings', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Privacy and security/ }))
+    expect(screen.getByRole('heading', { name: 'Privacy and security' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Change password' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Change password' })).toBeDisabled()
+  })
+
   it('requires the current password before permanently deleting the account from Chat settings', async () => {
     const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example', getIdToken: vi.fn(async () => 'test-firebase-id-token') }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
