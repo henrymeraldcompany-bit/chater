@@ -58,3 +58,9 @@ Chater now supports direct one-to-one conversations without message requests. Ei
 A block is stored privately at `users/{uid}/blocked/{targetUid}`. Firestore rules check both accounts' block lists before allowing a new conversation or message. A member cannot bypass a block by reopening a profile or using another screen.
 
 **Publish the current repository `firestore.rules` file** in Firebase Console → Firestore Database → Rules → Publish. This updated file contains the contact-list rules from Task 47, private block-list rules, participant-only conversation/message reads, and two-way block enforcement. GitHub Pages only deploys the frontend; it does not deploy Firestore rules. Never replace these rules with public or test-mode rules.
+
+## Conversation options menu
+
+The direct-message screen has a top-right options menu for profile information, in-chat search, reporting, blocking, chat theme selection, and secondary actions. Reports are created in the private `reports` collection. The current `firestore.rules` file allows authenticated report creation with a limited set of reason codes and denies report reads/updates/deletes from the client.
+
+**Publish the latest `firestore.rules` file again** after adding report support. Clear chat only hides history on the current device; it does not delete the other participant's messages. Chat theme and mute preferences are local to the device. Push notifications and message attachments are not connected yet, so the mute option stores a future preference and the media/links/docs option explains that attachments are not available.
