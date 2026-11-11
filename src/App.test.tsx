@@ -116,7 +116,7 @@ describe('Chater application shell', () => {
     // The signed-in user's Moments listener calls getDocs first; provide the
     // legacy profile result only after that initial listener has completed.
     await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
-    vi.mocked(getDocs).mockResolvedValueOnce({
+    vi.mocked(getDocs).mockResolvedValue({
       docs: [{
         id: 'legacy-member',
         data: () => ({ uid: 'legacy-member', username: 'mee_maw', displayName: 'Mee Maw', photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/legacy-member/avatar.jpg' })
