@@ -11,7 +11,7 @@ type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: str
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
 type UsernameSearchResult = { uid: string; username: string; displayName: string; photoURL: string }
-async function syncLegacyUsername(uid: string, rawUsername: string): Promise<void> {
+async function syncLegacyUsername(uid: string, rawUsername: string, rawDisplayName = ''): Promise<void> {
   const db = firestoreDb
   if (!db) return
   const normalized = rawUsername.trim().replace(/^@/, '').toLowerCase()
@@ -25,7 +25,7 @@ async function syncLegacyUsername(uid: string, rawUsername: string): Promise<voi
     if (!usernameSnapshot.exists()) {
       transaction.set(usernameRef, { uid, username: normalized, createdAt: serverTimestamp() })
     }
-    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, updatedAt: serverTimestamp() }, { merge: true })
+    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, ...(rawDisplayName.trim() ? { displayName: rawDisplayName.trim(), displayNameLower: rawDisplayName.trim().toLowerCase() } : {}), updatedAt: serverTimestamp() }, { merge: true })
   })
 }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
@@ -263,7 +263,7 @@ export default function App() {
         })
         const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
-        if (resolvedUsername) void syncLegacyUsername(user.uid, resolvedUsername).catch(() => undefined)
+        if (resolvedUsername) void syncLegacyUsername(user.uid, resolvedUsername, typeof storedProfile.displayName === 'string' ? storedProfile.displayName : (user.displayName || '')).catch(() => undefined)
         setProfileUsername(resolvedUsername)
         if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${user.uid}`, resolvedUsername)
       } catch {
@@ -846,7 +846,7 @@ export default function App() {
         const storedUsername = storedProfile.username
         const localUsername = window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
-        if (resolvedUsername) void syncLegacyUsername(credential.user.uid, resolvedUsername).catch(() => undefined)
+        if (resolvedUsername) void syncLegacyUsername(credential.user.uid, resolvedUsername, typeof storedProfile.displayName === 'string' ? storedProfile.displayName : (credential.user.displayName || '')).catch(() => undefined)
         setProfileUsername(resolvedUsername)
         setProfileDetails({
           about: typeof storedProfile.about === 'string' ? storedProfile.about : '',
