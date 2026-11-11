@@ -856,3 +856,21 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .moment-audio-playback audio{width:100%;max-width:360px}
 .moment-audio-playback>span{color:var(--text-muted);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .moment-audio-card-icon{width:100%;height:100%;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,#173d40,#101719)}
+
+
+/* Privacy and security settings */
+.security-settings-panel { display: grid; gap: 14px; }
+.security-status-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 14px; }
+.security-status-card > div { display: grid; gap: 5px; min-width: 0; }
+.security-status-card strong { font-size: .9rem; }
+.security-status-card > div span { color: var(--muted, #a3a3a3); font-size: .84rem; overflow-wrap: anywhere; }
+.security-status { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.security-status.verified { color: #75e0a0; background: rgba(50,190,110,.12); }
+.security-status.pending { color: #f2c56b; background: rgba(230,170,45,.12); }
+.security-action-row { display: grid; gap: 9px; }
+.security-action-row .secondary-button { justify-self: start; }
+.security-divider { height: 1px; background: var(--line, rgba(255,255,255,.12)); margin: 2px 0; }
+.security-settings-panel h4 { margin: 0; font-size: 1rem; }
+.security-password-form { gap: 12px; }
+.security-password-form .primary-button { width: 100%; }
+.security-success { color: #75e0a0; }
