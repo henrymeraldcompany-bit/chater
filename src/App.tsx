@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, updatePassword, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, Type, Music2, LayoutGrid, Mic, ImagePlus, Video, Check, ArrowLeft, type LucideIcon } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
@@ -10,7 +10,7 @@ type ProfileDetails = { about: string; location: string; occupation: string }
 type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video' | 'audio'; caption: string; createdAt: number; expiresAt: number }
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
-type UsernameSearchResult = { username: string; displayName: string; photoURL: string }
+type UsernameSearchResult = { uid: string; username: string; displayName: string; photoURL: string }
 async function syncLegacyUsername(uid: string, rawUsername: string): Promise<void> {
   const db = firestoreDb
   if (!db) return
@@ -25,7 +25,7 @@ async function syncLegacyUsername(uid: string, rawUsername: string): Promise<voi
     if (!usernameSnapshot.exists()) {
       transaction.set(usernameRef, { uid, username: normalized, createdAt: serverTimestamp() })
     }
-    transaction.set(profileRef, { uid, username: normalized, updatedAt: serverTimestamp() }, { merge: true })
+    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, updatedAt: serverTimestamp() }, { merge: true })
   })
 }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
@@ -151,7 +151,8 @@ export default function App() {
   const [username, setUsername] = useState('')
   const [searchNotice, setSearchNotice] = useState('')
   const [usernameSearchBusy, setUsernameSearchBusy] = useState(false)
-  const [usernameSearchResult, setUsernameSearchResult] = useState<UsernameSearchResult | null>(null)
+  const [usernameSearchResults, setUsernameSearchResults] = useState<UsernameSearchResult[]>([])
+  const usernameSearchRequest = useRef(0)
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
   const [registrationUsername, setRegistrationUsername] = useState('')
@@ -438,63 +439,88 @@ export default function App() {
       }
       transaction.set(newRef, { uid: authUser.uid, username: normalized, createdAt: serverTimestamp() })
       if (oldRef && oldSnapshot?.exists()) transaction.delete(oldRef)
-      transaction.set(userRef, { uid: authUser.uid, username: normalized, updatedAt: serverTimestamp() }, { merge: true })
+      transaction.set(userRef, { uid: authUser.uid, username: normalized, usernameLower: normalized, updatedAt: serverTimestamp() }, { merge: true })
     })
     setProfileUsername(normalized)
     try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
   }
-  const handleUsernameSearch = async () => {
-    const normalized = username.trim().replace(/^@/, '').toLowerCase()
+  const handleUsernameSearch = async (rawInput: string) => {
+    const normalized = rawInput.trim().replace(/^@/, '').toLowerCase().replace(/\\s+/g, ' ')
+    const requestId = ++usernameSearchRequest.current
     setSearchNotice('')
-    setUsernameSearchResult(null)
-    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
-      setSearchNotice('Enter a username with 3–20 lowercase letters, numbers or underscores.')
+    if (normalized.length < 2) {
+      setUsernameSearchResults([])
+      setUsernameSearchBusy(false)
       return
     }
     if (!authUser || !firestoreDb) {
-      setSearchNotice('Sign in with a verified Chater account to search for people.')
+      setUsernameSearchResults([])
+      setSearchNotice('Sign in with a verified Chater account to find people.')
       return
     }
     setUsernameSearchBusy(true)
     try {
-      // First use the canonical username index. Older Chater accounts may have
-      // a profile document but no corresponding index document, so fall back to
-      // searching the public username field on member profiles.
-      const usernameSnapshot = await getDoc(doc(firestoreDb, 'usernames', normalized))
-      let profile: Record<string, unknown> | null = null
-      if (usernameSnapshot.exists()) {
-        const ownerUid = usernameSnapshot.data()?.uid
-        if (typeof ownerUid === 'string' && ownerUid) {
-          const profileSnapshot = await getDoc(doc(firestoreDb, 'users', ownerUid))
-          if (profileSnapshot.exists()) profile = (profileSnapshot.data() || {}) as Record<string, unknown>
-        }
-      }
-      if (!profile) {
-        const profileMatches = await getDocs(firestoreQuery(
-          collection(firestoreDb, 'users'),
-          where('username', '==', normalized)
+      const db = firestoreDb
+      const [usernameMatches, nameMatches] = await Promise.all([
+        getDocs(firestoreQuery(
+          collection(db, 'users'),
+          where('usernameLower', '>=', normalized),
+          where('usernameLower', '<=', normalized + '\\uf8ff'),
+          limit(8)
+        )),
+        getDocs(firestoreQuery(
+          collection(db, 'users'),
+          where('displayNameLower', '>=', normalized),
+          where('displayNameLower', '<=', normalized + '\\uf8ff'),
+          limit(8)
         ))
-        const exactMatch = profileMatches.docs.find(member => {
-          const savedUsername = member.data()?.username
-          return typeof savedUsername === 'string' && savedUsername.trim().toLowerCase() === normalized
+      ])
+      if (requestId !== usernameSearchRequest.current) return
+      const unique = new Map<string, UsernameSearchResult>()
+      for (const member of [...usernameMatches.docs, ...nameMatches.docs]) {
+        const profile = member.data() as Record<string, unknown>
+        const uid = typeof profile.uid === 'string' ? profile.uid : member.id
+        const savedUsername = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
+        const displayName = typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : savedUsername
+        if (!uid || uid === authUser.uid || !savedUsername) continue
+        const usernameMatch = savedUsername.startsWith(normalized)
+        const nameMatch = displayName.toLowerCase().startsWith(normalized)
+        if (!usernameMatch && !nameMatch) continue
+        unique.set(uid, {
+          uid,
+          username: savedUsername,
+          displayName: displayName || savedUsername,
+          photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
         })
-        if (exactMatch) profile = (exactMatch.data() || {}) as Record<string, unknown>
       }
-      if (!profile) {
-        setSearchNotice(`No Chater account was found with the username @${normalized}. Check the spelling or ask the member to confirm their Chater username.`)
-        return
-      }
-      setUsernameSearchResult({
-        username: normalized,
-        displayName: typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName : normalized,
-        photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
-      })
+      const results = [...unique.values()].sort((a, b) => {
+        const aExact = a.username === normalized || a.displayName.toLowerCase() === normalized
+        const bExact = b.username === normalized || b.displayName.toLowerCase() === normalized
+        return Number(bExact) - Number(aExact) || a.displayName.localeCompare(b.displayName)
+      }).slice(0, 12)
+      setUsernameSearchResults(results)
+      if (!results.length) setSearchNotice('No matching Chater members yet. Try another name or username.')
     } catch {
-      setSearchNotice('Username search is temporarily unavailable. Check your connection and try again.')
+      if (requestId === usernameSearchRequest.current) {
+        setUsernameSearchResults([])
+        setSearchNotice('People search is temporarily unavailable. Check your connection and try again.')
+      }
     } finally {
-      setUsernameSearchBusy(false)
+      if (requestId === usernameSearchRequest.current) setUsernameSearchBusy(false)
     }
   }
+  useEffect(() => {
+    if (dialog !== 'new-chat' && dialog !== 'search') return
+    if (username.trim().length < 2) {
+      usernameSearchRequest.current += 1
+      setUsernameSearchResults([])
+      setSearchNotice('')
+      setUsernameSearchBusy(false)
+      return
+    }
+    const timer = window.setTimeout(() => { void handleUsernameSearch(username) }, 250)
+    return () => window.clearTimeout(timer)
+  }, [username, dialog, authUser])
   const handleDisplayNameChange = async (nextName: string) => {
     if (!authUser) throw new Error('Sign in to edit your profile name.')
     const normalized = nextName.trim().replace(/\s+/g, ' ')
@@ -505,7 +531,7 @@ export default function App() {
     if (db) {
       await runTransaction(db, async transaction => {
         transaction.set(doc(db, 'users', authUser.uid), {
-          uid: authUser.uid, ...(profileUsername ? { username: profileUsername } : {}), displayName: normalized, updatedAt: serverTimestamp()
+          uid: authUser.uid, ...(profileUsername ? { username: profileUsername, usernameLower: profileUsername.toLowerCase() } : {}), displayName: normalized, displayNameLower: normalized.toLowerCase(), updatedAt: serverTimestamp()
         }, { merge: true })
       })
     }
@@ -740,7 +766,7 @@ export default function App() {
               throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
             }
             transaction.set(usernameRef, { uid: credential.user.uid, username: registrationUsername, createdAt: serverTimestamp() })
-            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, displayName: registrationName.trim(), createdAt: serverTimestamp() }, { merge: true })
+            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, usernameLower: registrationUsername.toLowerCase(), displayName: registrationName.trim(), displayNameLower: registrationName.trim().toLowerCase(), createdAt: serverTimestamp() }, { merge: true })
           })
         } catch (reservationError) {
           await deleteDoc(userProfileRef).catch(() => undefined)
@@ -905,7 +931,7 @@ export default function App() {
       <button className="primary-button dialog-action" type="submit" disabled={passwordRecoveryBusy}>{passwordRecoveryBusy?'Sending reset email…':'Send reset link'}</button>
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
-    </form>:<><p className="dialog-copy">Search for a Chater member using their exact username. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setUsernameSearchResult(null)}} placeholder="@username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('');setUsernameSearchResult(null)}}><X size={15}/></button></label><button className="primary-button dialog-action" type="button" onClick={()=>void handleUsernameSearch()} disabled={!username.trim()||usernameSearchBusy}>{usernameSearchBusy?'Searching…':<><Search size={17}/> Search username</>}</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}{usernameSearchResult&&<div className="security-status-card username-search-result" role="status"><ProfileAvatar photoURL={usernameSearchResult.photoURL} displayName={usernameSearchResult.displayName} className="username-search-avatar"/><div><strong>{usernameSearchResult.displayName}</strong><span>@{usernameSearchResult.username}</span><span>Chater member</span></div><span className="security-status verified">Found</span></div>}</>}</section></div>}
+    </form>:<><p className="dialog-copy">Start typing a name or username to see matching Chater members. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="Search names or @username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('')}}><X size={15}/></button></label>{usernameSearchBusy&&<p className="search-progress" role="status">Finding members…</p>}{usernameSearchResults.length>0&&<div className="username-search-results" aria-label="Matching Chater members">{usernameSearchResults.map(result=><div className="security-status-card username-search-result" key={result.uid}><ProfileAvatar photoURL={result.photoURL} displayName={result.displayName} className="username-search-avatar"/><div><strong>{result.displayName}</strong><span>@{result.username}</span></div><span className="security-status verified">Chater</span></div>)}</div>}{searchNotice&&!usernameSearchResults.length&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
     {activeTab==='Moments' && momentViewerIndex !== null && <MomentViewer groups={momentGroups} initialGroupIndex={momentViewerIndex} onClose={closeMomentViewer}/>}
   </main>
 }
