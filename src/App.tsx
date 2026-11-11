@@ -12,12 +12,13 @@ type MomentGroup = { uid: string; displayName: string; photoURL: string; preview
 type ScheduledCall = { id: string; phone: string; at: string }
 type UsernameSearchResult = { username: string; displayName: string; photoURL: string }
 async function syncLegacyUsername(uid: string, rawUsername: string): Promise<void> {
-  if (!firestoreDb) return
+  const db = firestoreDb
+  if (!db) return
   const normalized = rawUsername.trim().replace(/^@/, '').toLowerCase()
   if (!/^[a-z0-9_]{3,20}$/.test(normalized)) return
-  await runTransaction(firestoreDb, async transaction => {
-    const usernameRef = doc(firestoreDb, 'usernames', normalized)
-    const profileRef = doc(firestoreDb, 'users', uid)
+  await runTransaction(db, async transaction => {
+    const usernameRef = doc(db, 'usernames', normalized)
+    const profileRef = doc(db, 'users', uid)
     const usernameSnapshot = await transaction.get(usernameRef)
     // Never claim a username that is already reserved by another account.
     if (usernameSnapshot.exists() && usernameSnapshot.data()?.uid !== uid) return
