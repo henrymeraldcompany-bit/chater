@@ -48,6 +48,19 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && request.auth.uid == userId;
+
+      // Contact links are private to the account that created them. Store only
+      // the target Chater UID; never store the phone-book name, phone or email.
+      match /contacts/{contactUid} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && contactUid != userId
+          && request.resource.data.keys().hasOnly(['uid', 'addedAt'])
+          && request.resource.data.uid == contactUid
+          && request.resource.data.addedAt == request.time;
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
     }
   }
 }
