@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { doc, getDoc, onSnapshot } from 'firebase/firestore'
+import { getDoc, onSnapshot } from 'firebase/firestore'
 import ConversationList from './ConversationList'
 
 vi.mock('../lib/firebase', () => ({ firestoreDb: {} }))
