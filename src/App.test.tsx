@@ -86,6 +86,18 @@ describe('Chater application shell', () => {
     }
   })
 
+  it('opens the Start a conversation flow as a full-screen page from both entry points', () => {
+    openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }))
+    expect(screen.getByRole('dialog', { name: 'Start a conversation' })).toBeInTheDocument()
+    expect(document.querySelector('.new-chat-screen.full-screen-dialog')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start a new chat' }))
+    expect(screen.getByRole('dialog', { name: 'Start a conversation' })).toBeInTheDocument()
+    expect(document.querySelector('.new-chat-screen.full-screen-dialog')).toBeInTheDocument()
+  })
+
   it('shows live partial matches by display name and username, including profile pictures', async () => {
     const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
