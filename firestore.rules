@@ -5,10 +5,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isBlocked(blockingUid, targetUid) {
+      return exists(/databases/$(database)/documents/users/$(blockingUid)/blocked/$(targetUid));
+    }
+
+    function canMessage(firstUid, secondUid) {
+      return !isBlocked(firstUid, secondUid) && !isBlocked(secondUid, firstUid);
+    }
+
     match /usernames/{username} {
       // Usernames are public identifiers; reads support availability checks.
       allow read: if true;
-      // A username can be created once and belongs to its owner.
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['uid', 'username', 'createdAt'])
         && request.resource.data.uid == request.auth.uid
@@ -19,7 +26,6 @@ service cloud.firestore {
     }
 
     match /moments/{momentId} {
-      // Signed-in members can view Moments while the client hides expired entries.
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
@@ -49,8 +55,7 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && request.auth.uid == userId;
 
-      // Contact links are private to the account that created them. Store only
-      // the target Chater UID; never store the phone-book name, phone or email.
+      // The owner alone can read and manage their private Chater contact list.
       match /contacts/{contactUid} {
         allow read: if signedIn() && request.auth.uid == userId;
         allow create, update: if signedIn()
@@ -60,6 +65,103 @@ service cloud.firestore {
           && request.resource.data.uid == contactUid
           && request.resource.data.addedAt == request.time;
         allow delete: if signedIn() && request.auth.uid == userId;
+      }
+
+      // A block is private to the account that placed it.
+      match /blocked/{blockedUid} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && blockedUid != userId
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+          && request.resource.data.uid == blockedUid
+          && request.resource.data.createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(blockedUid));
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // One deterministic two-member conversation is shared by both accounts.
+    // Either member can start it directly; no request/acceptance state exists.
+    match /conversations/{conversationId} {
+      allow read: if signedIn()
+        && request.auth.uid in resource.data.participants;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'participants', 'createdAt', 'updatedAt',
+          'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'participants', 'createdAt', 'updatedAt',
+          'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+        ])
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants[0] != request.resource.data.participants[1]
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.participants[0]))
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.participants[1]))
+        && canMessage(
+          request.resource.data.participants[0],
+          request.resource.data.participants[1]
+        )
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.lastMessageSenderId == request.auth.uid
+        && request.resource.data.lastMessageText is string
+        && request.resource.data.lastMessageText.size() <= 180;
+
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+        ])
+        && request.resource.data.lastMessageSenderId == request.auth.uid
+        && request.resource.data.lastMessageText is string
+        && request.resource.data.lastMessageText.size() <= 180
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && canMessage(
+          request.auth.uid,
+          resource.data.participants[0] == request.auth.uid
+            ? resource.data.participants[1]
+            : resource.data.participants[0]
+        );
+
+      // Account deletion may remove a member's conversations and their messages.
+      allow delete: if signedIn()
+        && request.auth.uid in resource.data.participants;
+
+      match /messages/{messageId} {
+        function conversationAfterWrite() {
+          return getAfter(/databases/$(database)/documents/conversations/$(conversationId)).data;
+        }
+
+        allow read: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['senderId', 'recipientId', 'text', 'createdAt'])
+          && request.resource.data.keys().hasAll(['senderId', 'recipientId', 'text', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.recipientId is string
+          && request.resource.data.recipientId != request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.createdAt == request.time
+          && request.auth.uid in conversationAfterWrite().participants
+          && request.resource.data.recipientId in conversationAfterWrite().participants
+          && conversationAfterWrite().participants.size() == 2
+          && canMessage(request.auth.uid, request.resource.data.recipientId);
+
+        allow update: if false;
+        allow delete: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
       }
     }
   }
