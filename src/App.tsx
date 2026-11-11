@@ -152,6 +152,7 @@ export default function App() {
   const [searchNotice, setSearchNotice] = useState('')
   const [usernameSearchBusy, setUsernameSearchBusy] = useState(false)
   const [usernameSearchResults, setUsernameSearchResults] = useState<UsernameSearchResult[]>([])
+  const [showAllPeopleResults, setShowAllPeopleResults] = useState(false)
   const usernameSearchRequest = useRef(0)
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
@@ -445,47 +446,34 @@ export default function App() {
     try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
   }
   const handleUsernameSearch = useCallback(async (rawInput: string) => {
-    const normalized = rawInput.trim().replace(/^@/, '').toLowerCase().replace(/\\s+/g, ' ')
+    const normalized = rawInput.trim().replace(/^@/, '').toLowerCase().replace(/\s+/g, ' ')
     const requestId = ++usernameSearchRequest.current
     setSearchNotice('')
-    if (normalized.length < 2) {
-      setUsernameSearchResults([])
+    setUsernameSearchResults([])
+    if (!normalized.length) {
       setUsernameSearchBusy(false)
       return
     }
     if (!authUser || !firestoreDb) {
-      setUsernameSearchResults([])
       setSearchNotice('Sign in with a verified Chater account to find people.')
       return
     }
     setUsernameSearchBusy(true)
     try {
-      const db = firestoreDb
-      const [usernameMatches, nameMatches] = await Promise.all([
-        getDocs(firestoreQuery(
-          collection(db, 'users'),
-          where('usernameLower', '>=', normalized),
-          where('usernameLower', '<=', normalized + '\\uf8ff'),
-          limit(8)
-        )),
-        getDocs(firestoreQuery(
-          collection(db, 'users'),
-          where('displayNameLower', '>=', normalized),
-          where('displayNameLower', '<=', normalized + '\\uf8ff'),
-          limit(8)
-        ))
-      ])
+      // Read the public member directory, then perform substring matching locally.
+      // This supports matches anywhere in a name or username, including from the
+      // very first typed character; prefix-only Firestore ranges cannot do that.
+      const snapshot = await getDocs(collection(firestoreDb, 'users'))
       if (requestId !== usernameSearchRequest.current) return
       const unique = new Map<string, UsernameSearchResult>()
-      for (const member of [...usernameMatches.docs, ...nameMatches.docs]) {
+      for (const member of snapshot.docs) {
         const profile = member.data() as Record<string, unknown>
         const uid = typeof profile.uid === 'string' ? profile.uid : member.id
         const savedUsername = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
         const displayName = typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : savedUsername
+        const searchableName = displayName.toLowerCase()
         if (!uid || uid === authUser.uid || !savedUsername) continue
-        const usernameMatch = savedUsername.startsWith(normalized)
-        const nameMatch = displayName.toLowerCase().startsWith(normalized)
-        if (!usernameMatch && !nameMatch) continue
+        if (!searchableName.includes(normalized) && !savedUsername.includes(normalized)) continue
         unique.set(uid, {
           uid,
           username: savedUsername,
@@ -494,12 +482,12 @@ export default function App() {
         })
       }
       const results = [...unique.values()].sort((a, b) => {
-        const aExact = a.username === normalized || a.displayName.toLowerCase() === normalized
-        const bExact = b.username === normalized || b.displayName.toLowerCase() === normalized
-        return Number(bExact) - Number(aExact) || a.displayName.localeCompare(b.displayName)
-      }).slice(0, 12)
+        const aStarts = a.displayName.toLowerCase().startsWith(normalized) || a.username.startsWith(normalized)
+        const bStarts = b.displayName.toLowerCase().startsWith(normalized) || b.username.startsWith(normalized)
+        return Number(bStarts) - Number(aStarts) || a.displayName.localeCompare(b.displayName)
+      })
       setUsernameSearchResults(results)
-      if (!results.length) setSearchNotice('No matching Chater members yet. Try another name or username.')
+      if (!results.length) setSearchNotice('No matching Chater members yet. Try another spelling.')
     } catch {
       if (requestId === usernameSearchRequest.current) {
         setUsernameSearchResults([])
@@ -511,14 +499,8 @@ export default function App() {
   }, [authUser])
   useEffect(() => {
     if (dialog !== 'new-chat' && dialog !== 'search') return
-    if (username.trim().length < 2) {
-      usernameSearchRequest.current += 1
-      setUsernameSearchResults([])
-      setSearchNotice('')
-      setUsernameSearchBusy(false)
-      return
-    }
-    const timer = window.setTimeout(() => { void handleUsernameSearch(username) }, 250)
+    usernameSearchRequest.current += 1
+    const timer = window.setTimeout(() => { void handleUsernameSearch(username) }, 180)
     return () => window.clearTimeout(timer)
   }, [username, dialog, authUser, handleUsernameSearch])
   const handleDisplayNameChange = async (nextName: string) => {
@@ -729,7 +711,7 @@ export default function App() {
 
     {activeTab==='Calls'&&<button className="compose-button compose-call" aria-label="Make a call" onClick={()=>setDialog('call')}><Phone size={24}/><span className="compose-plus"><Plus size={15}/></span></button>}
     <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
-    {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<>{!securityPanel&&<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div></>}{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
+    {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className={dialog==='search'?'dialog-card people-search-screen':'dialog-card'} role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<>{!securityPanel&&<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div></>}{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
   <div className="dialog-head"><div><p className="eyebrow">ACCOUNT PROTECTION</p><h3>Privacy and security</h3></div><button className="icon-button" aria-label="Close security settings" onClick={()=>{setSecurityPanel(false);setSecurityNotice('')}}><X size={18}/></button></div>
   <div className="security-status-card"><div><strong>Email address</strong><span>{authUser?.email || 'No email address available'}</span></div><span className={authUser?.emailVerified?'security-status verified':'security-status pending'}>{authUser?.emailVerified?'Verified':'Not verified'}</span></div>
   <div className="security-divider"/>
@@ -931,7 +913,7 @@ export default function App() {
       <button className="primary-button dialog-action" type="submit" disabled={passwordRecoveryBusy}>{passwordRecoveryBusy?'Sending reset email…':'Send reset link'}</button>
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
-    </form>:<><p className="dialog-copy">Start typing a name or username to see matching Chater members. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="Search names or @username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('')}}><X size={15}/></button></label>{usernameSearchBusy&&<p className="search-progress" role="status">Finding members…</p>}{usernameSearchResults.length>0&&<div className="username-search-results" aria-label="Matching Chater members">{usernameSearchResults.map(result=><div className="security-status-card username-search-result" key={result.uid}><ProfileAvatar photoURL={result.photoURL} displayName={result.displayName} className="username-search-avatar"/><div><strong>{result.displayName}</strong><span>@{result.username}</span></div><span className="security-status verified">Chater</span></div>)}</div>}{searchNotice&&!usernameSearchResults.length&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
+    </form>:<><p className="dialog-copy">Start typing a name or username to see matching Chater members. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="Search names or @username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('');setShowAllPeopleResults(false)}}><X size={15}/></button></label><button className="primary-button people-search-submit" type="button" disabled={!username.trim()||usernameSearchBusy} onClick={()=>{setShowAllPeopleResults(true);void handleUsernameSearch(username)}}><Search size={16}/> Search</button>{usernameSearchBusy&&<p className="search-progress" role="status">Finding members…</p>}{usernameSearchResults.length>0&&<div className="username-search-results" aria-label="Matching Chater members">{usernameSearchResults.slice(0,showAllPeopleResults?100:10).map(result=><div className="security-status-card username-search-result" key={result.uid}><ProfileAvatar photoURL={result.photoURL} displayName={result.displayName} className="username-search-avatar"/><div><strong>{result.displayName}</strong><span>@{result.username}</span></div><span className="security-status verified">Chater</span></div>)}</div>}{usernameSearchResults.length>10&&!showAllPeopleResults&&<button className="secondary-button people-search-more" type="button" onClick={()=>setShowAllPeopleResults(true)}>See more results ({usernameSearchResults.length-10} more)</button>}{searchNotice&&!usernameSearchResults.length&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
     {activeTab==='Moments' && momentViewerIndex !== null && <MomentViewer groups={momentGroups} initialGroupIndex={momentViewerIndex} onClose={closeMomentViewer}/>}
   </main>
 }
