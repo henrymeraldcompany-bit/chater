@@ -104,6 +104,29 @@ describe('Chater application shell', () => {
     expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
   })
 
+  it('finds legacy members whose profile exists without a username index record', async () => {
+    const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDoc)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
+      .mockResolvedValueOnce({ exists: () => false, data: () => undefined } as never)
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      docs: [{
+        id: 'legacy-member',
+        data: () => ({ uid: 'legacy-member', username: 'mee_maw', displayName: 'Mee Maw', photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/legacy-member/avatar.jpg' })
+      }]
+    } as never)
+    openApp()
+    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
+    fireEvent.change(screen.getByPlaceholderText('@username'), { target: { value: 'Mee_maw' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search username' }))
+    await waitFor(() => expect(screen.getByText('Mee Maw')).toBeInTheDocument())
+    expect(screen.getByText('@mee_maw')).toBeInTheDocument()
+    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/legacy-member/avatar.jpg')
+  })
+
   it('offers ten selectable accent colour presets in settings', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
