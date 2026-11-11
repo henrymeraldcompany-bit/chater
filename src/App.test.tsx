@@ -411,7 +411,7 @@ describe('Chater application shell', () => {
 
   it('opens privacy and security directly from the You profile options', () => {
     openApp()
-    fireEvent.click(screen.getByRole('button', { name: 'You' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
     fireEvent.click(screen.getByRole('button', { name: /Privacy and security/ }))
     expect(screen.getByRole('heading', { name: 'Privacy and security' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Change password' })).toBeInTheDocument()
@@ -420,7 +420,7 @@ describe('Chater application shell', () => {
 
   it('keeps Chat settings, Notifications, and Help separate from privacy and security', () => {
     openApp()
-    fireEvent.click(screen.getByRole('button', { name: 'You' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
     fireEvent.click(screen.getByRole('button', { name: /Privacy and security/ }))
     expect(screen.getByRole('heading', { name: 'Privacy and security' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
