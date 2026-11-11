@@ -1221,7 +1221,6 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
     </div>
     <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous Moment" onPointerDown={beginPress} onPointerUp={()=>endPress()} onPointerCancel={()=>endPress(true)} onContextMenu={event=>event.preventDefault()} onClick={zoneClick(previousStory)}/>
     <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next Moment" onPointerDown={beginPress} onPointerUp={()=>endPress()} onPointerCancel={()=>endPress(true)} onContextMenu={event=>event.preventDefault()} onClick={zoneClick(nextStory)}/>
-    {isPaused && <div className="moment-story-paused" role="status" aria-live="polite"><span>Ⅱ</span><small>Paused</small></div>}
     {moment.caption && <div className="moment-story-caption">{moment.caption}</div>}
     <div className="moment-story-footer"><span>{momentIndex+1} of {group.moments.length}</span><span>Available for 24 hours after sharing</span></div>
   </div>
