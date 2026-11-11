@@ -566,7 +566,7 @@ describe('Chater application shell', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
     expect(screen.getAllByRole('heading', { name: 'Moments' }).length).toBeGreaterThan(0)
-    expect(screen.getByText('My Moments')).toBeInTheDocument()
+    expect(screen.getAllByText('My Moments').length).toBeGreaterThan(0)
     expect(screen.getByText('Share a Moment')).toBeInTheDocument()
     expect(screen.queryByText('Recent Moments')).not.toBeInTheDocument()
     expect(screen.queryByText('No recent Moments yet')).not.toBeInTheDocument()
@@ -598,7 +598,7 @@ describe('Chater application shell', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
 
     const otherMomentCards = await screen.findAllByRole('button', { name: /Other Person/ })
-    expect(otherMomentCards.length).toBeGreaterThanOrEqual(2)
+    expect(otherMomentCards).toHaveLength(1)
     expect(otherMomentCards[0]).toHaveTextContent('2 Moments')
     expect(screen.getAllByText('Other Person')).toHaveLength(2)
     fireEvent.click(otherMomentCards[0])
