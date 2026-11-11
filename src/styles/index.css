@@ -1101,12 +1101,16 @@ body,.app-shell{background:var(--page);color:var(--text)}
   margin: 0 0 8px;
 }
 .people-search-back {
-  flex: 0 0 46px;
-  width: 46px;
-  height: 48px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 40px;
   padding: 0;
   color: var(--text-strong, currentColor);
   border-radius: 50%;
+}
+.people-search-back svg {
+  width: 21px;
+  height: 21px;
 }
 .people-search-screen .people-search-input,
 .new-chat-screen .people-search-input {
@@ -1117,14 +1121,30 @@ body,.app-shell{background:var(--page);color:var(--text)}
   margin: 0;
   padding: 0 7px 0 19px;
   border-radius: 999px;
-  background: var(--surface, transparent);
+  background: var(--field);
+  border-color: var(--border);
 }
 .people-search-screen .people-search-input input,
 .new-chat-screen .people-search-input input {
   min-width: 0;
   flex: 1 1 auto;
   height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+  caret-color: var(--text-strong);
   font-size: 16px;
+}
+.people-search-screen .people-search-input input:focus,
+.new-chat-screen .people-search-input input:focus {
+  outline: 0;
+  box-shadow: none;
+}
+.people-search-screen .people-search-input input::placeholder,
+.new-chat-screen .people-search-input input::placeholder {
+  color: var(--text-muted);
 }
 .people-search-screen .people-search-input input::placeholder,
 .new-chat-screen .people-search-input input::placeholder {
