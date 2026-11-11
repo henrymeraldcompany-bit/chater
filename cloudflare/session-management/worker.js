@@ -300,10 +300,24 @@ async function handleRequest(request, env, url) {
       }
       const document = await readSession(env, uid, sessionId);
       const fields = document?.fields || {};
+      const revokedAt = fields.revokedAt?.timestampValue || "";
+      const newlyAuthenticatedAfterRevocation = Boolean(
+        revokedAt && Number.isFinite(claims.auth_time) &&
+        claims.auth_time * 1000 > Date.parse(revokedAt)
+      );
+      if (document && newlyAuthenticatedAfterRevocation) {
+        await writeSession(env, uid, sessionId, {
+          deviceName: stringField(fields, "deviceName") || "This device",
+          platform: stringField(fields, "platform") || "Unknown platform",
+          userAgent: stringField(fields, "userAgent"),
+          createdAt: timestampField(fields, "createdAt") || new Date().toISOString(),
+          lastSeenAt: new Date().toISOString(),
+        }, true);
+      }
       return json({
         success: true,
         registered: Boolean(document),
-        revoked: Boolean(fields.revokedAt?.timestampValue),
+        revoked: Boolean(revokedAt) && !newlyAuthenticatedAfterRevocation,
       });
     }
 
