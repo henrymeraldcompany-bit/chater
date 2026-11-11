@@ -96,6 +96,38 @@ const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'amzak6nf'
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'chater_profiles'
 const CHATER_ACCOUNT_DELETION_URL = 'https://chater-account-deletion.henrymeraldcompany.workers.dev'
+const CHATER_SESSION_MANAGEMENT_URL = 'https://chater-session-management.henrymeraldcompany.workers.dev'
+type ChaterDeviceSession = { id: string; deviceName: string; platform: string; userAgent: string; createdAt: string; lastSeenAt: string; revoked: boolean }
+
+function getChaterDeviceSessionId(): string {
+  const key = 'chater:device-session-id'
+  try {
+    const saved = window.localStorage.getItem(key)
+    if (saved && /^[A-Za-z0-9_-]{16,80}$/.test(saved)) return saved
+    const created = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().replace(/-/g, '')
+      : Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
+    window.localStorage.setItem(key, created)
+    return created
+  } catch {
+    return Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
+  }
+}
+
+async function chaterSessionRequest<T>(user: User, path: string, method: 'GET' | 'POST' = 'GET', body?: Record<string, string>): Promise<T> {
+  const token = await user.getIdToken()
+  const response = await fetch(`${CHATER_SESSION_MANAGEMENT_URL}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  })
+  const result = await response.json().catch(() => ({})) as T & { error?: string }
+  if (!response.ok) throw new Error(result.error || 'Session management is temporarily unavailable.')
+  return result
+}
 
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
@@ -131,6 +163,11 @@ export default function App() {
   const [securityNotice, setSecurityNotice] = useState('')
   const [securityNoticeType, setSecurityNoticeType] = useState<'success' | 'error'>('success')
   const [securityVerificationBusy, setSecurityVerificationBusy] = useState(false)
+  const [deviceSessions, setDeviceSessions] = useState<ChaterDeviceSession[]>([])
+  const [deviceSessionsBusy, setDeviceSessionsBusy] = useState(false)
+  const [deviceSessionsNotice, setDeviceSessionsNotice] = useState('')
+  const [deviceSessionsNoticeType, setDeviceSessionsNoticeType] = useState<'success' | 'error'>('success')
+  const [revokeAllBusy, setRevokeAllBusy] = useState(false)
   const [username, setUsername] = useState('')
   const [searchNotice, setSearchNotice] = useState('')
   const [registrationName, setRegistrationName] = useState('')
@@ -253,6 +290,33 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!authUser || !firestoreDb) { setMoments([]); return }
+  useEffect(() => {
+    if (!authUser) { setDeviceSessions([]); return }
+    let active = true
+    const sessionId = getChaterDeviceSessionId()
+    const registerAndCheck = async () => {
+      try {
+        await chaterSessionRequest(authUser, '/sessions/register', 'POST', {
+          sessionId,
+          deviceName: 'This device',
+          platform: navigator.platform || 'Web browser'
+        })
+        const check = await chaterSessionRequest<{ registered: boolean; revoked: boolean }>(
+          authUser, '/sessions/check', 'POST', { sessionId }
+        )
+        if (active && check.revoked && firebaseAuth) {
+          await signOut(firebaseAuth)
+          setDeviceSessionsNotice('This device was signed out because the account sessions were revoked.')
+        }
+      } catch {
+        // Keep Chater usable if the session service is temporarily unavailable.
+      }
+    }
+    void registerAndCheck()
+    const heartbeat = window.setInterval(() => { void registerAndCheck() }, 5 * 60 * 1000)
+    return () => { active = false; window.clearInterval(heartbeat) }
+  }, [authUser])
+
     let active = true
     getDocs(collection(firestoreDb, 'moments')).then(snapshot => {
       const now = Date.now()
@@ -619,6 +683,15 @@ export default function App() {
     {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='new-chat'?'Start a conversation':dialog==='search'?'Find people':dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div>{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
   <div className="dialog-head"><div><p className="eyebrow">ACCOUNT PROTECTION</p><h3>Privacy and security</h3></div><button className="icon-button" aria-label="Close security settings" onClick={()=>{setSecurityPanel(false);setSecurityNotice('')}}><X size={18}/></button></div>
   <div className="security-status-card"><div><strong>Email address</strong><span>{authUser?.email || 'No email address available'}</span></div><span className={authUser?.emailVerified?'security-status verified':'security-status pending'}>{authUser?.emailVerified?'Verified':'Not verified'}</span></div>
+  <div className="security-divider"/>
+  <div className="accent-settings-heading"><h4>Devices and sessions</h4><span>{deviceSessions.length} listed</span></div>
+  <p className="accent-help">Devices that have opened your Chater account appear here. Last active times are approximate. Firebase's sign-out-all action affects every device, including this one.</p>
+  <div className="dialog-actions">
+    <button className="secondary-button" type="button" disabled={deviceSessionsBusy || !authUser} onClick={async()=>{if(!authUser)return;setDeviceSessionsBusy(true);setDeviceSessionsNotice('');try{const result=await chaterSessionRequest<{sessions:ChaterDeviceSession[]}>(authUser,'/sessions/list');setDeviceSessions(result.sessions||[]);setDeviceSessionsNoticeType('success');setDeviceSessionsNotice('Device list refreshed.')}catch(error){setDeviceSessionsNoticeType('error');setDeviceSessionsNotice(error instanceof Error?error.message:'Could not load devices.')}finally{setDeviceSessionsBusy(false)}}}>{deviceSessionsBusy?'Refreshing…':'Refresh devices'}</button>
+    <button className="secondary-button" type="button" disabled={revokeAllBusy || !authUser} onClick={async()=>{if(!authUser||!firebaseAuth)return;if(!window.confirm('Sign out Chater on every device, including this one? You will need to sign in again.'))return;setRevokeAllBusy(true);setDeviceSessionsNotice('');try{await chaterSessionRequest<{success:boolean}>(authUser,'/sessions/revoke-all','POST',{});await signOut(firebaseAuth);setAuthUser(null);setDeviceSessions([]);setDeviceSessionsNoticeType('success');setDeviceSessionsNotice('All devices have been signed out. Sign in again to continue.')}catch(error){setDeviceSessionsNoticeType('error');setDeviceSessionsNotice(error instanceof Error?error.message:'Could not sign out all devices.')}finally{setRevokeAllBusy(false)}}}>{revokeAllBusy?'Signing out…':'Sign out all devices'}</button>
+  </div>
+  {deviceSessions.length>0&&<div className="device-session-list">{deviceSessions.map(session=><div className="security-status-card" key={session.id}><div><strong>{session.deviceName || 'Chater device'}{session.id===getChaterDeviceSessionId()?' · Current device':''}</strong><span>{session.platform || 'Web browser'}</span><span>Last active: {session.lastSeenAt ? new Date(session.lastSeenAt).toLocaleString() : 'Not available'}</span></div><span className={session.revoked?'security-status pending':'security-status verified'}>{session.revoked?'Revoked':'Registered'}</span></div>)}</div>}
+  {deviceSessionsNotice&&<p className={deviceSessionsNoticeType==='success'?'dialog-notice security-success':'dialog-notice'} role="status">{deviceSessionsNotice}</p>}
   {!authUser?.emailVerified&&<div className="security-action-row"><p className="accent-help">Verify your email to help protect your account and confirm that you control this address.</p><button className="secondary-button" type="button" disabled={securityVerificationBusy||!authUser} onClick={async()=>{if(!authUser)return;setSecurityVerificationBusy(true);setSecurityNotice('');try{await sendEmailVerification(authUser);setSecurityNoticeType('success');setSecurityNotice('A verification email has been sent. Check your inbox and Spam or Junk folder.')}catch(error){const code=(error as {code?:string})?.code;setSecurityNoticeType('error');setSecurityNotice(code==='auth/too-many-requests'?'Too many requests. Wait before trying again.':'We could not send the verification email. Check your connection and try again.')}finally{setSecurityVerificationBusy(false)}}}>{securityVerificationBusy?'Sending…':'Resend verification email'}</button></div>}
   <div className="security-divider"/>
   <h4>Change password</h4>
