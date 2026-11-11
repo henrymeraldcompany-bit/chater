@@ -128,9 +128,62 @@ describe('Chater direct-message rules', () => {
       onUnblock={vi.fn(async () => undefined)}
     />)
     expect(await screen.findByText('No messages yet')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Block Other User' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Block' }))
     fireEvent.click(screen.getByRole('button', { name: 'Block account' }))
     await waitFor(() => expect(onBlock).toHaveBeenCalledWith('other-user'))
+  })
+
+  it('shows the WhatsApp-style chat menu with its More submenu and contact search', async () => {
+    const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    render(<ConversationScreen
+      currentUserId="signed-in-user"
+      target={target}
+      isBlocked={false}
+      onClose={vi.fn()}
+      onBlock={vi.fn(async () => undefined)}
+      onUnblock={vi.fn(async () => undefined)}
+    />)
+
+    await screen.findByText('No messages yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    expect(screen.getByRole('menuitem', { name: 'View contact' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Search' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Report' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Mute notifications' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Chat theme' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Search' }))
+    expect(screen.getByRole('textbox', { name: 'Search messages' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close message search' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'More' }))
+    expect(screen.getByRole('menuitem', { name: 'Media, links, and docs' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Clear chat' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Export chat' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Add shortcut' })).toBeInTheDocument()
+  })
+
+  it('opens the contact card and lets members choose a chat theme', async () => {
+    const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    render(<ConversationScreen
+      currentUserId="signed-in-user"
+      target={target}
+      isBlocked={false}
+      onClose={vi.fn()}
+      onBlock={vi.fn(async () => undefined)}
+      onUnblock={vi.fn(async () => undefined)}
+    />)
+
+    await screen.findByText('No messages yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'View contact' }))
+    expect(screen.getByRole('region', { name: 'Contact information' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Chat theme' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Forest' }))
+    expect(document.querySelector('.live-conversation-screen')).toHaveAttribute('data-chat-theme', 'forest')
   })
 })
 
