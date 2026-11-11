@@ -96,46 +96,6 @@ const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'amzak6nf'
 const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'chater_profiles'
 const CHATER_ACCOUNT_DELETION_URL = 'https://chater-account-deletion.henrymeraldcompany.workers.dev'
-const CHATER_SESSION_MANAGEMENT_URL = 'https://chater-session-management.henrymeraldcompany.workers.dev'
-type ChaterDeviceSession = { id: string; deviceName: string; platform: string; userAgent: string; createdAt: string; lastSeenAt: string; revoked: boolean }
-
-function createChaterDeviceSessionId(): string {
-  if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(24)
-    window.crypto.getRandomValues(bytes)
-    return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('')
-  }
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
-}
-
-function getChaterDeviceSessionId(): string {
-  const key = 'chater:device-session-id'
-  try {
-    const saved = window.localStorage.getItem(key)
-    if (saved && /^[A-Za-z0-9_-]{16,80}$/.test(saved)) return saved
-    const created = createChaterDeviceSessionId()
-    window.localStorage.setItem(key, created)
-    return created
-  } catch {
-    return createChaterDeviceSessionId()
-  }
-}
-
-async function chaterSessionRequest<T>(user: User, path: string, method: 'GET' | 'POST' = 'GET', body?: Record<string, string>): Promise<T> {
-  const token = await user.getIdToken()
-  const response = await fetch(`${CHATER_SESSION_MANAGEMENT_URL}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body ? { 'Content-Type': 'application/json' } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined
-  })
-  const result = await response.json().catch(() => ({})) as T & { error?: string }
-  if (!response.ok) throw new Error(result.error || 'Session management is temporarily unavailable.')
-  return result
-}
-
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
   return <span className={`profile-avatar ${className}`} aria-label={displayName ? `${displayName} profile picture` : 'Default profile picture'}>
@@ -170,11 +130,6 @@ export default function App() {
   const [securityNotice, setSecurityNotice] = useState('')
   const [securityNoticeType, setSecurityNoticeType] = useState<'success' | 'error'>('success')
   const [securityVerificationBusy, setSecurityVerificationBusy] = useState(false)
-  const [deviceSessions, setDeviceSessions] = useState<ChaterDeviceSession[]>([])
-  const [deviceSessionsBusy, setDeviceSessionsBusy] = useState(false)
-  const [deviceSessionsNotice, setDeviceSessionsNotice] = useState('')
-  const [deviceSessionsNoticeType, setDeviceSessionsNoticeType] = useState<'success' | 'error'>('success')
-  const [revokeAllBusy, setRevokeAllBusy] = useState(false)
   const [username, setUsername] = useState('')
   const [searchNotice, setSearchNotice] = useState('')
   const [registrationName, setRegistrationName] = useState('')
@@ -322,33 +277,6 @@ export default function App() {
     return () => { active = false }
   }, [authUser])
 
-  useEffect(() => {
-    if (!authUser) { setDeviceSessions([]); return }
-    let active = true
-    const sessionId = getChaterDeviceSessionId()
-    const registerAndCheck = async () => {
-      try {
-        const check = await chaterSessionRequest<{ registered: boolean; revoked: boolean }>(
-          authUser, '/sessions/check', 'POST', { sessionId }
-        )
-        if (active && check.revoked && firebaseAuth) {
-          setDeviceSessionsNotice('This device was signed out because the account sessions were revoked.')
-          await signOut(firebaseAuth)
-          return
-        }
-        await chaterSessionRequest(authUser, '/sessions/register', 'POST', {
-          sessionId,
-          deviceName: 'This device',
-          platform: navigator.platform || 'Web browser'
-        })
-      } catch {
-        // Keep Chater usable if the session service is temporarily unavailable.
-      }
-    }
-    void registerAndCheck()
-    const heartbeat = window.setInterval(() => { void registerAndCheck() }, 5 * 60 * 1000)
-    return () => { active = false; window.clearInterval(heartbeat) }
-  }, [authUser])
 
   const handleShareMoment = async (file: File, caption: string) => {
     if (!authUser || !firestoreDb) {
@@ -692,14 +620,6 @@ export default function App() {
   <div className="dialog-head"><div><p className="eyebrow">ACCOUNT PROTECTION</p><h3>Privacy and security</h3></div><button className="icon-button" aria-label="Close security settings" onClick={()=>{setSecurityPanel(false);setSecurityNotice('')}}><X size={18}/></button></div>
   <div className="security-status-card"><div><strong>Email address</strong><span>{authUser?.email || 'No email address available'}</span></div><span className={authUser?.emailVerified?'security-status verified':'security-status pending'}>{authUser?.emailVerified?'Verified':'Not verified'}</span></div>
   <div className="security-divider"/>
-  <div className="accent-settings-heading"><h4>Devices and sessions</h4><span>{deviceSessions.length} listed</span></div>
-  <p className="accent-help">Devices that have opened your Chater account appear here. Last active times are approximate. Firebase's sign-out-all action affects every device, including this one.</p>
-  <div className="dialog-actions">
-    <button className="secondary-button" type="button" disabled={deviceSessionsBusy || !authUser} onClick={async()=>{if(!authUser)return;setDeviceSessionsBusy(true);setDeviceSessionsNotice('');try{const result=await chaterSessionRequest<{sessions:ChaterDeviceSession[]}>(authUser,'/sessions/list');setDeviceSessions(result.sessions||[]);setDeviceSessionsNoticeType('success');setDeviceSessionsNotice('Device list refreshed.')}catch(error){setDeviceSessionsNoticeType('error');setDeviceSessionsNotice(error instanceof Error?error.message:'Could not load devices.')}finally{setDeviceSessionsBusy(false)}}}>{deviceSessionsBusy?'Refreshing…':'Refresh devices'}</button>
-    <button className="secondary-button" type="button" disabled={revokeAllBusy || !authUser} onClick={async()=>{if(!authUser||!firebaseAuth)return;if(!window.confirm('Sign out Chater on every device, including this one? You will need to sign in again.'))return;setRevokeAllBusy(true);setDeviceSessionsNotice('');try{await chaterSessionRequest<{success:boolean}>(authUser,'/sessions/revoke-all','POST',{});await signOut(firebaseAuth);setAuthUser(null);setDeviceSessions([]);setDeviceSessionsNoticeType('success');setDeviceSessionsNotice('All devices have been signed out. Sign in again to continue.')}catch(error){setDeviceSessionsNoticeType('error');setDeviceSessionsNotice(error instanceof Error?error.message:'Could not sign out all devices.')}finally{setRevokeAllBusy(false)}}}>{revokeAllBusy?'Signing out…':'Sign out all devices'}</button>
-  </div>
-  {deviceSessions.length>0&&<div className="device-session-list">{deviceSessions.map(session=><div className="security-status-card" key={session.id}><div><strong>{session.deviceName || 'Chater device'}{session.id===getChaterDeviceSessionId()?' · Current device':''}</strong><span>{session.platform || 'Web browser'}</span><span>Last active: {session.lastSeenAt ? new Date(session.lastSeenAt).toLocaleString() : 'Not available'}</span></div><span className={session.revoked?'security-status pending':'security-status verified'}>{session.revoked?'Revoked':'Registered'}</span></div>)}</div>}
-  {deviceSessionsNotice&&<p className={deviceSessionsNoticeType==='success'?'dialog-notice security-success':'dialog-notice'} role="status">{deviceSessionsNotice}</p>}
   {!authUser?.emailVerified&&<div className="security-action-row"><p className="accent-help">Verify your email to help protect your account and confirm that you control this address.</p><button className="secondary-button" type="button" disabled={securityVerificationBusy||!authUser} onClick={async()=>{if(!authUser)return;setSecurityVerificationBusy(true);setSecurityNotice('');try{await sendEmailVerification(authUser);setSecurityNoticeType('success');setSecurityNotice('A verification email has been sent. Check your inbox and Spam or Junk folder.')}catch(error){const code=(error as {code?:string})?.code;setSecurityNoticeType('error');setSecurityNotice(code==='auth/too-many-requests'?'Too many requests. Wait before trying again.':'We could not send the verification email. Check your connection and try again.')}finally{setSecurityVerificationBusy(false)}}}>{securityVerificationBusy?'Sending…':'Resend verification email'}</button></div>}
   <div className="security-divider"/>
   <h4>Change password</h4>
