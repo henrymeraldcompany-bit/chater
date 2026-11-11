@@ -5,7 +5,7 @@ import {
   ShieldCheck, Smartphone, Trash2, UserRound, Volume2, VolumeX, X
 } from 'lucide-react'
 import {
-  addDoc, collection, deleteDoc, doc, onSnapshot, orderBy,
+  addDoc, collection, doc, onSnapshot, orderBy,
   query as firestoreQuery, runTransaction, serverTimestamp
 } from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
