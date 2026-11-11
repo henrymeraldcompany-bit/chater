@@ -504,7 +504,6 @@ export default function App() {
   }, [authUser])
   const openPublicProfile = useCallback(async (result: UsernameSearchResult) => {
     if (!authUser || result.uid === authUser.uid) return
-    setDialog(null)
     setConversationTarget(null)
     setPublicProfileBusy(true)
     setPublicProfileNotice('')
@@ -980,7 +979,7 @@ export default function App() {
       </div>
     </section>}
     {conversationTarget && <section className="public-profile-screen conversation-entry-screen" role="dialog" aria-modal="true" aria-label={`Conversation with ${conversationTarget.displayName}`}>
-      <header className="public-profile-toolbar"><button type="button" className="icon-button" aria-label="Back to profile" onClick={()=>{setConversationTarget(null);void openPublicProfile(conversationTarget)}}><ArrowLeft size={21}/></button><ProfileAvatar photoURL={conversationTarget.photoURL} displayName={conversationTarget.displayName} className="conversation-entry-avatar"/><div><strong>{conversationTarget.displayName}</strong><span>@{conversationTarget.username}</span></div></header>
+      <header className="public-profile-toolbar conversation-entry-toolbar"><button type="button" className="icon-button" aria-label="Back to profile" onClick={()=>{setConversationTarget(null);void openPublicProfile(conversationTarget)}}><ArrowLeft size={21}/></button><ProfileAvatar photoURL={conversationTarget.photoURL} displayName={conversationTarget.displayName} className="conversation-entry-avatar"/><div><strong>{conversationTarget.displayName}</strong><span>@{conversationTarget.username}</span></div></header>
       <div className="conversation-entry-body"><MessageCircle size={38}/><h1>Start a conversation</h1><p>Your private conversation with <strong>{conversationTarget.displayName}</strong> will appear here.</p><p className="conversation-entry-note">Messaging is being connected in Phase 5. Messages cannot be sent yet.</p></div>
       <form className="conversation-entry-composer" onSubmit={event=>event.preventDefault()}><input aria-label="Message" placeholder="Messaging is not available yet" disabled/><button type="submit" aria-label="Send message" disabled><ArrowUpRight size={19}/></button></form>
     </section>}
