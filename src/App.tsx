@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, updatePassword, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
-import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, Type, Music2, LayoutGrid, Mic, ImagePlus, Video, Check, ArrowLeft, QrCode, type LucideIcon } from 'lucide-react'
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, ShieldBan, HelpCircle, Bell, X, ArrowUpRight, Type, Music2, LayoutGrid, Mic, ImagePlus, Video, Check, ArrowLeft, QrCode, type LucideIcon } from 'lucide-react'
+import ConversationList from './components/ConversationList'
+import ConversationScreen from './components/ConversationScreen'
+import type { ChatUser } from './lib/chat'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
@@ -233,6 +236,10 @@ export default function App() {
   const [savedContactsBusy, setSavedContactsBusy] = useState(false)
   const [contactActionBusy, setContactActionBusy] = useState(false)
   const [contactActionNotice, setContactActionNotice] = useState('')
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
+  const [profileBlockConfirmation, setProfileBlockConfirmation] = useState(false)
+  const [profileBlockBusy, setProfileBlockBusy] = useState(false)
+  const [profileBlockNotice, setProfileBlockNotice] = useState('')
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
   const [registrationUsername, setRegistrationUsername] = useState('')
@@ -362,6 +369,17 @@ export default function App() {
       }
     })
   }, [])
+  useEffect(() => {
+    if (!authUser || !firestoreDb) {
+      setBlockedUserIds([])
+      return
+    }
+    return onSnapshot(collection(firestoreDb, 'users', authUser.uid, 'blocked'), snapshot => {
+      setBlockedUserIds(snapshot.docs.map(item => item.id))
+    }, () => {
+      setBlockedUserIds([])
+    })
+  }, [authUser?.uid])
   useEffect(() => {
     if (!authUser || !firestoreDb) { setMoments([]); return }
     let active = true
@@ -585,6 +603,8 @@ export default function App() {
     setPublicProfileBusy(true)
     setPublicProfileNotice('')
     setContactActionNotice('')
+    setProfileBlockConfirmation(false)
+    setProfileBlockNotice('')
     setPublicProfile({
       ...result, about: '', location: '', occupation: ''
     })
@@ -752,6 +772,42 @@ export default function App() {
     }
   }
 
+  const blockUser = async (targetUid: string) => {
+    if (!authUser || !firestoreDb || targetUid === authUser.uid) throw new Error('Sign in to block another Chater account.')
+    await setDoc(doc(firestoreDb, 'users', authUser.uid, 'blocked', targetUid), {
+      uid: targetUid,
+      createdAt: serverTimestamp()
+    })
+    setBlockedUserIds(current => current.includes(targetUid) ? current : [...current, targetUid])
+  }
+
+  const unblockUser = async (targetUid: string) => {
+    if (!authUser || !firestoreDb || targetUid === authUser.uid) throw new Error('Sign in to manage your block list.')
+    await deleteDoc(doc(firestoreDb, 'users', authUser.uid, 'blocked', targetUid))
+    setBlockedUserIds(current => current.filter(uid => uid !== targetUid))
+  }
+
+  const handlePublicProfileBlockAction = async () => {
+    if (!publicProfile || !authUser) return
+    const alreadyBlocked = blockedUserIds.includes(publicProfile.uid)
+    setProfileBlockBusy(true)
+    setProfileBlockNotice('')
+    try {
+      if (alreadyBlocked) {
+        await unblockUser(publicProfile.uid)
+        setProfileBlockNotice('You have unblocked @' + publicProfile.username + '.')
+      } else {
+        await blockUser(publicProfile.uid)
+        setProfileBlockNotice('@' + publicProfile.username + ' can no longer contact you on Chater.')
+      }
+      setProfileBlockConfirmation(false)
+    } catch {
+      setProfileBlockNotice('Chater could not update your block list. Check your connection and try again.')
+    } finally {
+      setProfileBlockBusy(false)
+    }
+  }
+
   const isSavedContact = (uid: string) => savedContacts.some(contact => contact.uid === uid)
 
   useEffect(() => {
@@ -795,6 +851,8 @@ export default function App() {
   const closePublicProfile = () => {
     setPublicProfile(null)
     setPublicProfileNotice('')
+    setProfileBlockConfirmation(false)
+    setProfileBlockNotice('')
   }
   const openConversationEntry = () => {
     if (!publicProfile || !authUser || publicProfile.uid === authUser.uid) return
@@ -1081,7 +1139,12 @@ export default function App() {
       <div key={activeTab} className={`content-wrap tab-slide tab-slide-${slideDirection}`}>
         {activeTab==='Chats' && <>
           <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
-          <div className="empty-state chat-empty"><h1 className="a11y-heading">Chats</h1><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
+          <ConversationList
+            userId={authUser?.uid || null}
+            search={query}
+            onOpen={user=>setConversationTarget(user)}
+            onStartConversation={()=>setDialog(authUser?'new-chat':'login')}
+          />
         </>}
         {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share photos and videos that disappear after 24 hours.</p><MomentsScreen groups={momentGroups} userId={authUser?.uid || ''} photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My Moments'} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={groupIndex=>setMomentViewerIndex(groupIndex)}/></>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
@@ -1309,14 +1372,19 @@ export default function App() {
           {publicProfile.location && <div className="public-profile-detail"><span>Location</span><p>{publicProfile.location}</p></div>}
           {publicProfile.occupation && <div className="public-profile-detail"><span>Occupation</span><p>{publicProfile.occupation}</p></div>}
         </section> : !publicProfileBusy && <p className="public-profile-empty">No additional profile information has been shared.</p>}
-        {authUser&&publicProfile.uid!==authUser.uid&&<button type="button" className="secondary-button public-profile-contact" disabled={contactActionBusy} onClick={()=>void (isSavedContact(publicProfile.uid)?removePublicProfileFromContacts(publicProfile):savePublicProfileAsContact(publicProfile))}><Users size={17}/>{contactActionBusy?'Saving…':isSavedContact(publicProfile.uid)?'Remove from contacts':'Add to contacts'}</button>}{contactActionNotice&&<p className="contact-action-notice" role="status">{contactActionNotice}</p>}<button type="button" className="primary-button public-profile-message" onClick={openConversationEntry} disabled={!authUser || publicProfile.uid === authUser.uid}><MessageCircle size={18}/>Message</button>
+        {authUser&&publicProfile.uid!==authUser.uid&&<button type="button" className="secondary-button public-profile-contact" disabled={contactActionBusy} onClick={()=>void (isSavedContact(publicProfile.uid)?removePublicProfileFromContacts(publicProfile):savePublicProfileAsContact(publicProfile))}><Users size={17}/>{contactActionBusy?'Saving…':isSavedContact(publicProfile.uid)?'Remove from contacts':'Add to contacts'}</button>}{contactActionNotice&&<p className="contact-action-notice" role="status">{contactActionNotice}</p>}
+        {authUser&&publicProfile.uid!==authUser.uid&&<><button type="button" className="secondary-button public-profile-block" disabled={profileBlockBusy} onClick={()=>{setProfileBlockNotice('');if(blockedUserIds.includes(publicProfile.uid)){void handlePublicProfileBlockAction()}else setProfileBlockConfirmation(true)}}><ShieldBan size={17}/>{profileBlockBusy?'Saving…':blockedUserIds.includes(publicProfile.uid)?'Unblock account':'Block account'}</button>{profileBlockConfirmation&&<div className="profile-block-confirm" role="group" aria-label="Confirm block account"><p>Block @{publicProfile.username}? They will no longer be able to send you messages. You can unblock them later.</p><div><button type="button" className="secondary-button" disabled={profileBlockBusy} onClick={()=>setProfileBlockConfirmation(false)}>Cancel</button><button type="button" className="primary-button" disabled={profileBlockBusy} onClick={()=>void handlePublicProfileBlockAction()}>{profileBlockBusy?'Blocking…':'Confirm block'}</button></div></div>}{profileBlockNotice&&<p className="contact-action-notice" role="status">{profileBlockNotice}</p>}</>}
+        <button type="button" className="primary-button public-profile-message" onClick={openConversationEntry} disabled={!authUser || publicProfile.uid === authUser.uid}><MessageCircle size={18}/>Message</button>
       </div>
     </section>}
-    {conversationTarget && <section className="public-profile-screen conversation-entry-screen" role="dialog" aria-modal="true" aria-label={`Conversation with ${conversationTarget.displayName}`}>
-      <header className="public-profile-toolbar conversation-entry-toolbar"><button type="button" className="icon-button" aria-label="Back to profile" onClick={()=>{setConversationTarget(null);void openPublicProfile(conversationTarget)}}><ArrowLeft size={21}/></button><ProfileAvatar photoURL={conversationTarget.photoURL} displayName={conversationTarget.displayName} className="conversation-entry-avatar"/><div><strong>{conversationTarget.displayName}</strong><span>@{conversationTarget.username}</span></div></header>
-      <div className="conversation-entry-body"><MessageCircle size={38}/><h1>Start a conversation</h1><p>Your private conversation with <strong>{conversationTarget.displayName}</strong> will appear here.</p><p className="conversation-entry-note">Messaging is being connected in Phase 5. Messages cannot be sent yet.</p></div>
-      <form className="conversation-entry-composer" onSubmit={event=>event.preventDefault()}><input aria-label="Message" placeholder="Messaging is not available yet" disabled/><button type="submit" aria-label="Send message" disabled><ArrowUpRight size={19}/></button></form>
-    </section>}
+    {conversationTarget && authUser && <ConversationScreen
+      currentUserId={authUser.uid}
+      target={conversationTarget as ChatUser}
+      isBlocked={blockedUserIds.includes(conversationTarget.uid)}
+      onClose={()=>setConversationTarget(null)}
+      onBlock={blockUser}
+      onUnblock={unblockUser}
+    />}
     {qrDisplayOpen && authUser && profileUsername && <section className="chater-qr-overlay" role="dialog" aria-modal="true" aria-label="Your Chater QR code">
       <div className="chater-qr-card">
         <header><strong>My Chater QR code</strong><button type="button" className="icon-button" aria-label="Close QR code" onClick={()=>setQrDisplayOpen(false)}><X size={20}/></button></header>
