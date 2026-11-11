@@ -290,6 +290,31 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!authUser || !firestoreDb) { setMoments([]); return }
+    let active = true
+    getDocs(collection(firestoreDb, 'moments')).then(snapshot => {
+      const now = Date.now()
+      const entries = snapshot.docs.map(item => {
+        const data = item.data()
+        const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : 0
+        const savedAt = data.createdAt && typeof data.createdAt.toMillis === 'function'
+          ? data.createdAt.toMillis()
+          : typeof data.createdAt === 'number' ? data.createdAt : 0
+        return {
+          id: item.id,
+          uid: typeof data.uid === 'string' ? data.uid : '',
+          displayName: typeof data.displayName === 'string' ? data.displayName : 'Chater member',
+          mediaUrl: typeof data.mediaUrl === 'string' ? data.mediaUrl : '',
+          mediaType: data.mediaType === 'audio' ? 'audio' as const : data.mediaType === 'video' ? 'video' as const : 'image' as const,
+          caption: typeof data.caption === 'string' ? data.caption : '',
+          createdAt: savedAt || (expiresAt ? expiresAt - 86400000 : 0),
+          expiresAt
+        }
+      }).filter(item => item.mediaUrl && item.expiresAt > now).sort((left, right) => right.createdAt - left.createdAt)
+      if (active) setMoments(entries)
+    }).catch(() => { if (active) setMoments([]) })
+    return () => { active = false }
+  }, [authUser])
+
   useEffect(() => {
     if (!authUser) { setDeviceSessions([]); return }
     let active = true
@@ -316,31 +341,6 @@ export default function App() {
     void registerAndCheck()
     const heartbeat = window.setInterval(() => { void registerAndCheck() }, 5 * 60 * 1000)
     return () => { active = false; window.clearInterval(heartbeat) }
-  }, [authUser])
-
-    let active = true
-    getDocs(collection(firestoreDb, 'moments')).then(snapshot => {
-      const now = Date.now()
-      const entries = snapshot.docs.map(item => {
-        const data = item.data()
-        const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : 0
-        const savedAt = data.createdAt && typeof data.createdAt.toMillis === 'function'
-          ? data.createdAt.toMillis()
-          : typeof data.createdAt === 'number' ? data.createdAt : 0
-        return {
-          id: item.id,
-          uid: typeof data.uid === 'string' ? data.uid : '',
-          displayName: typeof data.displayName === 'string' ? data.displayName : 'Chater member',
-          mediaUrl: typeof data.mediaUrl === 'string' ? data.mediaUrl : '',
-          mediaType: data.mediaType === 'audio' ? 'audio' as const : data.mediaType === 'video' ? 'video' as const : 'image' as const,
-          caption: typeof data.caption === 'string' ? data.caption : '',
-          createdAt: savedAt || (expiresAt ? expiresAt - 86400000 : 0),
-          expiresAt
-        }
-      }).filter(item => item.mediaUrl && item.expiresAt > now).sort((left, right) => right.createdAt - left.createdAt)
-      if (active) setMoments(entries)
-    }).catch(() => { if (active) setMoments([]) })
-    return () => { active = false }
   }, [authUser])
 
   const handleShareMoment = async (file: File, caption: string) => {
