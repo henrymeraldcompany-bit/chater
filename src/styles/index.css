@@ -920,12 +920,12 @@ body,.app-shell{background:var(--page);color:var(--text)}
 
 
 /* Dedicated full-screen people discovery page */
-.dialog-backdrop:has(.people-search-screen) {
+.dialog-backdrop:has(.full-screen-dialog) {
   padding: 0 !important;
   place-items: stretch !important;
   overflow: hidden !important;
 }
-.people-search-screen {
+.full-screen-dialog {
   width: 100% !important;
   max-width: none !important;
   height: 100dvh !important;
@@ -938,7 +938,8 @@ body,.app-shell{background:var(--page);color:var(--text)}
   display: flex;
   flex-direction: column;
 }
-.people-search-screen .username-search-results {
+.people-search-screen .username-search-results,
+.new-chat-screen .username-search-results {
   flex: 1;
   max-height: none;
   min-height: 0;
