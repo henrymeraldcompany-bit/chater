@@ -33,3 +33,22 @@ The install prompt is shown only when the browser provides an install opportunit
 ## Planned feature boundaries
 
 Each major feature should be implemented behind typed service interfaces and tested independently. Placeholder screens must not be described as functional services.
+
+## Direct one-to-one messaging (Tasks 48–49)
+
+Chater uses one deterministic Firestore conversation document per pair of user IDs. Both participants share the same realtime message thread. A signed-in member can start the conversation from any public profile; there is no message-request, accept, or reject state. Either participant may reply whenever they choose.
+
+- Conversation metadata is stored at `conversations/{conversationId}`.
+- Text messages are stored at `conversations/{conversationId}/messages/{messageId}`.
+- The conversation ID is derived from the two sorted, URL-encoded Firebase user IDs.
+- Message text is limited to 4,000 characters.
+- Conversation and message reads are restricted to the two participants.
+- Messages are realtime Firestore updates; no private content is copied to a public profile.
+
+## Blocking (Task 50)
+
+A member blocks another account by creating `users/{uid}/blocked/{targetUid}`. The block list is readable only by its owner. Firestore rules check both directions before a conversation can be created or a message can be sent. Either participant can still read the existing conversation history, but neither side can send new messages while a block exists. The blocker can remove the block later.
+
+Blocking is enforced by Firestore Security Rules, not merely by hiding the composer in the client. The web deployment does not publish those rules; publish the repository's `firestore.rules` file in Firebase Console before using live messaging in production.
+
+Direct messaging here is authenticated transport and access control. It is **not end-to-end encrypted**; do not describe it as E2EE.
