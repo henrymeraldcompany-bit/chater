@@ -444,7 +444,7 @@ export default function App() {
     setProfileUsername(normalized)
     try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
   }
-  const handleUsernameSearch = async (rawInput: string) => {
+  const handleUsernameSearch = useCallback(async (rawInput: string) => {
     const normalized = rawInput.trim().replace(/^@/, '').toLowerCase().replace(/\\s+/g, ' ')
     const requestId = ++usernameSearchRequest.current
     setSearchNotice('')
@@ -508,7 +508,7 @@ export default function App() {
     } finally {
       if (requestId === usernameSearchRequest.current) setUsernameSearchBusy(false)
     }
-  }
+  }, [authUser])
   useEffect(() => {
     if (dialog !== 'new-chat' && dialog !== 'search') return
     if (username.trim().length < 2) {
@@ -520,7 +520,7 @@ export default function App() {
     }
     const timer = window.setTimeout(() => { void handleUsernameSearch(username) }, 250)
     return () => window.clearTimeout(timer)
-  }, [username, dialog, authUser])
+  }, [username, dialog, authUser, handleUsernameSearch])
   const handleDisplayNameChange = async (nextName: string) => {
     if (!authUser) throw new Error('Sign in to edit your profile name.')
     const normalized = nextName.trim().replace(/\s+/g, ' ')
