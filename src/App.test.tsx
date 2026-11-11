@@ -121,7 +121,7 @@ describe('Chater application shell', () => {
       .mockResolvedValueOnce({ docs: [member] } as never)
       .mockResolvedValueOnce({ docs: [member] } as never)
     fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
-    fireEvent.change(screen.getByPlaceholderText('Search names or @username'), { target: { value: 'e M' } })
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'e M' } })
     await waitFor(() => expect(screen.getByText('Mee Maw')).toBeInTheDocument())
     expect(screen.getByText('@mee_maw')).toBeInTheDocument()
     expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
