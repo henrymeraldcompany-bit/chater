@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { getDoc, getDocs, onSnapshot, orderBy, query, runTransaction, setDoc, where } from 'firebase/firestore'
+import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
 import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
 import ConversationScreen from './components/ConversationScreen'
 import { createConversationId, isValidChatMessage, normalizeChatMessage } from './lib/chat'
