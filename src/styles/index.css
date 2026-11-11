@@ -874,3 +874,7 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .security-password-form { gap: 12px; }
 .security-password-form .primary-button { width: 100%; }
 .security-success { color: #75e0a0; }
+
+/* When security is opened from either entry point, show it immediately instead of leaving it below the long settings list. */
+.dialog-card:has(.security-settings-panel) > :not(.dialog-head):not(.security-settings-panel) { display: none !important; }
+.security-settings-panel { margin-top: 14px; }
