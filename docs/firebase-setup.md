@@ -42,3 +42,10 @@ The cloud name and unsigned preset name are public client-side configuration. Ne
 ## Email registration prerequisites
 
 In Firebase Console, open **Build → Authentication → Sign-in method** and enable **Email/Password**. Under Authentication settings, add `henrymeraldcompany-bit.github.io` to **Authorized domains**. If either is missing, Chater will show a specific error when registration is attempted.
+
+
+## Contact discovery and private contact links (Task 47)
+
+Contact discovery uses the browser Contact Picker only after the user presses **Choose contacts**. Chater requests contact names only, sends the selected names as exact-match search terms against public Chater display names, and labels every result as a possible match for manual review. It does not request or store phone numbers, email addresses, or device contact photos. A confirmed Chater contact is saved only as a private target UID and timestamp under `users/{uid}/contacts/{targetUid}`.
+
+The GitHub Pages workflow publishes the web app only; it does not publish Firestore Security Rules. To enable adding and removing contacts in the live app, open Firebase Console for project `chater-8f834`, select **Firestore Database → Rules**, replace the rules with the current repository `firestore.rules` file, and select **Publish**. The nested contact rules restrict each contact list to its owner. Do not use permissive test rules or make contact subcollections publicly readable.
