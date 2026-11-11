@@ -917,3 +917,45 @@ body,.app-shell{background:var(--page);color:var(--text)}
   color: var(--muted, #747b84);
   font-size: 14px;
 }
+
+
+/* Dedicated full-screen people discovery page */
+.dialog-backdrop:has(.people-search-screen) {
+  padding: 0 !important;
+  place-items: stretch !important;
+  overflow: hidden !important;
+}
+.people-search-screen {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 100dvh;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: max(22px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)) !important;
+  overflow-y: auto !important;
+  display: flex;
+  flex-direction: column;
+}
+.people-search-screen .username-search-results {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+}
+.people-search-submit {
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.people-search-more {
+  width: 100%;
+  margin-top: 12px;
+}
+.people-search-screen .dialog-search input {
+  min-width: 0;
+}
