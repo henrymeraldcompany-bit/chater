@@ -203,7 +203,7 @@ describe('Chater direct-message rules', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Clear chat' }))
     expect(screen.getByText(/other participant keeps their copy/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Clear chat' }))
-    expect(window.localStorage.getItem('chater:chat-cleared-at:' + createConversationId('signed-in-user', 'other-user'))).toMatch(/^\\d+$/)
+    expect(window.localStorage.getItem('chater:chat-cleared-at:' + createConversationId('signed-in-user', 'other-user'))).toMatch(/^\d+$/)
     expect(screen.getByRole('status')).toHaveTextContent('Chat cleared on this device')
   })
 })
