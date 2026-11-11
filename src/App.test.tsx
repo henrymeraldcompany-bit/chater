@@ -418,6 +418,21 @@ describe('Chater application shell', () => {
     expect(screen.queryByRole('heading', { name: 'Appearance' })).not.toBeInTheDocument()
   })
 
+  it('keeps Chat settings, Notifications, and Help separate from privacy and security', () => {
+    openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'You' }))
+    fireEvent.click(screen.getByRole('button', { name: /Privacy and security/ }))
+    expect(screen.getByRole('heading', { name: 'Privacy and security' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    for (const label of ['Chat settings', 'Notifications', 'Help and support']) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+      expect(screen.getByRole('heading', { name: 'Appearance' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Change password' })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    }
+  })
+
   it('opens the privacy and security panel from settings', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
