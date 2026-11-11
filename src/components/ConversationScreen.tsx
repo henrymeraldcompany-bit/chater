@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowUpRight, ShieldBan, ShieldCheck } from 'lucide-react'
-import { collection, doc, onSnapshot, orderBy, query as firestoreQuery, runTransaction, serverTimestamp } from 'firebase/firestore'
+import {
+  ArrowLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, Download,
+  FileText, Flag, FolderOpen, MoreVertical, Palette, Search, ShieldBan,
+  ShieldCheck, Smartphone, Trash2, UserRound, Volume2, VolumeX, X
+} from 'lucide-react'
+import {
+  addDoc, collection, deleteDoc, doc, onSnapshot, orderBy,
+  query as firestoreQuery, runTransaction, serverTimestamp
+} from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
 import { createConversationId, isValidChatMessage, normalizeChatMessage, timestampToMillis, type ChatMessage, type ChatUser } from '../lib/chat'
 
@@ -13,10 +20,37 @@ type ConversationScreenProps = {
   onUnblock: (targetUid: string) => Promise<void>
 }
 
+type MenuPage = 'main' | 'more' | 'theme'
+type ChatTheme = 'default' | 'midnight' | 'forest' | 'rose'
+
+const chatThemes: { id: ChatTheme; label: string }[] = [
+  { id: 'default', label: 'Default' },
+  { id: 'midnight', label: 'Midnight' },
+  { id: 'forest', label: 'Forest' },
+  { id: 'rose', label: 'Rose' }
+]
+
 function formatMessageTime(value: unknown): string {
   const millis = timestampToMillis(value)
   if (!millis) return ''
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(millis))
+}
+
+function readChatTheme(conversationId: string): ChatTheme {
+  try {
+    const stored = window.localStorage.getItem('chater:chat-theme:' + conversationId)
+    return chatThemes.some(theme => theme.id === stored) ? stored as ChatTheme : 'default'
+  } catch {
+    return 'default'
+  }
+}
+
+function readMutedPreference(conversationId: string): boolean {
+  try {
+    return window.localStorage.getItem('chater:chat-muted:' + conversationId) === 'true'
+  } catch {
+    return false
+  }
 }
 
 export default function ConversationScreen({
@@ -34,8 +68,48 @@ export default function ConversationScreen({
   const [messageNotice, setMessageNotice] = useState('')
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
   const [blockBusy, setBlockBusy] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPage, setMenuPage] = useState<MenuPage>('main')
+  const [contactInfoOpen, setContactInfoOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [messageSearch, setMessageSearch] = useState('')
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportReason, setReportReason] = useState('spam')
+  const [reportBusy, setReportBusy] = useState(false)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [clearBusy, setClearBusy] = useState(false)
+  const [chatTheme, setChatTheme] = useState<ChatTheme>(() => readChatTheme(createConversationId(currentUserId, target.uid)))
+  const [muted, setMuted] = useState(() => readMutedPreference(createConversationId(currentUserId, target.uid)))
   const messageEndRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const conversationId = createConversationId(currentUserId, target.uid)
+
+  useEffect(() => {
+    setChatTheme(readChatTheme(conversationId))
+    setMuted(readMutedPreference(conversationId))
+  }, [conversationId])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        setMenuPage('main')
+      }
+    }
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false)
+        setMenuPage('main')
+      }
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    document.addEventListener('pointerdown', closeOutside)
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape)
+      document.removeEventListener('pointerdown', closeOutside)
+    }
+  }, [menuOpen])
 
   useEffect(() => {
     if (!firestoreDb) {
@@ -72,6 +146,11 @@ export default function ConversationScreen({
     messageEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' })
   }, [messages])
 
+  const closeMenu = () => {
+    setMenuOpen(false)
+    setMenuPage('main')
+  }
+
   const handleSendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!firestoreDb || isBlocked || messageSending || !isValidChatMessage(messageDraft)) return
@@ -85,7 +164,7 @@ export default function ConversationScreen({
       const participants = [currentUserId, target.uid].sort()
       await runTransaction(db, async transaction => {
         const conversationSnapshot = await transaction.get(conversationRef)
-        const messageSummary = text.replace(/\s+/g, ' ').slice(0, 180)
+        const messageSummary = text.replace(/\\s+/g, ' ').slice(0, 180)
         const latestMessage = {
           lastMessageText: messageSummary,
           lastMessageSenderId: currentUserId,
@@ -146,23 +225,149 @@ export default function ConversationScreen({
     }
   }
 
-  return <section className="public-profile-screen conversation-entry-screen live-conversation-screen" role="dialog" aria-modal="true" aria-label={'Conversation with ' + target.displayName}>
+  const handleReport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!firestoreDb || reportBusy) return
+    setReportBusy(true)
+    try {
+      await addDoc(collection(firestoreDb, 'reports'), {
+        reporterUid: currentUserId,
+        reportedUid: target.uid,
+        conversationId,
+        reason: reportReason,
+        createdAt: serverTimestamp()
+      })
+      setReportOpen(false)
+      setMessageNotice('Thank you. Your report has been submitted for review.')
+    } catch {
+      setMessageNotice('Your report could not be submitted. Publish Chater’s latest Firestore rules and try again.')
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
+  const handleClearChat = async () => {
+    if (!firestoreDb || clearBusy) return
+    setClearBusy(true)
+    setMessageNotice('')
+    try {
+      const db = firestoreDb
+      await Promise.all(messages.map(message =>
+        deleteDoc(doc(db, 'conversations', conversationId, 'messages', message.id))
+      ))
+      await deleteDoc(doc(db, 'conversations', conversationId))
+      setMessages([])
+      setClearConfirmOpen(false)
+      setMessageNotice('Chat cleared.')
+    } catch {
+      setMessageNotice('The chat could not be cleared. Check your connection and try again.')
+    } finally {
+      setClearBusy(false)
+    }
+  }
+
+  const handleExportChat = () => {
+    const exported = messages.map(message => {
+      const sender = message.senderId === currentUserId ? 'You' : target.displayName
+      const timestamp = formatMessageTime(message.createdAt)
+      return '[' + timestamp + '] ' + sender + ': ' + message.text
+    }).join('\\n')
+    const file = new Blob([exported || 'No messages in this conversation.'], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'chater-' + target.username + '-chat.txt'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    closeMenu()
+    setMessageNotice('Chat export prepared.')
+  }
+
+  const handleThemeChange = (theme: ChatTheme) => {
+    setChatTheme(theme)
+    try {
+      window.localStorage.setItem('chater:chat-theme:' + conversationId, theme)
+    } catch {
+      // Keep the choice for this open conversation even when local storage is unavailable.
+    }
+    closeMenu()
+  }
+
+  const handleMuteToggle = () => {
+    const nextMuted = !muted
+    setMuted(nextMuted)
+    try {
+      window.localStorage.setItem('chater:chat-muted:' + conversationId, String(nextMuted))
+    } catch {
+      // The local preference remains active in this view.
+    }
+    closeMenu()
+    setMessageNotice(nextMuted
+      ? 'Muted preference saved. Push notifications are not active in Chater yet.'
+      : 'Chat unmuted. Push notifications are not active in Chater yet.')
+  }
+
+  const filteredMessages = searchOpen && messageSearch.trim()
+    ? messages.filter(message => message.text.toLowerCase().includes(messageSearch.trim().toLowerCase()))
+    : messages
+
+  return <section className="public-profile-screen conversation-entry-screen live-conversation-screen" role="dialog" aria-modal="true" aria-label={'Conversation with ' + target.displayName} data-chat-theme={chatTheme}>
     <header className="public-profile-toolbar conversation-entry-toolbar">
       <button type="button" className="icon-button" aria-label="Back to chats" onClick={onClose}><ArrowLeft size={21}/></button>
       <span className="profile-avatar conversation-entry-avatar" aria-label={target.displayName + ' profile picture'}>
         {target.photoURL ? <img src={target.photoURL} alt="" /> : target.displayName.trim().charAt(0).toUpperCase()}
       </span>
       <div><strong>{target.displayName}</strong><span>@{target.username}</span></div>
-      <button
-        type="button"
-        className={isBlocked ? 'conversation-unblock-button' : 'conversation-block-button'}
-        aria-label={isBlocked ? 'Unblock ' + target.displayName : 'Block ' + target.displayName}
-        onClick={() => setBlockConfirmOpen(open => !open)}
-      >
-        {isBlocked ? <ShieldCheck size={17}/> : <ShieldBan size={17}/>}
-        <span>{isBlocked ? 'Unblock' : 'Block'}</span>
-      </button>
+      <div className="conversation-menu-anchor" ref={menuRef}>
+        <button
+          type="button"
+          className="conversation-menu-trigger"
+          aria-label="Chat options"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => { setMenuOpen(open => !open); setMenuPage('main') }}
+        ><MoreVertical size={22}/></button>
+        {menuOpen && <div className="conversation-dropdown" role="menu" aria-label="Chat options menu">
+          {menuPage === 'main' && <>
+            <button type="button" role="menuitem" onClick={() => { setContactInfoOpen(open => !open); closeMenu() }}><UserRound size={18}/>View contact</button>
+            <button type="button" role="menuitem" onClick={() => { setSearchOpen(true); setMessageSearch(''); closeMenu() }}><Search size={18}/>Search</button>
+            <button type="button" role="menuitem" onClick={() => { setReportOpen(true); closeMenu() }}><Flag size={18}/>Report</button>
+            <button type="button" role="menuitem" onClick={() => { setBlockConfirmOpen(true); closeMenu() }}>{isBlocked ? <ShieldCheck size={18}/> : <ShieldBan size={18}/>} {isBlocked ? 'Unblock' : 'Block'}</button>
+            <button type="button" role="menuitem" onClick={handleMuteToggle}>{muted ? <Volume2 size={18}/> : <VolumeX size={18}/>} {muted ? 'Unmute notifications' : 'Mute notifications'}</button>
+            <button type="button" role="menuitem" onClick={() => setMenuPage('theme')}><Palette size={18}/>Chat theme</button>
+            <button type="button" role="menuitem" onClick={() => setMenuPage('more')}><FolderOpen size={18}/>More <ChevronRight className="conversation-menu-chevron" size={17}/></button>
+          </>}
+          {menuPage === 'theme' && <>
+            <button type="button" className="conversation-menu-back" onClick={() => setMenuPage('main')}><ChevronLeft size={18}/>Back</button>
+            {chatThemes.map(theme => <button type="button" role="menuitemradio" aria-checked={chatTheme === theme.id} key={theme.id} onClick={() => handleThemeChange(theme.id)}><span className={'conversation-theme-dot theme-' + theme.id}/>{theme.label}{chatTheme === theme.id && <Check size={17}/>}</button>)}
+          </>}
+          {menuPage === 'more' && <>
+            <button type="button" className="conversation-menu-back" onClick={() => setMenuPage('main')}><ChevronLeft size={18}/>Back</button>
+            <button type="button" role="menuitem" onClick={() => { closeMenu(); setMessageNotice('Media, links, and documents will appear here when chat attachments are available.') }}><FolderOpen size={18}/>Media, links, and docs</button>
+            <button type="button" role="menuitem" onClick={() => { closeMenu(); setClearConfirmOpen(true) }}><Trash2 size={18}/>Clear chat</button>
+            <button type="button" role="menuitem" onClick={handleExportChat}><Download size={18}/>Export chat</button>
+            <button type="button" role="menuitem" onClick={() => { closeMenu(); setMessageNotice('To add Chater to your home screen, open your browser menu and choose “Add to Home screen”. Individual chat shortcuts are not supported yet.') }}><Smartphone size={18}/>Add shortcut</button>
+          </>}
+        </div>}
+      </div>
     </header>
+
+    {contactInfoOpen && <section className="conversation-contact-card" aria-label="Contact information">
+      <button type="button" className="conversation-panel-close" aria-label="Close contact information" onClick={() => setContactInfoOpen(false)}><X size={17}/></button>
+      <span className="profile-avatar conversation-contact-avatar">{target.photoURL ? <img src={target.photoURL} alt=""/> : target.displayName.trim().charAt(0).toUpperCase()}</span>
+      <strong>{target.displayName}</strong>
+      <span>@{target.username}</span>
+      <small>Chater member</small>
+    </section>}
+
+    {searchOpen && <div className="conversation-search-bar">
+      <Search size={18}/>
+      <input autoFocus aria-label="Search messages" placeholder="Search in this chat" value={messageSearch} onChange={event => setMessageSearch(event.target.value)}/>
+      <span>{messageSearch.trim() ? filteredMessages.length + ' found' : ''}</span>
+      <button type="button" aria-label="Close message search" onClick={() => { setSearchOpen(false); setMessageSearch('') }}><X size={18}/></button>
+    </div>}
 
     {blockConfirmOpen && <div className="conversation-block-confirm" role="group" aria-label={isBlocked ? 'Confirm unblock' : 'Confirm block'}>
       <div><strong>{isBlocked ? 'Allow this account to contact you?' : 'Block this account?'}</strong><p>{isBlocked ? '@' + target.username + ' will be able to send you messages again.' : '@' + target.username + ' will no longer be able to send you messages. You can unblock them later.'}</p></div>
@@ -172,10 +377,35 @@ export default function ConversationScreen({
       </div>
     </div>}
 
+    {clearConfirmOpen && <div className="conversation-block-confirm" role="group" aria-label="Confirm clear chat">
+      <div><strong>Clear this chat?</strong><p>This removes all messages in this conversation for both participants. This cannot be undone.</p></div>
+      <div className="conversation-block-actions">
+        <button type="button" className="secondary-button" disabled={clearBusy} onClick={() => setClearConfirmOpen(false)}>Cancel</button>
+        <button type="button" className="primary-button" disabled={clearBusy} onClick={() => void handleClearChat()}>{clearBusy ? 'Clearing…' : 'Clear chat'}</button>
+      </div>
+    </div>}
+
+    {reportOpen && <form className="conversation-block-confirm conversation-report-form" onSubmit={handleReport} aria-label="Report this account">
+      <div><strong>Report @{target.username}</strong><p>Choose the reason that best describes your report. Our team can review the account and conversation.</p></div>
+      <label htmlFor="conversation-report-reason">Reason</label>
+      <select id="conversation-report-reason" value={reportReason} onChange={event => setReportReason(event.target.value)}>
+        <option value="spam">Spam</option>
+        <option value="harassment">Harassment or bullying</option>
+        <option value="impersonation">Impersonation</option>
+        <option value="inappropriate">Inappropriate content</option>
+        <option value="other">Something else</option>
+      </select>
+      <div className="conversation-block-actions">
+        <button type="button" className="secondary-button" disabled={reportBusy} onClick={() => setReportOpen(false)}>Cancel</button>
+        <button type="submit" className="primary-button" disabled={reportBusy}>{reportBusy ? 'Submitting…' : 'Submit report'}</button>
+      </div>
+    </form>}
+
     <div className="conversation-thread" role="log" aria-label="Messages" aria-live="polite">
       {messagesBusy && <p className="conversation-thread-notice" role="status">Loading messages…</p>}
       {!messagesBusy && messages.length === 0 && <div className="conversation-start-note"><strong>No messages yet</strong><p>Start the conversation. There are no message requests or approval steps on Chater.</p></div>}
-      {messages.map(message => {
+      {searchOpen && messageSearch.trim() && filteredMessages.length === 0 && <p className="conversation-thread-notice" role="status">No matching messages found.</p>}
+      {filteredMessages.map(message => {
         const sent = message.senderId === currentUserId
         return <article key={message.id} className={sent ? 'chat-message chat-message-sent' : 'chat-message chat-message-received'}>
           <p>{message.text}</p>
