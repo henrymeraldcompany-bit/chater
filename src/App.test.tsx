@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
+import { getDoc, getDocs, limit, query, runTransaction, setDoc, where } from 'firebase/firestore'
 import App from './App'
 
 vi.mock('firebase/firestore', () => ({
@@ -9,6 +9,7 @@ vi.mock('firebase/firestore', () => ({
   getDoc: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
   getDocs: vi.fn(async () => ({ docs: [] })),
   query: vi.fn((...parts: unknown[]) => ({ parts })),
+  limit: vi.fn((...parts: unknown[]) => ({ parts })),
   where: vi.fn((...parts: unknown[]) => ({ parts })),
   collection: vi.fn((...parts: unknown[]) => ({ parts })),
   addDoc: vi.fn(async () => ({ id: 'test-moment' })),
@@ -85,49 +86,34 @@ describe('Chater application shell', () => {
     }
   })
 
-  it('finds a Chater member by their exact global username', async () => {
+  it('shows live partial matches by display name and username, including profile pictures', async () => {
     const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
     vi.mocked(reload).mockResolvedValue(undefined)
-    vi.mocked(getDoc)
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ uid: 'target-user', username: 'target_user' }) } as never)
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ displayName: 'Target Person', photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg' }) } as never)
+    vi.mocked(getDoc).mockResolvedValue({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
     openApp()
     await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
-    fireEvent.change(screen.getByPlaceholderText('@username'), { target: { value: '@TARGET_USER' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Search username' }))
-    await waitFor(() => expect(screen.getByText('Target Person')).toBeInTheDocument())
-    expect(screen.getByText('@target_user')).toBeInTheDocument()
-    expect(screen.getByText('Chater member')).toBeInTheDocument()
-    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
-  })
-
-  it('finds legacy members whose profile exists without a username index record', async () => {
-    const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
-    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
-    vi.mocked(reload).mockResolvedValue(undefined)
-    vi.mocked(getDoc)
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
-      .mockResolvedValueOnce({ exists: () => false, data: () => undefined } as never)
-    openApp()
-    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
-    // The signed-in user's Moments listener calls getDocs first; provide the
-    // legacy profile result only after that initial listener has completed.
     await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
-    vi.mocked(getDocs).mockResolvedValue({
-      docs: [{
-        id: 'legacy-member',
-        data: () => ({ uid: 'legacy-member', username: 'mee_maw', displayName: 'Mee Maw', photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/legacy-member/avatar.jpg' })
-      }]
-    } as never)
+    const member = {
+      id: 'target-user',
+      data: () => ({
+        uid: 'target-user',
+        username: 'mee_maw',
+        usernameLower: 'mee_maw',
+        displayName: 'Mee Maw',
+        displayNameLower: 'mee maw',
+        photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg'
+      })
+    }
+    vi.mocked(getDocs)
+      .mockResolvedValueOnce({ docs: [member] } as never)
+      .mockResolvedValueOnce({ docs: [member] } as never)
     fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
-    fireEvent.change(screen.getByPlaceholderText('@username'), { target: { value: 'Mee_maw' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Search username' }))
+    fireEvent.change(screen.getByPlaceholderText('Search names or @username'), { target: { value: 'Mee' } })
     await waitFor(() => expect(screen.getByText('Mee Maw')).toBeInTheDocument())
     expect(screen.getByText('@mee_maw')).toBeInTheDocument()
-    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/legacy-member/avatar.jpg')
+    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
+    expect(screen.queryByRole('button', { name: 'Search username' })).not.toBeInTheDocument()
   })
 
   it('offers ten selectable accent colour presets in settings', () => {
