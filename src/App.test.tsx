@@ -139,6 +139,45 @@ describe('Chater application shell', () => {
     expect(document.querySelector('.people-search-screen')).toBeInTheDocument()
   })
 
+  it('opens public profiles from people search and enters the selected conversation without exposing email', async () => {
+    const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDoc)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
+      .mockResolvedValue({ exists: () => true, data: () => ({
+        uid: 'target-user', username: 'mee_maw', displayName: 'Mee Maw',
+        photoURL: 'https://media.example/avatar.jpg', about: 'A Chater member',
+        location: 'Onitsha', occupation: 'Designer', email: 'private@example.com'
+      }) } as never)
+    openApp()
+    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+    const member = { id: 'target-user', data: () => ({
+      uid: 'target-user', username: 'mee_maw', displayName: 'Mee Maw',
+      photoURL: 'https://media.example/avatar.jpg'
+    }) }
+    vi.mocked(getDocs).mockResolvedValueOnce({ docs: [member] } as never)
+    fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
+    fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: 'mee' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'View Mee Maw profile' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'View Mee Maw profile' }))
+    expect(await screen.findByRole('dialog', { name: 'Mee Maw profile' })).toBeInTheDocument()
+    expect(screen.getByText('@mee_maw')).toBeInTheDocument()
+    expect(screen.getByText('A Chater member')).toBeInTheDocument()
+    expect(screen.getByText('Onitsha')).toBeInTheDocument()
+    expect(screen.getByText('Designer')).toBeInTheDocument()
+    expect(screen.queryByText('private@example.com')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Message' }))
+    expect(screen.getByRole('dialog', { name: 'Conversation with Mee Maw' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Message')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to profile' }))
+    expect(await screen.findByRole('dialog', { name: 'Mee Maw profile' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to people search' }))
+    expect(document.querySelector('.people-search-screen')).toBeInTheDocument()
+  })
+
   it('offers ten selectable accent colour presets in settings', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
