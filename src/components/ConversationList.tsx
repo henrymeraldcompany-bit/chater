@@ -12,6 +12,14 @@ type ConversationListProps = {
   onFindPeople: () => void
 }
 
+type InboxItem = {
+  id: string
+  user: ChatUser
+  lastMessageText: string
+  lastMessageSenderId: string
+  lastMessageAt: unknown
+}
+
 function formatConversationTime(value: unknown): string {
   const millis = timestampToMillis(value)
   if (!millis) return ''
@@ -31,7 +39,9 @@ function ConversationAvatar({ user }: { user: ChatUser }) {
 
 export default function ConversationList({ userId, search, onOpen, onStartConversation, onFindPeople }: ConversationListProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
+  const [contacts, setContacts] = useState<ChatUser[]>([])
   const [busy, setBusy] = useState(false)
+  const [contactsBusy, setContactsBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
@@ -102,15 +112,91 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
     }
   }, [userId])
 
-  const filteredConversations = useMemo(() => {
+  // Saved contacts are subscribed independently from conversations, so adding
+  // someone to contacts makes them appear here even before the first message.
+  useEffect(() => {
+    if (!userId || !firestoreDb) {
+      setContacts([])
+      setContactsBusy(false)
+      return
+    }
+    const db = firestoreDb
+    let active = true
+    setContactsBusy(true)
+    const unsubscribe = onSnapshot(collection(db, 'users', userId, 'contacts'), snapshot => {
+      void (async () => {
+        const contactUsers = await Promise.all(snapshot.docs.map(async link => {
+          const linkData = link.data() as Record<string, unknown>
+          const contactUid = typeof linkData.uid === 'string' ? linkData.uid : link.id
+          if (!contactUid || contactUid === userId) return null
+          try {
+            const profileSnapshot = await getDoc(doc(db, 'users', contactUid))
+            if (!profileSnapshot.exists()) return null
+            const profile = profileSnapshot.data() as Record<string, unknown>
+            const username = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
+            const displayName = typeof profile.displayName === 'string' && profile.displayName.trim()
+              ? profile.displayName.trim()
+              : username || 'Chater member'
+            return {
+              uid: contactUid,
+              username,
+              displayName,
+              photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+            } satisfies ChatUser
+          } catch {
+            return null
+          }
+        }))
+        if (!active) return
+        const uniqueContacts = new Map<string, ChatUser>()
+        contactUsers.forEach(contact => {
+          if (contact) uniqueContacts.set(contact.uid, contact)
+        })
+        setContacts([...uniqueContacts.values()].sort((left, right) => left.displayName.localeCompare(right.displayName)))
+        setContactsBusy(false)
+      })().catch(() => {
+        if (active) {
+          setContactsBusy(false)
+          setNotice('Your saved contacts could not be loaded. Check your connection and try again.')
+        }
+      })
+    }, () => {
+      if (!active) return
+      setContactsBusy(false)
+      setNotice('Your saved contacts could not be loaded. Publish Chater’s latest Firestore rules and try again.')
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [userId])
+
+  const inboxItems = useMemo<InboxItem[]>(() => {
+    const conversationUserIds = new Set(conversations.map(item => item.user.uid))
+    const contactOnlyItems: InboxItem[] = contacts
+      .filter(contact => !conversationUserIds.has(contact.uid))
+      .map(contact => ({
+        id: 'contact:' + contact.uid,
+        user: contact,
+        lastMessageText: '',
+        lastMessageSenderId: '',
+        lastMessageAt: null
+      }))
+    return [...conversations, ...contactOnlyItems].sort((left, right) => {
+      const recentDifference = timestampToMillis(right.lastMessageAt) - timestampToMillis(left.lastMessageAt)
+      return recentDifference || left.user.displayName.localeCompare(right.user.displayName)
+    })
+  }, [conversations, contacts])
+
+  const filteredItems = useMemo(() => {
     const term = search.trim().replace(/^@/, '').toLowerCase()
-    if (!term) return conversations
-    return conversations.filter(item =>
+    if (!term) return inboxItems
+    return inboxItems.filter(item =>
       item.user.displayName.toLowerCase().includes(term) ||
       item.user.username.toLowerCase().includes(term) ||
       item.lastMessageText.toLowerCase().includes(term)
     )
-  }, [conversations, search])
+  }, [inboxItems, search])
 
   if (!userId) {
     return <section className="conversation-list-section" aria-label="Your conversations">
@@ -129,18 +215,18 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
   return <section className="conversation-list-section" aria-label="Your conversations">
     <h1 className="a11y-heading">Chats</h1>
     {notice && <p className="conversation-list-notice" role="status">{notice}</p>}
-    {busy && conversations.length === 0 && <p className="conversation-list-loading" role="status">Loading your conversations…</p>}
-    {!busy && !notice && conversations.length === 0 && <div className="empty-state chat-empty conversation-list-empty">
+    {(busy || contactsBusy) && inboxItems.length === 0 && <p className="conversation-list-loading" role="status">Loading your conversations and contacts…</p>}
+    {!busy && !contactsBusy && !notice && inboxItems.length === 0 && <div className="empty-state chat-empty conversation-list-empty">
       <div className="conversation-empty-icon"><MessageCircle size={34}/></div>
       <p className="eyebrow">YOUR CHATS</p>
       <h2>Your conversations<br/>start here.</h2>
-      <p className="empty-description">Anyone can message you directly. You can reply whenever you want or block an account from contacting you.</p>
+      <p className="empty-description">People you add to your Chater contacts will appear here. You can message anyone directly, reply whenever you want, or block an account.</p>
       <button className="primary-button" onClick={onStartConversation}><Plus size={17}/> Start a conversation</button>
       <button className="text-button" onClick={onFindPeople}>Find people by username</button>
     </div>}
-    {!busy && conversations.length > 0 && filteredConversations.length === 0 && <p className="conversation-list-loading">No conversations match this search.</p>}
+    {!busy && !contactsBusy && inboxItems.length > 0 && filteredItems.length === 0 && <p className="conversation-list-loading">No chats or contacts match this search.</p>}
     <div className="conversation-list">
-      {filteredConversations.map(item => <button
+      {filteredItems.map(item => <button
         type="button"
         className="conversation-list-item"
         key={item.id}
