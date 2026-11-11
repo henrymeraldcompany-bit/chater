@@ -11,6 +11,22 @@ type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: str
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
 type UsernameSearchResult = { username: string; displayName: string; photoURL: string }
+async function syncLegacyUsername(uid: string, rawUsername: string): Promise<void> {
+  if (!firestoreDb) return
+  const normalized = rawUsername.trim().replace(/^@/, '').toLowerCase()
+  if (!/^[a-z0-9_]{3,20}$/.test(normalized)) return
+  await runTransaction(firestoreDb, async transaction => {
+    const usernameRef = doc(firestoreDb, 'usernames', normalized)
+    const profileRef = doc(firestoreDb, 'users', uid)
+    const usernameSnapshot = await transaction.get(usernameRef)
+    // Never claim a username that is already reserved by another account.
+    if (usernameSnapshot.exists() && usernameSnapshot.data()?.uid !== uid) return
+    if (!usernameSnapshot.exists()) {
+      transaction.set(usernameRef, { uid, username: normalized, createdAt: serverTimestamp() })
+    }
+    transaction.set(profileRef, { uid, username: normalized, updatedAt: serverTimestamp() }, { merge: true })
+  })
+}
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
 const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
   { label: 'Chats', icon: MessageCircle }, { label: 'Moments', icon: CirclePlay },
@@ -245,6 +261,7 @@ export default function App() {
         })
         const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
+        if (resolvedUsername) void syncLegacyUsername(user.uid, resolvedUsername).catch(() => undefined)
         setProfileUsername(resolvedUsername)
         if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${user.uid}`, resolvedUsername)
       } catch {
@@ -802,6 +819,7 @@ export default function App() {
         const storedUsername = storedProfile.username
         const localUsername = window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
+        if (resolvedUsername) void syncLegacyUsername(credential.user.uid, resolvedUsername).catch(() => undefined)
         setProfileUsername(resolvedUsername)
         setProfileDetails({
           about: typeof storedProfile.about === 'string' ? storedProfile.about : '',
