@@ -49,3 +49,12 @@ In Firebase Console, open **Build → Authentication → Sign-in method** and en
 Contact discovery uses the browser Contact Picker only after the user presses **Choose contacts**. Chater requests contact names only, sends the selected names as exact-match search terms against public Chater display names, and labels every result as a possible match for manual review. It does not request or store phone numbers, email addresses, or device contact photos. A confirmed Chater contact is saved only as a private target UID and timestamp under `users/{uid}/contacts/{targetUid}`.
 
 The GitHub Pages workflow publishes the web app only; it does not publish Firestore Security Rules. To enable adding and removing contacts in the live app, open Firebase Console for project `chater-8f834`, select **Firestore Database → Rules**, replace the rules with the current repository `firestore.rules` file, and select **Publish**. The nested contact rules restrict each contact list to its owner. Do not use permissive test rules or make contact subcollections publicly readable.
+
+
+## Direct messaging and blocking (Tasks 48–50)
+
+Chater now supports direct one-to-one conversations without message requests. Either signed-in participant can start a thread and send a text message; the recipient can reply at any time or block the sender. Messages are stored in Firestore at `conversations/{conversationId}/messages/{messageId}`, and the inbox subscribes to each account's conversation documents.
+
+A block is stored privately at `users/{uid}/blocked/{targetUid}`. Firestore rules check both accounts' block lists before allowing a new conversation or message. A member cannot bypass a block by reopening a profile or using another screen.
+
+**Publish the current repository `firestore.rules` file** in Firebase Console → Firestore Database → Rules → Publish. This updated file contains the contact-list rules from Task 47, private block-list rules, participant-only conversation/message reads, and two-way block enforcement. GitHub Pages only deploys the frontend; it does not deploy Firestore rules. Never replace these rules with public or test-mode rules.
