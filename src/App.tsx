@@ -99,18 +99,25 @@ const CHATER_ACCOUNT_DELETION_URL = 'https://chater-account-deletion.henrymerald
 const CHATER_SESSION_MANAGEMENT_URL = 'https://chater-session-management.henrymeraldcompany.workers.dev'
 type ChaterDeviceSession = { id: string; deviceName: string; platform: string; userAgent: string; createdAt: string; lastSeenAt: string; revoked: boolean }
 
+function createChaterDeviceSessionId(): string {
+  if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(24)
+    window.crypto.getRandomValues(bytes)
+    return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('')
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
+}
+
 function getChaterDeviceSessionId(): string {
   const key = 'chater:device-session-id'
   try {
     const saved = window.localStorage.getItem(key)
     if (saved && /^[A-Za-z0-9_-]{16,80}$/.test(saved)) return saved
-    const created = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID().replace(/-/g, '')
-      : Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
+    const created = createChaterDeviceSessionId()
     window.localStorage.setItem(key, created)
     return created
   } catch {
-    return Array.from(crypto.getRandomValues(new Uint8Array(24)), value => value.toString(16).padStart(2, '0')).join('')
+    return createChaterDeviceSessionId()
   }
 }
 
