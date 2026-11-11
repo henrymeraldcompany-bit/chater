@@ -109,11 +109,12 @@ describe('Chater application shell', () => {
       .mockResolvedValueOnce({ docs: [member] } as never)
       .mockResolvedValueOnce({ docs: [member] } as never)
     fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
-    fireEvent.change(screen.getByPlaceholderText('Search names or @username'), { target: { value: 'Mee' } })
+    fireEvent.change(screen.getByPlaceholderText('Search names or @username'), { target: { value: 'e M' } })
     await waitFor(() => expect(screen.getByText('Mee Maw')).toBeInTheDocument())
     expect(screen.getByText('@mee_maw')).toBeInTheDocument()
     expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
-    expect(screen.queryByRole('button', { name: 'Search username' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
+    expect(document.querySelector('.people-search-screen')).toBeInTheDocument()
   })
 
   it('offers ten selectable accent colour presets in settings', () => {
