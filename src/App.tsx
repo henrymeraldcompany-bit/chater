@@ -24,9 +24,9 @@ export function extractChaterUsernameFromQR(rawValue: string): string {
     const queryUsername = parsed.searchParams.get('chater_user')
     if (queryUsername) candidate = queryUsername
     else if (parsed.protocol === 'chater:' && parsed.hostname === 'user') {
-      candidate = parsed.pathname.replace(/^\\/+/, '')
+      candidate = parsed.pathname.replace(/^\/+/, '')
     } else {
-      const pathMatch = parsed.pathname.match(/^\\/(?:u|user)\\/@?([a-z0-9_]{3,20})\\/?$/i)
+      const pathMatch = parsed.pathname.match(/^\/(?:u|user)\/@?([a-z0-9_]{3,20})\/?$/i)
       if (pathMatch) candidate = pathMatch[1]
       else return ''
     }
