@@ -86,7 +86,7 @@ async function syncLegacyUsername(uid: string, rawUsername: string, rawDisplayNa
     if (!usernameSnapshot.exists()) {
       transaction.set(usernameRef, { uid, username: normalized, createdAt: serverTimestamp() })
     }
-    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, ...(rawDisplayName.trim() ? { displayName: rawDisplayName.trim(), displayNameLower: rawDisplayName.trim().replace(/\s+/g, ' ').toLowerCase() } : {}), updatedAt: serverTimestamp() }, { merge: true })
+    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, ...(rawDisplayName.trim() ? { displayName: rawDisplayName.trim(), displayNameLower: normalizeContactDisplayName(rawDisplayName) } : {}), updatedAt: serverTimestamp() }, { merge: true })
   })
 }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
@@ -890,7 +890,7 @@ export default function App() {
     if (db) {
       await runTransaction(db, async transaction => {
         transaction.set(doc(db, 'users', authUser.uid), {
-          uid: authUser.uid, ...(profileUsername ? { username: profileUsername, usernameLower: profileUsername.toLowerCase() } : {}), displayName: normalized, displayNameLower: normalized.toLowerCase(), updatedAt: serverTimestamp()
+          uid: authUser.uid, ...(profileUsername ? { username: profileUsername, usernameLower: profileUsername.toLowerCase() } : {}), displayName: normalized, displayNameLower: normalizeContactDisplayName(normalized), updatedAt: serverTimestamp()
         }, { merge: true })
       })
     }
@@ -1125,7 +1125,7 @@ export default function App() {
               throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
             }
             transaction.set(usernameRef, { uid: credential.user.uid, username: registrationUsername, createdAt: serverTimestamp() })
-            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, usernameLower: registrationUsername.toLowerCase(), displayName: registrationName.trim(), displayNameLower: registrationName.trim().replace(/\s+/g, ' ').toLowerCase(), createdAt: serverTimestamp() }, { merge: true })
+            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, usernameLower: registrationUsername.toLowerCase(), displayName: registrationName.trim(), displayNameLower: normalizeContactDisplayName(registrationName), createdAt: serverTimestamp() }, { merge: true })
           })
         } catch (reservationError) {
           await deleteDoc(userProfileRef).catch(() => undefined)
