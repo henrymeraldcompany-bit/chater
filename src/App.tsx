@@ -439,15 +439,33 @@ export default function App() {
     }
     setUsernameSearchBusy(true)
     try {
+      // First use the canonical username index. Older Chater accounts may have
+      // a profile document but no corresponding index document, so fall back to
+      // searching the public username field on member profiles.
       const usernameSnapshot = await getDoc(doc(firestoreDb, 'usernames', normalized))
-      if (!usernameSnapshot.exists()) {
-        setSearchNotice(`No Chater account was found with the username @${normalized}.`)
+      let profile: Record<string, unknown> | null = null
+      if (usernameSnapshot.exists()) {
+        const ownerUid = usernameSnapshot.data()?.uid
+        if (typeof ownerUid === 'string' && ownerUid) {
+          const profileSnapshot = await getDoc(doc(firestoreDb, 'users', ownerUid))
+          if (profileSnapshot.exists()) profile = (profileSnapshot.data() || {}) as Record<string, unknown>
+        }
+      }
+      if (!profile) {
+        const profileMatches = await getDocs(firestoreQuery(
+          collection(firestoreDb, 'users'),
+          where('username', '==', normalized)
+        ))
+        const exactMatch = profileMatches.docs.find(member => {
+          const savedUsername = member.data()?.username
+          return typeof savedUsername === 'string' && savedUsername.trim().toLowerCase() === normalized
+        })
+        if (exactMatch) profile = (exactMatch.data() || {}) as Record<string, unknown>
+      }
+      if (!profile) {
+        setSearchNotice(`No Chater account was found with the username @${normalized}. Check the spelling or ask the member to confirm their Chater username.`)
         return
       }
-      const ownerUid = usernameSnapshot.data()?.uid
-      if (typeof ownerUid !== 'string' || !ownerUid) throw new Error('This username record is invalid.')
-      const profileSnapshot = await getDoc(doc(firestoreDb, 'users', ownerUid))
-      const profile = profileSnapshot.data() || {}
       setUsernameSearchResult({
         username: normalized,
         displayName: typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName : normalized,
