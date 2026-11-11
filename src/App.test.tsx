@@ -169,9 +169,9 @@ describe('Chater application shell', () => {
       })
     } finally {
       if (secureContextDescriptor) Object.defineProperty(window, 'isSecureContext', secureContextDescriptor)
-      else delete (window as Window & { isSecureContext?: boolean }).isSecureContext
+      else Reflect.deleteProperty(window, 'isSecureContext')
       if (contactsDescriptor) Object.defineProperty(navigator, 'contacts', contactsDescriptor)
-      else delete (navigator as Navigator & { contacts?: unknown }).contacts
+      else Reflect.deleteProperty(navigator, 'contacts')
     }
   })
 
