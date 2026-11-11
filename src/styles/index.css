@@ -878,3 +878,21 @@ body,.app-shell{background:var(--page);color:var(--text)}
 /* When security is opened from either entry point, show it immediately instead of leaving it below the long settings list. */
 .dialog-card:has(.security-settings-panel) > :not(.dialog-head):not(.security-settings-panel) { display: none !important; }
 .security-settings-panel { margin-top: 14px; }
+
+
+/* Username discovery result cards */
+.username-search-result {
+  justify-content: flex-start;
+  gap: 14px;
+  margin-top: 14px;
+}
+.username-search-result .username-search-avatar {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  font-size: 17px;
+}
+.username-search-result > div {
+  flex: 1;
+  min-width: 0;
+}
