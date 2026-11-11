@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, updatePassword, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
@@ -1052,7 +1052,15 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
   const [groupIndex,setGroupIndex] = useState(initialGroupIndex)
   const [momentIndex,setMomentIndex] = useState(0)
   const [progress,setProgress] = useState(0)
+  const [isPaused,setIsPaused] = useState(false)
   const touchStart = useRef<{x:number;y:number}|null>(null)
+  const imageElapsedRef = useRef(0)
+  const imageStartedAtRef = useRef<number|null>(null)
+  const holdTimerRef = useRef<number|null>(null)
+  const holdActiveRef = useRef(false)
+  const suppressClickRef = useRef(false)
+  const videoRef = useRef<HTMLVideoElement|null>(null)
+  const audioRef = useRef<HTMLAudioElement|null>(null)
   const group = groups[groupIndex]
   const moment = group?.moments[momentIndex]
   const avatarURL = group?.photoURL || group?.previewURL || ''
@@ -1086,6 +1094,37 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
     }
   }, [momentIndex, groupIndex, groups])
 
+  const beginPress = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    suppressClickRef.current = false
+    if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current)
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Pointer capture is not available in every test/browser environment. */ }
+    holdTimerRef.current = window.setTimeout(() => {
+      holdTimerRef.current = null
+      holdActiveRef.current = true
+      setIsPaused(true)
+    }, 180)
+  }
+  const endPress = (cancelled = false) => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+    if (holdActiveRef.current) {
+      holdActiveRef.current = false
+      suppressClickRef.current = !cancelled
+      setIsPaused(false)
+    }
+  }
+  const zoneClick = (action: () => void) => (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      event.preventDefault()
+      return
+    }
+    action()
+  }
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -1100,22 +1139,54 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
   const currentMomentType = moment?.mediaType
   useEffect(() => {
     setProgress(0)
-    if (!currentMomentId || currentMomentType !== 'image') return
+    imageElapsedRef.current = 0
+    imageStartedAtRef.current = null
+    holdActiveRef.current = false
+    suppressClickRef.current = false
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+    setIsPaused(false)
+  }, [currentMomentId])
+
+  useEffect(() => {
+    if (!currentMomentId || currentMomentType !== 'image' || isPaused) return
     const startedAt = Date.now()
+    imageStartedAtRef.current = startedAt
     const duration = 6000
     const timer = window.setInterval(() => {
-      const nextProgress = Math.min(((Date.now() - startedAt) / duration) * 100, 100)
+      const elapsed = imageElapsedRef.current + (Date.now() - startedAt)
+      const nextProgress = Math.min((elapsed / duration) * 100, 100)
       setProgress(nextProgress)
       if (nextProgress >= 100) {
         window.clearInterval(timer)
         nextStory()
       }
     }, 80)
-    return () => window.clearInterval(timer)
-  }, [currentMomentId, currentMomentType, nextStory])
+    return () => {
+      window.clearInterval(timer)
+      if (imageStartedAtRef.current === startedAt) {
+        imageElapsedRef.current += Date.now() - startedAt
+        imageStartedAtRef.current = null
+      }
+    }
+  }, [currentMomentId, currentMomentType, isPaused, nextStory])
+
+  useEffect(() => {
+    if (!currentMomentId || (currentMomentType !== 'video' && currentMomentType !== 'audio')) return
+    const media = currentMomentType === 'video' ? videoRef.current : audioRef.current
+    if (!media) return
+    if (isPaused) media.pause()
+    else if (media.paused) void media.play().catch(() => undefined)
+  }, [currentMomentId, currentMomentType, isPaused])
+
+  useEffect(() => () => {
+    if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current)
+  }, [])
 
   if (!group || !moment) return null
-  return <div className="moment-story-overlay" role="dialog" aria-modal="true" aria-label={`Moment from ${group.displayName}`}
+  return <div className="moment-story-overlay" role="dialog" aria-modal="true" aria-label={`Moment from ${group.displayName}`} data-paused={isPaused ? 'true' : 'false'}
     onTouchStart={event=>{const touch=event.touches[0];touchStart.current={x:touch.clientX,y:touch.clientY}}}
     onTouchEnd={event=>{
       const start=touchStart.current
@@ -1137,19 +1208,20 @@ function MomentViewer({groups,initialGroupIndex,onClose}:{groups:MomentGroup[];i
     </header>
     <div className="moment-story-media">
       {moment.mediaType==='video'
-        ? <video key={moment.id} src={moment.mediaUrl} autoPlay controls playsInline onTimeUpdate={event=>{
+        ? <video ref={videoRef} key={moment.id} src={moment.mediaUrl} autoPlay controls playsInline onTimeUpdate={event=>{
             const video=event.currentTarget
             if(video.duration>0)setProgress((video.currentTime/video.duration)*100)
           }} onEnded={nextStory}/>
         : moment.mediaType==='audio'
-          ? <div className="moment-audio-playback"><audio key={moment.id} src={moment.mediaUrl} autoPlay controls onTimeUpdate={event=>{
+          ? <div className="moment-audio-playback"><audio ref={audioRef} key={moment.id} src={moment.mediaUrl} autoPlay controls onTimeUpdate={event=>{
               const audio=event.currentTarget
               if(audio.duration>0)setProgress((audio.currentTime/audio.duration)*100)
             }} onEnded={nextStory}/><span>Audio Moment</span></div>
           : <img src={moment.mediaUrl} alt={moment.caption || `Moment from ${group.displayName}`}/>}
     </div>
-    <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous Moment" onClick={previousStory}/>
-    <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next Moment" onClick={nextStory}/>
+    <button type="button" className="moment-story-tap moment-story-tap-left" aria-label="Previous Moment" onPointerDown={beginPress} onPointerUp={()=>endPress()} onPointerCancel={()=>endPress(true)} onContextMenu={event=>event.preventDefault()} onClick={zoneClick(previousStory)}/>
+    <button type="button" className="moment-story-tap moment-story-tap-right" aria-label="Next Moment" onPointerDown={beginPress} onPointerUp={()=>endPress()} onPointerCancel={()=>endPress(true)} onContextMenu={event=>event.preventDefault()} onClick={zoneClick(nextStory)}/>
+    {isPaused && <div className="moment-story-paused" role="status" aria-live="polite"><span>Ⅱ</span><small>Paused</small></div>}
     {moment.caption && <div className="moment-story-caption">{moment.caption}</div>}
     <div className="moment-story-footer"><span>{momentIndex+1} of {group.moments.length}</span><span>Available for 24 hours after sharing</span></div>
   </div>
