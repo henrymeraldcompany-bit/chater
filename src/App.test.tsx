@@ -115,6 +115,66 @@ describe('Chater application shell', () => {
     }
   })
 
+  it('uses selected contact names for possible matches and saves only after profile review', async () => {
+    const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDoc)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({
+        uid: 'ada-user', username: 'ada_lovelace', displayName: 'Ada Lovelace', photoURL: ''
+      }) } as never)
+
+    const contactPickerSelect = vi.fn().mockResolvedValue([{ name: ['Ada', 'Lovelace'] }])
+    const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, 'isSecureContext')
+    const contactsDescriptor = Object.getOwnPropertyDescriptor(navigator, 'contacts')
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true })
+    Object.defineProperty(navigator, 'contacts', {
+      configurable: true,
+      value: { select: contactPickerSelect }
+    })
+
+    try {
+      openApp()
+      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+      fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Sync contacts' }))
+      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(2))
+      vi.mocked(getDocs).mockResolvedValueOnce({
+        docs: [{
+          id: 'ada-user',
+          data: () => ({
+            uid: 'ada-user',
+            username: 'ada_lovelace',
+            displayName: 'Ada Lovelace',
+            displayNameLower: 'ada lovelace',
+            photoURL: ''
+          })
+        }]
+      } as never)
+
+      expect(screen.getByText(/sent to Chater only as exact-match search terms/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Choose contacts' }))
+      expect(contactPickerSelect).toHaveBeenCalledWith(['name'], { multiple: true })
+      const possibleMatch = await screen.findByRole('button', { name: 'Review possible match Ada Lovelace' })
+      expect(setDoc).not.toHaveBeenCalled()
+
+      fireEvent.click(possibleMatch)
+      expect(await screen.findByRole('dialog', { name: 'Ada Lovelace profile' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Add to contacts' }))
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Contact saved to your Chater account.'))
+      expect(setDoc).toHaveBeenCalledWith(expect.anything(), {
+        uid: 'ada-user',
+        addedAt: 'SERVER_TIMESTAMP'
+      })
+    } finally {
+      if (secureContextDescriptor) Object.defineProperty(window, 'isSecureContext', secureContextDescriptor)
+      else delete (window as Window & { isSecureContext?: boolean }).isSecureContext
+      if (contactsDescriptor) Object.defineProperty(navigator, 'contacts', contactsDescriptor)
+      else delete (navigator as Navigator & { contacts?: unknown }).contacts
+    }
+  })
+
   it('shows all five primary navigation destinations after the splash', () => {
     openApp()
     expect(screen.getAllByRole('navigation', { name: 'Main navigation' })).toHaveLength(2)
