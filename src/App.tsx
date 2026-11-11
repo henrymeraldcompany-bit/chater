@@ -951,6 +951,12 @@ export default function App() {
     const momentsSnapshot = await getDocs(firestoreQuery(collection(db, 'moments'), where('uid', '==', authUser.uid)))
     const ownedMoments = momentsSnapshot.docs
     await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
+    // Firestore does not cascade deletes into subcollections. Explicitly remove
+    // this account's private contact links before deleting its parent profile.
+    const contactSnapshot = await getDocs(collection(db, 'users', authUser.uid, 'contacts'))
+    await Promise.all(contactSnapshot.docs.map(contact =>
+      deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))
+    ))
     const usernameRef = profileUsername ? doc(db, 'usernames', profileUsername) : null
     const profileRef = doc(db, 'users', authUser.uid)
     await runTransaction(db, async transaction => {
