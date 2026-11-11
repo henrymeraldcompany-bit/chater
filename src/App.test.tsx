@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
+import { getDoc, getDocs, onSnapshot, orderBy, query, runTransaction, setDoc, where } from 'firebase/firestore'
 import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
+import ConversationScreen from './components/ConversationScreen'
+import { createConversationId, isValidChatMessage, normalizeChatMessage } from './lib/chat'
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
   getDoc: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
   getDocs: vi.fn(async () => ({ docs: [] })),
   query: vi.fn((...parts: unknown[]) => ({ parts })),
+  orderBy: vi.fn((...parts: unknown[]) => ({ parts })),
+  onSnapshot: vi.fn((_reference: unknown, next: (snapshot: { docs: unknown[] }) => void) => { next({ docs: [] }); return vi.fn() }),
   limit: vi.fn((...parts: unknown[]) => ({ parts })),
   where: vi.fn((...parts: unknown[]) => ({ parts })),
   collection: vi.fn((...parts: unknown[]) => ({ parts })),
@@ -17,9 +21,10 @@ vi.mock('firebase/firestore', () => ({
   serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   deleteDoc: vi.fn(async () => undefined),
   setDoc: vi.fn(async () => undefined),
-  runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean; data: () => Record<string, unknown> | undefined }>; set: (...args: unknown[]) => void; delete: (ref: unknown) => void }) => Promise<void>) => callback({
+  runTransaction: vi.fn(async (_db: unknown, callback: (transaction: { get: (ref: unknown) => Promise<{ exists: () => boolean; data: () => Record<string, unknown> | undefined }>; set: (...args: unknown[]) => void; update: (...args: unknown[]) => void; delete: (ref: unknown) => void }) => Promise<void>) => callback({
     get: vi.fn(async () => ({ exists: () => false, data: () => undefined })),
     set: vi.fn(),
+    update: vi.fn(),
     delete: vi.fn()
   }))
 }))
@@ -94,6 +99,38 @@ describe('Chater contact discovery', () => {
     expect(matches[0].matches.map(profile => profile.uid)).toEqual(['ada-1', 'ada-2'])
     expect(matches[1].matches.map(profile => profile.uid)).toEqual(['grace'])
     expect(matches[2].matches).toEqual([])
+  })
+})
+
+describe('Chater direct-message rules', () => {
+  it('creates the same private conversation ID for either participant order', () => {
+    expect(createConversationId('alice_uid', 'bob_uid')).toBe(createConversationId('bob_uid', 'alice_uid'))
+    expect(createConversationId('alice_uid', 'bob_uid')).not.toBe(createConversationId('alice_uid', 'charlie_uid'))
+    expect(() => createConversationId('alice_uid', 'alice_uid')).toThrow('two different Chater accounts')
+  })
+
+  it('normalizes and validates direct messages before sending', () => {
+    expect(normalizeChatMessage('  Hello\\r\\nthere  ')).toBe('Hello\\nthere')
+    expect(isValidChatMessage('  hello  ')).toBe(true)
+    expect(isValidChatMessage('   ')).toBe(false)
+    expect(isValidChatMessage('x'.repeat(4001))).toBe(false)
+  })
+
+  it('lets the recipient block a sender from the conversation screen', async () => {
+    const onBlock = vi.fn(async () => undefined)
+    const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    render(<ConversationScreen
+      currentUserId="signed-in-user"
+      target={target}
+      isBlocked={false}
+      onClose={vi.fn()}
+      onBlock={onBlock}
+      onUnblock={vi.fn(async () => undefined)}
+    />)
+    expect(await screen.findByText('No messages yet')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Block Other User' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Block account' }))
+    await waitFor(() => expect(onBlock).toHaveBeenCalledWith('other-user'))
   })
 })
 
@@ -268,12 +305,19 @@ describe('Chater application shell', () => {
     expect(screen.queryByText('private@example.com')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Message' }))
     expect(screen.getByRole('dialog', { name: 'Conversation with Mee Maw' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Message')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Back to profile' }))
-    expect(await screen.findByRole('dialog', { name: 'Mee Maw profile' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Back to people search' }))
-    expect(document.querySelector('.people-search-screen')).toBeInTheDocument()
+    const messageInput = screen.getByRole('textbox', { name: 'Message' })
+    const sendButton = screen.getByRole('button', { name: 'Send message' })
+    expect(messageInput).toBeEnabled()
+    expect(sendButton).toBeDisabled()
+    fireEvent.change(messageInput, { target: { value: 'Hello from Chater' } })
+    expect(sendButton).toBeEnabled()
+    fireEvent.click(sendButton)
+    await waitFor(() => expect(runTransaction).toHaveBeenCalled())
+    expect(messageInput).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: 'Block Mee Maw' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Block account' }))
+    await waitFor(() => expect(screen.getByText('You blocked this account. Unblock them to send messages again.')).toBeInTheDocument())
+    expect(setDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ uid: 'target-user', createdAt: 'SERVER_TIMESTAMP' }))
   })
 
   it('opens a scanned Chater QR username as the matching public profile', async () => {
