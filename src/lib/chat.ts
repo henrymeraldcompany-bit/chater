@@ -31,7 +31,7 @@ export function createConversationId(firstUid: string, secondUid: string): strin
 }
 
 export function normalizeChatMessage(value: string): string {
-  return value.replace(/\\r\\n?/g, '\\n').trim()
+  return value.replace(/\r\n?/g, '\n').trim()
 }
 
 export function isValidChatMessage(value: string): boolean {
