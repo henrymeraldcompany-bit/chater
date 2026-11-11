@@ -409,6 +409,15 @@ describe('Chater application shell', () => {
     expect(screen.queryByText(/These details are optional/)).not.toBeInTheDocument()
   })
 
+  it('opens privacy and security directly from the You profile options', () => {
+    openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'You' }))
+    fireEvent.click(screen.getByRole('button', { name: /Privacy and security/ }))
+    expect(screen.getByRole('heading', { name: 'Privacy and security' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Change password' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Appearance' })).not.toBeInTheDocument()
+  })
+
   it('opens the privacy and security panel from settings', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
