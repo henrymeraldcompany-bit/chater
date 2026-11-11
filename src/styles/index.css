@@ -1208,7 +1208,7 @@ body,.app-shell{background:var(--page);color:var(--text)}
   flex-direction: column;
   min-height: 100dvh;
   overflow-y: auto;
-  background: var(--bg, #0b1014);
+  background: var(--page, #101010);
   color: var(--text-strong);
 }
 .public-profile-toolbar {
