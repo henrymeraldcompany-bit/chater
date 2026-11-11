@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, getAuth, onAuthStateChanged, reauthenticateWithCredential, reload, sendEmailVerification, updatePassword, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth'
 import { firebaseApp, firestoreDb } from './lib/firebase'
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, query as firestoreQuery, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore'
-import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, Type, Music2, LayoutGrid, Mic, ImagePlus, Video, Check, ArrowLeft, type LucideIcon } from 'lucide-react'
+import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, HelpCircle, Bell, X, ArrowUpRight, Type, Music2, LayoutGrid, Mic, ImagePlus, Video, Check, ArrowLeft, QrCode, type LucideIcon } from 'lucide-react'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
@@ -11,6 +11,42 @@ type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: str
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
 type UsernameSearchResult = { uid: string; username: string; displayName: string; photoURL: string }
+type QRCodeDetection = { rawValue: string }
+type QRCodeDetectorLike = { detect(source: HTMLVideoElement): Promise<QRCodeDetection[]> }
+type QRCodeDetectorConstructor = new (options: { formats: string[] }) => QRCodeDetectorLike
+
+export function extractChaterUsernameFromQR(rawValue: string): string {
+  const raw = rawValue.trim()
+  if (!raw) return ''
+  let candidate = raw
+  try {
+    const parsed = new URL(raw)
+    const queryUsername = parsed.searchParams.get('chater_user')
+    if (queryUsername) candidate = queryUsername
+    else if (parsed.protocol === 'chater:' && parsed.hostname === 'user') {
+      candidate = parsed.pathname.replace(/^\\/+/, '')
+    } else {
+      const pathMatch = parsed.pathname.match(/^\\/(?:u|user)\\/@?([a-z0-9_]{3,20})\\/?$/i)
+      if (pathMatch) candidate = pathMatch[1]
+      else return ''
+    }
+  } catch {
+    candidate = raw.replace(/^@/, '')
+  }
+  candidate = candidate.trim().replace(/^@/, '').toLowerCase()
+  return /^[a-z0-9_]{3,20}$/.test(candidate) ? candidate : ''
+}
+
+function createChaterProfileLink(username: string): string {
+  const base = new URL(import.meta.env.BASE_URL, window.location.origin)
+  base.searchParams.set('chater_user', username)
+  return base.toString()
+}
+
+function createChaterQRCodeImage(username: string): string {
+  const encodedProfileLink = encodeURIComponent(createChaterProfileLink(username))
+  return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&format=png&data=${encodedProfileLink}`
+}
 type PublicUserProfile = UsernameSearchResult & { about: string; location: string; occupation: string }
 async function syncLegacyUsername(uid: string, rawUsername: string, rawDisplayName = ''): Promise<void> {
   const db = firestoreDb
@@ -158,6 +194,13 @@ export default function App() {
   const [publicProfileBusy, setPublicProfileBusy] = useState(false)
   const [publicProfileNotice, setPublicProfileNotice] = useState('')
   const [conversationTarget, setConversationTarget] = useState<UsernameSearchResult | null>(null)
+  const [qrScannerOpen, setQrScannerOpen] = useState(false)
+  const [qrScannerStatus, setQrScannerStatus] = useState('Starting camera…')
+  const [qrManualUsername, setQrManualUsername] = useState('')
+  const [qrDisplayOpen, setQrDisplayOpen] = useState(false)
+  const [qrCopied, setQrCopied] = useState(false)
+  const qrVideoRef = useRef<HTMLVideoElement | null>(null)
+  const qrScannerStreamRef = useRef<MediaStream | null>(null)
   const usernameSearchRequest = useRef(0)
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
@@ -533,6 +576,42 @@ export default function App() {
       setPublicProfileBusy(false)
     }
   }, [authUser])
+  const openPublicProfileByUsername = useCallback(async (rawUsername: string): Promise<boolean> => {
+    const normalized = rawUsername.trim().replace(/^@/, '').toLowerCase()
+    if (!authUser || !firestoreDb || !/^[a-z0-9_]{3,20}$/.test(normalized)) return false
+    try {
+      const usernameSnapshot = await getDoc(doc(firestoreDb, 'usernames', normalized))
+      if (!usernameSnapshot.exists()) return false
+      const uid = usernameSnapshot.data()?.uid
+      if (typeof uid !== 'string' || !uid || uid === authUser.uid) return false
+      await openPublicProfile({
+        uid,
+        username: normalized,
+        displayName: normalized,
+        photoURL: ''
+      })
+      return true
+    } catch {
+      return false
+    }
+  }, [authUser, openPublicProfile])
+  const handleScannedQRCode = useCallback(async (rawValue: string): Promise<boolean> => {
+    const normalized = extractChaterUsernameFromQR(rawValue)
+    if (!normalized) {
+      setQrScannerStatus('This QR code is not a valid Chater profile code.')
+      return false
+    }
+    setQrScannerStatus(`Finding @${normalized}…`)
+    const found = await openPublicProfileByUsername(normalized)
+    if (!found) {
+      setQrScannerStatus('No matching Chater account was found. Try another QR code.')
+      return false
+    }
+    setQrScannerOpen(false)
+    setQrManualUsername('')
+    setDialog(null)
+    return true
+  }, [openPublicProfileByUsername])
   const closePublicProfile = () => {
     setPublicProfile(null)
     setPublicProfileNotice('')
@@ -547,6 +626,77 @@ export default function App() {
     })
     setPublicProfile(null)
   }
+  useEffect(() => {
+    if (!qrScannerOpen) return
+    let cancelled = false
+    let animationFrame = 0
+    let stream: MediaStream | null = null
+    const Detector = (window as unknown as { BarcodeDetector?: QRCodeDetectorConstructor }).BarcodeDetector
+    if (!Detector) {
+      setQrScannerStatus('QR scanning is not supported in this browser. You can enter a username below.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setQrScannerStatus('Camera access is unavailable. You can enter a username below.')
+      return
+    }
+    const startCamera = async () => {
+      try {
+        const detector = new Detector({ formats: ['qr_code'] })
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        })
+        if (cancelled) {
+          stream.getTracks().forEach(track => track.stop())
+          return
+        }
+        qrScannerStreamRef.current = stream
+        const video = qrVideoRef.current
+        if (!video) return
+        video.srcObject = stream
+        await video.play().catch(() => undefined)
+        setQrScannerStatus('Point your camera at a Chater QR code.')
+        const scanFrame = async () => {
+          if (cancelled) return
+          const currentVideo = qrVideoRef.current
+          if (currentVideo && currentVideo.readyState >= 2) {
+            try {
+              const detected = await detector.detect(currentVideo)
+              const rawValue = detected[0]?.rawValue
+              if (rawValue && await handleScannedQRCode(rawValue)) return
+            } catch {
+              // Keep scanning if a frame is temporarily unreadable.
+            }
+          }
+          if (!cancelled) animationFrame = window.requestAnimationFrame(() => { void scanFrame() })
+        }
+        animationFrame = window.requestAnimationFrame(() => { void scanFrame() })
+      } catch {
+        setQrScannerStatus('Camera permission was not granted or the camera is unavailable. You can enter a username below.')
+      }
+    }
+    void startCamera()
+    return () => {
+      cancelled = true
+      if (animationFrame) window.cancelAnimationFrame(animationFrame)
+      stream?.getTracks().forEach(track => track.stop())
+      qrScannerStreamRef.current = null
+      if (qrVideoRef.current) qrVideoRef.current.srcObject = null
+    }
+  }, [qrScannerOpen, handleScannedQRCode])
+
+  useEffect(() => {
+    if (!authUser || !firestoreDb) return
+    const params = new URLSearchParams(window.location.search)
+    const linkedUsername = params.get('chater_user')
+    if (!linkedUsername) return
+    params.delete('chater_user')
+    const remaining = params.toString()
+    window.history.replaceState({}, '', window.location.pathname + (remaining ? `?${remaining}` : '') + window.location.hash)
+    void openPublicProfileByUsername(linkedUsername)
+  }, [authUser, openPublicProfileByUsername])
+
   useEffect(() => {
     if (dialog !== 'new-chat' && dialog !== 'search') return
     usernameSearchRequest.current += 1
