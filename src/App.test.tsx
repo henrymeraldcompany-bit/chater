@@ -110,7 +110,7 @@ describe('Chater direct-message rules', () => {
   })
 
   it('normalizes and validates direct messages before sending', () => {
-    expect(normalizeChatMessage('  Hello\\r\\nthere  ')).toBe('Hello\\nthere')
+    expect(normalizeChatMessage('  Hello\r\nthere  ')).toBe('Hello\nthere')
     expect(isValidChatMessage('  hello  ')).toBe(true)
     expect(isValidChatMessage('   ')).toBe(false)
     expect(isValidChatMessage('x'.repeat(4001))).toBe(false)
