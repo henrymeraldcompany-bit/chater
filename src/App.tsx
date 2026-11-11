@@ -10,7 +10,7 @@ type ProfileDetails = { about: string; location: string; occupation: string }
 type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video' | 'audio'; caption: string; createdAt: number; expiresAt: number }
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
-type UsernameSearchResult = { username: string; displayName: string }
+type UsernameSearchResult = { username: string; displayName: string; photoURL: string }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
 const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
   { label: 'Chats', icon: MessageCircle }, { label: 'Moments', icon: CirclePlay },
@@ -230,6 +230,13 @@ export default function App() {
         setProfilePhotoUrl(user.photoURL || '')
         const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
         const storedProfile = profileSnapshot?.data() || {}
+        if (user.photoURL && storedProfile.photoURL !== user.photoURL && firestoreDb) {
+          void setDoc(doc(firestoreDb, 'users', user.uid), {
+            uid: user.uid,
+            photoURL: user.photoURL,
+            updatedAt: serverTimestamp()
+          }, { merge: true }).catch(() => undefined)
+        }
         const storedUsername = storedProfile.username
         setProfileDetails({
           about: typeof storedProfile.about === 'string' ? storedProfile.about : '',
@@ -373,6 +380,13 @@ export default function App() {
       }
       const photoURL = result.secure_url
       await updateProfile(user, { photoURL })
+      if (firestoreDb) {
+        await setDoc(doc(firestoreDb, 'users', user.uid), {
+          uid: user.uid,
+          photoURL,
+          updatedAt: serverTimestamp()
+        }, { merge: true })
+      }
       setProfilePhotoUrl(photoURL)
       return photoURL
     } catch (error) {
@@ -436,7 +450,8 @@ export default function App() {
       const profile = profileSnapshot.data() || {}
       setUsernameSearchResult({
         username: normalized,
-        displayName: typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName : normalized
+        displayName: typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName : normalized,
+        photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
       })
     } catch {
       setSearchNotice('Username search is temporarily unavailable. Check your connection and try again.')
@@ -853,7 +868,7 @@ export default function App() {
       <button className="primary-button dialog-action" type="submit" disabled={passwordRecoveryBusy}>{passwordRecoveryBusy?'Sending reset email…':'Send reset link'}</button>
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
-    </form>:<><p className="dialog-copy">Search for a Chater member using their exact username. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setUsernameSearchResult(null)}} placeholder="@username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('');setUsernameSearchResult(null)}}><X size={15}/></button></label><button className="primary-button dialog-action" type="button" onClick={()=>void handleUsernameSearch()} disabled={!username.trim()||usernameSearchBusy}>{usernameSearchBusy?'Searching…':<><Search size={17}/> Search username</>}</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}{usernameSearchResult&&<div className="security-status-card username-search-result" role="status"><div><strong>{usernameSearchResult.displayName}</strong><span>@{usernameSearchResult.username}</span><span>Chater member</span></div><span className="security-status verified">Found</span></div>}</>}</section></div>}
+    </form>:<><p className="dialog-copy">Search for a Chater member using their exact username. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setUsernameSearchResult(null)}} placeholder="@username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('');setUsernameSearchResult(null)}}><X size={15}/></button></label><button className="primary-button dialog-action" type="button" onClick={()=>void handleUsernameSearch()} disabled={!username.trim()||usernameSearchBusy}>{usernameSearchBusy?'Searching…':<><Search size={17}/> Search username</>}</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}{usernameSearchResult&&<div className="security-status-card username-search-result" role="status"><ProfileAvatar photoURL={usernameSearchResult.photoURL} displayName={usernameSearchResult.displayName} className="username-search-avatar"/><div><strong>{usernameSearchResult.displayName}</strong><span>@{usernameSearchResult.username}</span><span>Chater member</span></div><span className="security-status verified">Found</span></div>}</>}</section></div>}
     {activeTab==='Moments' && momentViewerIndex !== null && <MomentViewer groups={momentGroups} initialGroupIndex={momentViewerIndex} onClose={closeMomentViewer}/>}
   </main>
 }
