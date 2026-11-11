@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { createUserWithEmailAndPassword, deleteUser, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
+import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
+import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
 import App from './App'
 
 vi.mock('firebase/firestore', () => ({
@@ -85,14 +85,22 @@ describe('Chater application shell', () => {
     }
   })
 
-  it('opens and closes the username discovery dialog without pretending search is live', () => {
+  it('finds a Chater member by their exact global username', async () => {
+    const user = { uid: 'signed-in-user', email: 'member@example.com', emailVerified: true, photoURL: null, displayName: 'Signed In Member' }
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { callback(user as never); return vi.fn() })
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDoc)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ uid: 'target-user', username: 'target_user' }) } as never)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ displayName: 'Target Person' }) } as never)
     openApp()
+    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    fireEvent.change(screen.getByPlaceholderText('@username'), { target: { value: 'henry' } })
+    fireEvent.change(screen.getByPlaceholderText('@username'), { target: { value: '@TARGET_USER' } })
     fireEvent.click(screen.getByRole('button', { name: 'Search username' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Username discovery will be connected')
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Target Person')).toBeInTheDocument())
+    expect(screen.getByText('@target_user')).toBeInTheDocument()
+    expect(screen.getByText('Chater member')).toBeInTheDocument()
   })
 
   it('offers ten selectable accent colour presets in settings', () => {
