@@ -185,6 +185,27 @@ describe('Chater direct-message rules', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Forest' }))
     expect(document.querySelector('.live-conversation-screen')).toHaveAttribute('data-chat-theme', 'forest')
   })
+
+  it('clears chat only from this device without deleting the shared conversation', async () => {
+    const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    render(<ConversationScreen
+      currentUserId="signed-in-user"
+      target={target}
+      isBlocked={false}
+      onClose={vi.fn()}
+      onBlock={vi.fn(async () => undefined)}
+      onUnblock={vi.fn(async () => undefined)}
+    />)
+
+    await screen.findByText('No messages yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'More' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Clear chat' }))
+    expect(screen.getByText(/other participant keeps their copy/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear chat' }))
+    expect(window.localStorage.getItem('chater:chat-cleared-at:' + createConversationId('signed-in-user', 'other-user'))).toMatch(/^\\d+$/)
+    expect(screen.getByRole('status')).toHaveTextContent('Chat cleared on this device')
+  })
 })
 
 describe('Chater application shell', () => {
