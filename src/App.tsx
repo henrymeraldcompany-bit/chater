@@ -296,18 +296,19 @@ export default function App() {
     const sessionId = getChaterDeviceSessionId()
     const registerAndCheck = async () => {
       try {
+        const check = await chaterSessionRequest<{ registered: boolean; revoked: boolean }>(
+          authUser, '/sessions/check', 'POST', { sessionId }
+        )
+        if (active && check.revoked && firebaseAuth) {
+          setDeviceSessionsNotice('This device was signed out because the account sessions were revoked.')
+          await signOut(firebaseAuth)
+          return
+        }
         await chaterSessionRequest(authUser, '/sessions/register', 'POST', {
           sessionId,
           deviceName: 'This device',
           platform: navigator.platform || 'Web browser'
         })
-        const check = await chaterSessionRequest<{ registered: boolean; revoked: boolean }>(
-          authUser, '/sessions/check', 'POST', { sessionId }
-        )
-        if (active && check.revoked && firebaseAuth) {
-          await signOut(firebaseAuth)
-          setDeviceSessionsNotice('This device was signed out because the account sessions were revoked.')
-        }
       } catch {
         // Keep Chater usable if the session service is temporarily unavailable.
       }
