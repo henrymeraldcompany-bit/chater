@@ -45,7 +45,7 @@ export function timestampToMillis(value: unknown): number {
     const toMillis = (value as { toMillis?: unknown }).toMillis
     if (typeof toMillis === 'function') {
       try {
-        const millis = (toMillis as () => number)()
+        const millis = (toMillis as (this: unknown) => number).call(value)
         return Number.isFinite(millis) ? millis : 0
       } catch {
         return 0
