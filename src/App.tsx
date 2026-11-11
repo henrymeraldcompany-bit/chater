@@ -14,6 +14,30 @@ type UsernameSearchResult = { uid: string; username: string; displayName: string
 type QRCodeDetection = { rawValue: string }
 type QRCodeDetectorLike = { detect(source: HTMLVideoElement): Promise<QRCodeDetection[]> }
 type QRCodeDetectorConstructor = new (options: { formats: string[] }) => QRCodeDetectorLike
+type ContactPickerRecord = { name?: string[] }
+type ContactPickerManager = { select(properties: string[], options?: { multiple?: boolean }): Promise<ContactPickerRecord[]> }
+type ContactNameMatch = { contactName: string; matches: UsernameSearchResult[] }
+
+export function normalizeContactDisplayName(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\\s+/g, ' ').toLowerCase()
+}
+
+export function matchChaterContactsByName(contactNames: string[], profiles: UsernameSearchResult[], currentUid: string): ContactNameMatch[] {
+  const uniqueNames = new Map<string, string>()
+  for (const rawName of contactNames) {
+    const contactName = rawName.trim().replace(/\\s+/g, ' ')
+    const normalizedName = normalizeContactDisplayName(contactName)
+    if (normalizedName && !uniqueNames.has(normalizedName)) uniqueNames.set(normalizedName, contactName)
+  }
+  return [...uniqueNames.entries()].map(([normalizedName, contactName]) => ({
+    contactName,
+    matches: profiles.filter(profile =>
+      profile.uid !== currentUid &&
+      /^[a-z0-9_]{3,20}$/.test(profile.username) &&
+      normalizeContactDisplayName(profile.displayName) === normalizedName
+    )
+  }))
+}
 
 export function extractChaterUsernameFromQR(rawValue: string): string {
   const raw = rawValue.trim()
@@ -62,7 +86,7 @@ async function syncLegacyUsername(uid: string, rawUsername: string, rawDisplayNa
     if (!usernameSnapshot.exists()) {
       transaction.set(usernameRef, { uid, username: normalized, createdAt: serverTimestamp() })
     }
-    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, ...(rawDisplayName.trim() ? { displayName: rawDisplayName.trim(), displayNameLower: rawDisplayName.trim().toLowerCase() } : {}), updatedAt: serverTimestamp() }, { merge: true })
+    transaction.set(profileRef, { uid, username: normalized, usernameLower: normalized, ...(rawDisplayName.trim() ? { displayName: rawDisplayName.trim(), displayNameLower: rawDisplayName.trim().replace(/\\s+/g, ' ').toLowerCase() } : {}), updatedAt: serverTimestamp() }, { merge: true })
   })
 }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
@@ -201,6 +225,14 @@ export default function App() {
   const [qrCopied, setQrCopied] = useState(false)
   const qrVideoRef = useRef<HTMLVideoElement | null>(null)
   const usernameSearchRequest = useRef(0)
+  const [contactSyncExpanded, setContactSyncExpanded] = useState(false)
+  const [contactSyncBusy, setContactSyncBusy] = useState(false)
+  const [contactSyncNotice, setContactSyncNotice] = useState('')
+  const [contactMatches, setContactMatches] = useState<ContactNameMatch[]>([])
+  const [savedContacts, setSavedContacts] = useState<UsernameSearchResult[]>([])
+  const [savedContactsBusy, setSavedContactsBusy] = useState(false)
+  const [contactActionBusy, setContactActionBusy] = useState(false)
+  const [contactActionNotice, setContactActionNotice] = useState('')
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
   const [registrationUsername, setRegistrationUsername] = useState('')
@@ -278,6 +310,9 @@ export default function App() {
         setProfilePhotoUrl('')
         setProfileUsername('')
         setProfileDetails(emptyProfileDetails)
+        setSavedContacts([])
+        setContactMatches([])
+        setContactSyncExpanded(false)
         return
       }
       try {
@@ -549,6 +584,7 @@ export default function App() {
     setConversationTarget(null)
     setPublicProfileBusy(true)
     setPublicProfileNotice('')
+    setContactActionNotice('')
     setPublicProfile({
       ...result, about: '', location: '', occupation: ''
     })
@@ -611,6 +647,150 @@ export default function App() {
     setDialog(null)
     return true
   }, [openPublicProfileByUsername])
+  const handleContactSync = async () => {
+    setContactSyncNotice('')
+    setContactMatches([])
+    if (!authUser || !firestoreDb) {
+      setContactSyncNotice('Sign in with a verified Chater account to sync contacts.')
+      return
+    }
+    const contactPicker = (navigator as Navigator & { contacts?: ContactPickerManager }).contacts
+    if (!window.isSecureContext || !contactPicker?.select) {
+      setContactSyncNotice('This browser does not support contact selection. Use the search field above or scan a Chater QR code instead.')
+      return
+    }
+
+    setContactSyncBusy(true)
+    try {
+      // Request names only; device phone numbers, emails and contact photos
+      // are deliberately not requested.
+      const selected = await contactPicker.select(['name'], { multiple: true })
+      const names = selected
+        .map(contact => Array.isArray(contact.name) ? contact.name.join(' ') : '')
+        .map(name => name.trim().replace(/\\s+/g, ' '))
+        .filter(name => name.length >= 2 && name.length <= 50)
+      const normalizedNames = [...new Set(names.map(normalizeContactDisplayName).filter(Boolean))]
+      if (!normalizedNames.length) {
+        setContactSyncNotice('No contact names were selected. Nothing was saved.')
+        return
+      }
+
+      const candidateProfiles = new Map<string, UsernameSearchResult>()
+      // Firestore "in" queries are bounded, so query in batches rather than
+      // downloading the entire public member directory.
+      for (let offset = 0; offset < normalizedNames.length; offset += 30) {
+        const nameBatch = normalizedNames.slice(offset, offset + 30)
+        const snapshot = await getDocs(firestoreQuery(
+          collection(firestoreDb, 'users'),
+          where('displayNameLower', 'in', nameBatch)
+        ))
+        for (const member of snapshot.docs) {
+          const profile = member.data() as Record<string, unknown>
+          const uid = typeof profile.uid === 'string' ? profile.uid : member.id
+          const username = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
+          const displayName = typeof profile.displayName === 'string' && profile.displayName.trim()
+            ? profile.displayName.trim()
+            : username
+          if (!uid || uid === authUser.uid || !/^[a-z0-9_]{3,20}$/.test(username)) continue
+          candidateProfiles.set(uid, {
+            uid,
+            username,
+            displayName,
+            photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+          })
+        }
+      }
+
+      const groups = matchChaterContactsByName(names, [...candidateProfiles.values()], authUser.uid)
+      setContactMatches(groups)
+      const matchCount = groups.reduce((total, group) => total + group.matches.length, 0)
+      setContactSyncNotice(matchCount
+        ? `Found ${matchCount} possible exact-name match${matchCount === 1 ? '' : 'es'}. Review each public profile before adding it.`
+        : 'No exact display-name matches were found. Try searching by Chater username instead.')
+    } catch (error) {
+      const errorName = typeof error === 'object' && error !== null && 'name' in error
+        ? String((error as { name?: unknown }).name || '')
+        : ''
+      setContactSyncNotice(errorName === 'AbortError'
+        ? 'No contacts were shared. Nothing was saved.'
+        : 'Chater could not read the selected contacts. Check your browser support and try again.')
+    } finally {
+      setContactSyncBusy(false)
+    }
+  }
+
+  const savePublicProfileAsContact = async (profile: UsernameSearchResult) => {
+    if (!authUser || !firestoreDb || profile.uid === authUser.uid) return
+    setContactActionBusy(true)
+    setContactActionNotice('')
+    try {
+      await setDoc(doc(firestoreDb, 'users', authUser.uid, 'contacts', profile.uid), {
+        uid: profile.uid,
+        addedAt: serverTimestamp()
+      })
+      setSavedContacts(current => current.some(item => item.uid === profile.uid) ? current : [...current, profile])
+      setContactActionNotice('Contact saved to your Chater account.')
+    } catch {
+      setContactActionNotice('We could not save this contact. Check your connection and try again.')
+    } finally {
+      setContactActionBusy(false)
+    }
+  }
+
+  const removePublicProfileFromContacts = async (profile: UsernameSearchResult) => {
+    if (!authUser || !firestoreDb || profile.uid === authUser.uid) return
+    setContactActionBusy(true)
+    setContactActionNotice('')
+    try {
+      await deleteDoc(doc(firestoreDb, 'users', authUser.uid, 'contacts', profile.uid))
+      setSavedContacts(current => current.filter(item => item.uid !== profile.uid))
+      setContactActionNotice('Contact removed from your Chater contacts.')
+    } catch {
+      setContactActionNotice('We could not remove this contact. Check your connection and try again.')
+    } finally {
+      setContactActionBusy(false)
+    }
+  }
+
+  const isSavedContact = (uid: string) => savedContacts.some(contact => contact.uid === uid)
+
+  useEffect(() => {
+    if (!contactSyncExpanded || !authUser || !firestoreDb) return
+    let active = true
+    setSavedContactsBusy(true)
+    void (async () => {
+      try {
+        const links = await getDocs(collection(firestoreDb, 'users', authUser.uid, 'contacts'))
+        const targetIds = [...new Set(links.docs
+          .map(link => {
+            const data = link.data() as Record<string, unknown>
+            return typeof data.uid === 'string' ? data.uid : link.id
+          })
+          .filter(uid => uid && uid !== authUser.uid)
+        )].slice(0, 100)
+        const profiles = await Promise.all(targetIds.map(async uid => {
+          const snapshot = await getDoc(doc(firestoreDb, 'users', uid))
+          if (!snapshot.exists()) return null
+          const data = snapshot.data() as Record<string, unknown>
+          const username = typeof data.username === 'string' ? data.username.trim().toLowerCase() : ''
+          if (!/^[a-z0-9_]{3,20}$/.test(username)) return null
+          return {
+            uid,
+            username,
+            displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : username,
+            photoURL: typeof data.photoURL === 'string' ? data.photoURL : ''
+          } satisfies UsernameSearchResult
+        }))
+        if (active) setSavedContacts(profiles.filter((profile): profile is UsernameSearchResult => profile !== null))
+      } catch {
+        if (active) setContactSyncNotice('Your saved contacts could not be loaded. Check your connection and try again.')
+      } finally {
+        if (active) setSavedContactsBusy(false)
+      }
+    })()
+    return () => { active = false }
+  }, [contactSyncExpanded, authUser])
+
   const closePublicProfile = () => {
     setPublicProfile(null)
     setPublicProfileNotice('')
@@ -908,7 +1088,7 @@ export default function App() {
 
     {activeTab==='Calls'&&<button className="compose-button compose-call" aria-label="Make a call" onClick={()=>setDialog('call')}><Phone size={24}/><span className="compose-plus"><Plus size={15}/></span></button>}
     <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
-    {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className={dialog==='search'?'dialog-card people-search-screen full-screen-dialog':dialog==='new-chat'?'dialog-card new-chat-screen full-screen-dialog':'dialog-card'} role="dialog" aria-modal="true" aria-labelledby="dialog-title">{dialog==='new-chat'||dialog==='search'?<><h2 id="dialog-title" className="a11y-heading">{dialog==='new-chat'?'Start a conversation':'Find people'}</h2><div className="people-search-toolbar"><button className="icon-button people-search-back" type="button" aria-label="Back" onClick={()=>setDialog(null)}><ArrowLeft size={21}/></button><label className="search-box dialog-search people-search-input"><input autoFocus aria-label="Search names or username" value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setShowAllPeopleResults(false)}} placeholder="Search"/>{username&&<button className="people-search-clear" aria-label="Clear search" type="button" onClick={()=>{setUsername('');setSearchNotice('');setShowAllPeopleResults(false)}}><X size={17}/></button>}<button className="people-search-icon" type="button" aria-label="Search people" disabled={!username.trim()||usernameSearchBusy} onClick={()=>{setShowAllPeopleResults(true);void handleUsernameSearch(username)}}><Search size={20}/></button></label><button className="icon-button people-qr-scan" type="button" aria-label="Scan Chater QR code" title="Scan Chater QR code" onClick={()=>{setQrScannerStatus('Starting camera…');setQrManualUsername('');setQrScannerOpen(true)}}><QrCode size={20}/></button></div></>:<div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>}{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<>{!securityPanel&&<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div></>}{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
+    {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className={dialog==='search'?'dialog-card people-search-screen full-screen-dialog':dialog==='new-chat'?'dialog-card new-chat-screen full-screen-dialog':'dialog-card'} role="dialog" aria-modal="true" aria-labelledby="dialog-title">{dialog==='new-chat'||dialog==='search'?<><h2 id="dialog-title" className="a11y-heading">{dialog==='new-chat'?'Start a conversation':'Find people'}</h2><div className="people-search-toolbar"><button className="icon-button people-search-back" type="button" aria-label="Back" onClick={()=>setDialog(null)}><ArrowLeft size={21}/></button><label className="search-box dialog-search people-search-input"><input autoFocus aria-label="Search names or username" value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setShowAllPeopleResults(false)}} placeholder="Search"/>{username&&<button className="people-search-clear" aria-label="Clear search" type="button" onClick={()=>{setUsername('');setSearchNotice('');setShowAllPeopleResults(false)}}><X size={17}/></button>}<button className="people-search-icon" type="button" aria-label="Search people" disabled={!username.trim()||usernameSearchBusy} onClick={()=>{setShowAllPeopleResults(true);void handleUsernameSearch(username)}}><Search size={20}/></button></label><button className="icon-button people-qr-scan" type="button" aria-label="Scan Chater QR code" title="Scan Chater QR code" onClick={()=>{setQrScannerStatus('Starting camera…');setQrManualUsername('');setQrScannerOpen(true)}}><QrCode size={20}/></button></div>{authUser&&<button className="contact-sync-trigger" type="button" aria-expanded={contactSyncExpanded} onClick={()=>{setContactSyncExpanded(open=>!open);setContactSyncNotice('')}}><Users size={17}/>{contactSyncExpanded?'Hide contact sync':'Sync contacts'}</button>}{contactSyncExpanded&&<section className="contact-sync-panel" aria-label="Contact synchronization"><div className="contact-sync-intro"><strong>Find people from your contacts</strong><p>Chater asks your device to share only the names you select. Names are checked against public Chater display names. Phone numbers, email addresses and contact photos are not requested or saved.</p><p>Names are not unique, so results are only possible matches. Open a profile and confirm it is the right person before adding them.</p></div><button className="primary-button contact-sync-action" type="button" disabled={contactSyncBusy} onClick={()=>void handleContactSync()}>{contactSyncBusy?'Checking selected names…':'Choose contacts'}</button>{contactSyncNotice&&<p className="contact-sync-notice" role="status">{contactSyncNotice}</p>}{savedContactsBusy&&<p className="search-progress" role="status">Loading your Chater contacts…</p>}{savedContacts.length>0&&<div className="contact-sync-list"><strong>Your Chater contacts</strong><div className="username-search-results">{savedContacts.map(contact=><button type="button" className="username-search-result" key={contact.uid} onClick={()=>void openPublicProfile(contact)} aria-label={`View ${contact.displayName} profile`}><ProfileAvatar photoURL={contact.photoURL} displayName={contact.displayName} className="username-search-avatar"/><div><strong>{contact.displayName}</strong><span>@{contact.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div></div>}{contactMatches.length>0&&<div className="contact-sync-list"><strong>Possible matches</strong>{contactMatches.map(group=><div className="contact-match-group" key={normalizeContactDisplayName(group.contactName)}><span>{group.contactName}</span>{group.matches.length>0?<div className="username-search-results">{group.matches.map(match=><button type="button" className="username-search-result" key={match.uid} onClick={()=>void openPublicProfile(match)} aria-label={`Review possible match ${match.displayName}`}><ProfileAvatar photoURL={match.photoURL} displayName={match.displayName} className="username-search-avatar"/><div><strong>{match.displayName}</strong><span>@{match.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div>:<p>No exact public display-name match. Search by username instead.</p>}</div>)}</div>}</section>}</>:<div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>}{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<>{!securityPanel&&<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">Theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">System follows your device appearance setting and updates when it changes.</p></section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">Chat wallpaper</h3><span>{wallpapers.find(item => item.id === wallpaper)?.name}</span></div><div className="wallpaper-options" role="group" aria-label="Choose a chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={wallpaper === item.id} onClick={()=>setWallpaper(item.id)}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="Chat wallpaper preview"><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><p className="accent-help">Preview your wallpaper here. It will be used on chat conversation backgrounds as messaging is connected.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div><p className="accent-help">Choose the shape of message bubbles. Your choice is saved on this device and will style connected chats.</p></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div></>}{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
   <div className="dialog-head"><div><p className="eyebrow">ACCOUNT PROTECTION</p><h3>Privacy and security</h3></div><button className="icon-button" aria-label="Close security settings" onClick={()=>{setSecurityPanel(false);setSecurityNotice('')}}><X size={18}/></button></div>
   <div className="security-status-card"><div><strong>Email address</strong><span>{authUser?.email || 'No email address available'}</span></div><span className={authUser?.emailVerified?'security-status verified':'security-status pending'}>{authUser?.emailVerified?'Verified':'Not verified'}</span></div>
   <div className="security-divider"/>
@@ -945,7 +1125,7 @@ export default function App() {
               throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
             }
             transaction.set(usernameRef, { uid: credential.user.uid, username: registrationUsername, createdAt: serverTimestamp() })
-            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, usernameLower: registrationUsername.toLowerCase(), displayName: registrationName.trim(), displayNameLower: registrationName.trim().toLowerCase(), createdAt: serverTimestamp() }, { merge: true })
+            transaction.set(userProfileRef, { uid: credential.user.uid, username: registrationUsername, usernameLower: registrationUsername.toLowerCase(), displayName: registrationName.trim(), displayNameLower: registrationName.trim().replace(/\\s+/g, ' ').toLowerCase(), createdAt: serverTimestamp() }, { merge: true })
           })
         } catch (reservationError) {
           await deleteDoc(userProfileRef).catch(() => undefined)
@@ -1122,7 +1302,7 @@ export default function App() {
           {publicProfile.location && <div className="public-profile-detail"><span>Location</span><p>{publicProfile.location}</p></div>}
           {publicProfile.occupation && <div className="public-profile-detail"><span>Occupation</span><p>{publicProfile.occupation}</p></div>}
         </section> : !publicProfileBusy && <p className="public-profile-empty">No additional profile information has been shared.</p>}
-        <button type="button" className="primary-button public-profile-message" onClick={openConversationEntry} disabled={!authUser || publicProfile.uid === authUser.uid}><MessageCircle size={18}/>Message</button>
+        {authUser&&publicProfile.uid!==authUser.uid&&<button type="button" className="secondary-button public-profile-contact" disabled={contactActionBusy} onClick={()=>void (isSavedContact(publicProfile.uid)?removePublicProfileFromContacts(publicProfile):savePublicProfileAsContact(publicProfile))}><Users size={17}/>{contactActionBusy?'Saving…':isSavedContact(publicProfile.uid)?'Remove from contacts':'Add to contacts'}</button>}{contactActionNotice&&<p className="contact-action-notice" role="status">{contactActionNotice}</p>}<button type="button" className="primary-button public-profile-message" onClick={openConversationEntry} disabled={!authUser || publicProfile.uid === authUser.uid}><MessageCircle size={18}/>Message</button>
       </div>
     </section>}
     {conversationTarget && <section className="public-profile-screen conversation-entry-screen" role="dialog" aria-modal="true" aria-label={`Conversation with ${conversationTarget.displayName}`}>
