@@ -9,6 +9,7 @@ type ConversationListProps = {
   search: string
   onOpen: (user: ChatUser) => void
   onStartConversation: () => void
+  onFindPeople: () => void
 }
 
 function formatConversationTime(value: unknown): string {
@@ -28,7 +29,7 @@ function ConversationAvatar({ user }: { user: ChatUser }) {
   </span>
 }
 
-export default function ConversationList({ userId, search, onOpen, onStartConversation }: ConversationListProps) {
+export default function ConversationList({ userId, search, onOpen, onStartConversation, onFindPeople }: ConversationListProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -112,16 +113,21 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
   }, [conversations, search])
 
   if (!userId) {
-    return <div className="empty-state chat-empty">
-      <div className="conversation-empty-icon"><MessageCircle size={34}/></div>
-      <p className="eyebrow">YOUR CHATER INBOX</p>
-      <h2>Sign in to start chatting.</h2>
-      <p className="empty-description">Find any Chater member, send a message, and let them decide whether to reply or block you.</p>
-      <button className="primary-button" onClick={onStartConversation}>Sign in to chat</button>
-    </div>
+    return <section className="conversation-list-section" aria-label="Your conversations">
+      <h1 className="a11y-heading">Chats</h1>
+      <div className="empty-state chat-empty">
+        <div className="conversation-empty-icon"><MessageCircle size={34}/></div>
+        <p className="eyebrow">YOUR CHATER INBOX</p>
+        <h2>Conversations start here.</h2>
+        <p className="empty-description">Find any Chater member. Sign in to send a message, reply whenever you want, or block an account from contacting you.</p>
+        <button className="primary-button" onClick={onStartConversation}><Plus size={17}/> Start a conversation</button>
+        <button className="text-button" onClick={onFindPeople}>Find people by username</button>
+      </div>
+    </section>
   }
 
   return <section className="conversation-list-section" aria-label="Your conversations">
+    <h1 className="a11y-heading">Chats</h1>
     {notice && <p className="conversation-list-notice" role="status">{notice}</p>}
     {busy && conversations.length === 0 && <p className="conversation-list-loading" role="status">Loading your conversations…</p>}
     {!busy && !notice && conversations.length === 0 && <div className="empty-state chat-empty conversation-list-empty">
@@ -130,6 +136,7 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
       <h2>Your conversations<br/>start here.</h2>
       <p className="empty-description">Anyone can message you directly. You can reply whenever you want or block an account from contacting you.</p>
       <button className="primary-button" onClick={onStartConversation}><Plus size={17}/> Start a conversation</button>
+      <button className="text-button" onClick={onFindPeople}>Find people by username</button>
     </div>}
     {!busy && conversations.length > 0 && filteredConversations.length === 0 && <p className="conversation-list-loading">No conversations match this search.</p>}
     <div className="conversation-list">
