@@ -200,7 +200,6 @@ export default function App() {
   const [qrDisplayOpen, setQrDisplayOpen] = useState(false)
   const [qrCopied, setQrCopied] = useState(false)
   const qrVideoRef = useRef<HTMLVideoElement | null>(null)
-  const qrScannerStreamRef = useRef<MediaStream | null>(null)
   const usernameSearchRequest = useRef(0)
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
@@ -651,7 +650,6 @@ export default function App() {
           stream.getTracks().forEach(track => track.stop())
           return
         }
-        qrScannerStreamRef.current = stream
         const video = qrVideoRef.current
         if (!video) return
         video.srcObject = stream
@@ -681,7 +679,6 @@ export default function App() {
       cancelled = true
       if (animationFrame) window.cancelAnimationFrame(animationFrame)
       stream?.getTracks().forEach(track => track.stop())
-      qrScannerStreamRef.current = null
       if (qrVideoRef.current) qrVideoRef.current.srcObject = null
     }
   }, [qrScannerOpen, handleScannedQRCode])
