@@ -111,14 +111,17 @@ describe('Chater application shell', () => {
     vi.mocked(getDoc)
       .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
       .mockResolvedValueOnce({ exists: () => false, data: () => undefined } as never)
+    openApp()
+    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
+    // The signed-in user's Moments listener calls getDocs first; provide the
+    // legacy profile result only after that initial listener has completed.
+    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
     vi.mocked(getDocs).mockResolvedValueOnce({
       docs: [{
         id: 'legacy-member',
         data: () => ({ uid: 'legacy-member', username: 'mee_maw', displayName: 'Mee Maw', photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/legacy-member/avatar.jpg' })
       }]
     } as never)
-    openApp()
-    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'Find people by username' }))
     fireEvent.change(screen.getByPlaceholderText('@username'), { target: { value: 'Mee_maw' } })
     fireEvent.click(screen.getByRole('button', { name: 'Search username' }))
