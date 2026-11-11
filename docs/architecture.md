@@ -52,3 +52,13 @@ A member blocks another account by creating `users/{uid}/blocked/{targetUid}`. T
 Blocking is enforced by Firestore Security Rules, not merely by hiding the composer in the client. The web deployment does not publish those rules; publish the repository's `firestore.rules` file in Firebase Console before using live messaging in production.
 
 Direct messaging here is authenticated transport and access control. It is **not end-to-end encrypted**; do not describe it as E2EE.
+
+## Conversation overflow menu
+
+Each direct chat includes a top-right options menu for viewing the other member's public Chater identity, searching the current message history, reporting the account, blocking/unblocking, choosing a per-chat wallpaper, and opening secondary chat actions.
+
+- Reports are created under `reports/{reportId}`; Firestore allows a signed-in member to create a narrowly shaped report but does not allow client reads or edits.
+- Clear chat is device-local: it hides older messages and the preview on the current device only. It does not delete the shared Firestore messages or the other participant's copy.
+- Export chat creates a plain-text download in the browser.
+- Per-chat theme and mute preferences are stored locally. Push notifications are not yet connected, so muting is currently a saved preference only.
+- Media, links and documents are not available until attachment support exists. Individual conversation shortcuts are also not supported yet.
