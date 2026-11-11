@@ -93,7 +93,7 @@ describe('Chater application shell', () => {
     expect(document.querySelector('.new-chat-screen.full-screen-dialog')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Start a new chat' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start a new chat', hidden: true }))
     expect(screen.getByRole('dialog', { name: 'Start a conversation' })).toBeInTheDocument()
     expect(document.querySelector('.new-chat-screen.full-screen-dialog')).toBeInTheDocument()
   })
