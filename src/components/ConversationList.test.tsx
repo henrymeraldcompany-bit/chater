@@ -102,8 +102,9 @@ describe('ConversationList saved contacts', () => {
       />
     )
 
-    await screen.findByRole('button', { name: 'Open conversation with Ada Lovelace' })
-    expect(screen.getAllByRole('button', { name: 'Open conversation with Ada Lovelace' })).toHaveLength(1)
-    expect(screen.getByText('You: Hello')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Open conversation with Ada Lovelace' })).toHaveLength(1)
+      expect(screen.getByText('You: Hello')).toBeInTheDocument()
+    })
   })
 })
