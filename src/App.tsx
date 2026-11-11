@@ -1009,12 +1009,27 @@ export default function App() {
     const momentsSnapshot = await getDocs(firestoreQuery(collection(db, 'moments'), where('uid', '==', authUser.uid)))
     const ownedMoments = momentsSnapshot.docs
     await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
-    // Firestore does not cascade deletes into subcollections. Explicitly remove
-    // this account's private contact links before deleting its parent profile.
-    const contactSnapshot = await getDocs(collection(db, 'users', authUser.uid, 'contacts'))
-    await Promise.all(contactSnapshot.docs.map(contact =>
-      deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))
-    ))
+    // Firestore does not cascade deletes into subcollections. Remove private
+    // contact and block links before deleting the profile document.
+    const [contactSnapshot, blockedSnapshot, conversationsSnapshot] = await Promise.all([
+      getDocs(collection(db, 'users', authUser.uid, 'contacts')),
+      getDocs(collection(db, 'users', authUser.uid, 'blocked')),
+      getDocs(firestoreQuery(collection(db, 'conversations'), where('participants', 'array-contains', authUser.uid)))
+    ])
+    await Promise.all([
+      ...contactSnapshot.docs.map(contact => deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))),
+      ...blockedSnapshot.docs.map(block => deleteDoc(doc(db, 'users', authUser.uid, 'blocked', block.id)))
+    ])
+    // Conversation messages are shared by the two participants. Account
+    // deletion removes these threads and their messages rather than leaving
+    // private message documents orphaned beneath a deleted profile.
+    for (const conversation of conversationsSnapshot.docs) {
+      const messages = await getDocs(collection(db, 'conversations', conversation.id, 'messages'))
+      await Promise.all(messages.docs.map(message =>
+        deleteDoc(doc(db, 'conversations', conversation.id, 'messages', message.id))
+      ))
+      await deleteDoc(doc(db, 'conversations', conversation.id))
+    }
     const usernameRef = profileUsername ? doc(db, 'usernames', profileUsername) : null
     const profileRef = doc(db, 'users', authUser.uid)
     await runTransaction(db, async transaction => {
