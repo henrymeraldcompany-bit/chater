@@ -676,7 +676,7 @@ export default function App() {
           <div className="filter-row" role="group" aria-label="Chat filters">{filters.map(item=><button key={item} className={filter===item?'filter-chip selected':'filter-chip'} onClick={()=>setFilter(item)}>{item}</button>)}</div>
           <div className="empty-state chat-empty"><h1 className="a11y-heading">Chats</h1><EmptyIllustration icon={MessageCircle}/><p className="eyebrow">A FRESH START</p><h2>Your conversations<br/>start here.</h2><p className="empty-description">{query?'No conversations match that search yet.':'Find someone by their unique Chater username and say hello.'}</p><button className="primary-button" onClick={()=>setDialog('new-chat')}><Plus size={17}/> Start a conversation</button><button className="text-button" onClick={()=>setDialog('search')}>Find people by username <ArrowUpRight size={15}/></button></div>
         </>}
-        {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share photos and videos that disappear after 24 hours.</p><MomentsScreen groups={momentGroups} photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My Moments'} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={groupIndex=>setMomentViewerIndex(groupIndex)}/></>}
+        {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share photos and videos that disappear after 24 hours.</p><MomentsScreen groups={momentGroups} userId={authUser?.uid || ''} photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My Moments'} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={groupIndex=>setMomentViewerIndex(groupIndex)}/></>}
         {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
         {activeTab==='Calls'&&<CallsScreen scheduledCalls={scheduledCalls} onStartCall={()=>setDialog('call')} onScheduleCall={()=>setDialog('schedule')}/>}
         {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>{setSecurityPanel(false);setDialog('settings')}} onSecurity={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('');setDialog('settings')}} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}}/>}
@@ -919,9 +919,9 @@ function formatMomentTime(timestamp: number) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-function MomentsScreen({groups,photoURL,displayName,onAdd,onView}:{groups:MomentGroup[];photoURL:string;displayName:string;onAdd:()=>void;onView:(groupIndex:number)=>void}) {
-  const myGroup = groups[0]
-  const people = groups.slice(1)
+function MomentsScreen({groups,userId,photoURL,displayName,onAdd,onView}:{groups:MomentGroup[];userId:string;photoURL:string;displayName:string;onAdd:()=>void;onView:(groupIndex:number)=>void}) {
+  const myGroup = groups.find(group => group.uid === userId)
+  const people = groups.filter(group => group.uid !== userId)
   const ownCount = myGroup?.moments.length || 0
   const previewOf = (group:MomentGroup) => group.moments[group.moments.length - 1]
   return <div className="moments-screen">
@@ -940,9 +940,9 @@ function MomentsScreen({groups,photoURL,displayName,onAdd,onView}:{groups:Moment
           <span className="moment-card-add" onClick={event=>{event.stopPropagation();onAdd()}} aria-label="Add a Moment"><Plus size={19}/></span>
           <span className="moment-card-count">{ownCount ? ownCount + (ownCount===1?' Moment':' Moments') : 'Share a Moment'}</span>
         </button>
-        {people.map((group,index)=>{
+        {people.map(group=>{
           const latest=previewOf(group)
-          const groupIndex=index+1
+          const groupIndex=groups.indexOf(group)
           return <button type="button" className="moment-person-card" key={group.uid} onClick={()=>onView(groupIndex)}>
             <span className="moment-person-image">
               {latest?.mediaType==='video'
