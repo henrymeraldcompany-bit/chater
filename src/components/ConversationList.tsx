@@ -126,7 +126,7 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
     {busy && conversations.length === 0 && <p className="conversation-list-loading" role="status">Loading your conversations…</p>}
     {!busy && !notice && conversations.length === 0 && <div className="empty-state chat-empty conversation-list-empty">
       <div className="conversation-empty-icon"><MessageCircle size={34}/></div>
-      <p className="eyebrow">NO MESSAGE REQUESTS</p>
+      <p className="eyebrow">YOUR CHATS</p>
       <h2>Your conversations<br/>start here.</h2>
       <p className="empty-description">Anyone can message you directly. You can reply whenever you want or block an account from contacting you.</p>
       <button className="primary-button" onClick={onStartConversation}><Plus size={17}/> Start a conversation</button>
