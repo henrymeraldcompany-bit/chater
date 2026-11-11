@@ -1089,3 +1089,78 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .new-chat-screen .search-progress {
   margin: 14px 2px 0;
 }
+
+
+/* Search screen matches the compact native search layout in the supplied reference. */
+.people-search-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0 0 8px;
+}
+.people-search-back {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 48px;
+  padding: 0;
+  color: var(--text-strong, currentColor);
+  border-radius: 50%;
+}
+.people-search-screen .people-search-input,
+.new-chat-screen .people-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 56px;
+  height: 56px;
+  margin: 0;
+  padding: 0 7px 0 19px;
+  border-radius: 999px;
+  background: var(--surface, transparent);
+}
+.people-search-screen .people-search-input input,
+.new-chat-screen .people-search-input input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  font-size: 16px;
+}
+.people-search-screen .people-search-input input::placeholder,
+.new-chat-screen .people-search-input input::placeholder {
+  color: var(--muted, #929292);
+  opacity: 1;
+}
+.people-search-clear {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted, #929292);
+  background: transparent;
+}
+.people-search-screen .people-search-icon,
+.new-chat-screen .people-search-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--muted, #929292);
+  border-radius: 50%;
+  background: transparent;
+}
+.people-search-screen .people-search-results,
+.new-chat-screen .people-search-results {
+  flex: 1 1 auto;
+}
+.people-search-screen .username-search-results,
+.new-chat-screen .username-search-results {
+  flex: 0 1 auto;
+  margin-top: 18px;
+}
