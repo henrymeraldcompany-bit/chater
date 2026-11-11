@@ -600,7 +600,7 @@ describe('Chater application shell', () => {
     const otherMomentCards = await screen.findAllByRole('button', { name: /Other Person/ })
     expect(otherMomentCards).toHaveLength(1)
     expect(otherMomentCards[0]).toHaveTextContent('2 Moments')
-    expect(screen.getAllByText('Other Person')).toHaveLength(2)
+    expect(screen.getAllByText('Other Person')).toHaveLength(1)
     fireEvent.click(otherMomentCards[0])
     expect(screen.getByRole('dialog', { name: 'Moment from Other Person' })).toBeInTheDocument()
     expect(screen.getByText('1 of 2')).toBeInTheDocument()
