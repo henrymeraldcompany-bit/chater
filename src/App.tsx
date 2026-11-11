@@ -11,6 +11,7 @@ type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: str
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
 type UsernameSearchResult = { uid: string; username: string; displayName: string; photoURL: string }
+type PublicUserProfile = UsernameSearchResult & { about: string; location: string; occupation: string }
 async function syncLegacyUsername(uid: string, rawUsername: string, rawDisplayName = ''): Promise<void> {
   const db = firestoreDb
   if (!db) return
@@ -153,6 +154,10 @@ export default function App() {
   const [usernameSearchBusy, setUsernameSearchBusy] = useState(false)
   const [usernameSearchResults, setUsernameSearchResults] = useState<UsernameSearchResult[]>([])
   const [showAllPeopleResults, setShowAllPeopleResults] = useState(false)
+  const [publicProfile, setPublicProfile] = useState<PublicUserProfile | null>(null)
+  const [publicProfileBusy, setPublicProfileBusy] = useState(false)
+  const [publicProfileNotice, setPublicProfileNotice] = useState('')
+  const [conversationTarget, setConversationTarget] = useState<UsernameSearchResult | null>(null)
   const usernameSearchRequest = useRef(0)
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
@@ -497,6 +502,52 @@ export default function App() {
       if (requestId === usernameSearchRequest.current) setUsernameSearchBusy(false)
     }
   }, [authUser])
+  const openPublicProfile = useCallback(async (result: UsernameSearchResult) => {
+    if (!authUser || result.uid === authUser.uid) return
+    setDialog(null)
+    setConversationTarget(null)
+    setPublicProfileBusy(true)
+    setPublicProfileNotice('')
+    setPublicProfile({
+      ...result, about: '', location: '', occupation: ''
+    })
+    try {
+      if (firestoreDb) {
+        const snapshot = await getDoc(doc(firestoreDb, 'users', result.uid))
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Record<string, unknown>
+          // Explicitly whitelist public fields. Never copy email or other private account data.
+          setPublicProfile({
+            uid: result.uid,
+            username: result.username,
+            displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : result.displayName,
+            photoURL: typeof data.photoURL === 'string' ? data.photoURL : result.photoURL,
+            about: typeof data.about === 'string' ? data.about.trim() : '',
+            location: typeof data.location === 'string' ? data.location.trim() : '',
+            occupation: typeof data.occupation === 'string' ? data.occupation.trim() : ''
+          })
+        }
+      }
+    } catch {
+      setPublicProfileNotice('Some profile details could not be loaded. Showing available public information.')
+    } finally {
+      setPublicProfileBusy(false)
+    }
+  }, [authUser])
+  const closePublicProfile = () => {
+    setPublicProfile(null)
+    setPublicProfileNotice('')
+  }
+  const openConversationEntry = () => {
+    if (!publicProfile || !authUser || publicProfile.uid === authUser.uid) return
+    setConversationTarget({
+      uid: publicProfile.uid,
+      username: publicProfile.username,
+      displayName: publicProfile.displayName,
+      photoURL: publicProfile.photoURL
+    })
+    setPublicProfile(null)
+  }
   useEffect(() => {
     if (dialog !== 'new-chat' && dialog !== 'search') return
     usernameSearchRequest.current += 1
@@ -913,7 +964,26 @@ export default function App() {
       <button className="primary-button dialog-action" type="submit" disabled={passwordRecoveryBusy}>{passwordRecoveryBusy?'Sending reset email…':'Send reset link'}</button>
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
-    </form>:<>{usernameSearchBusy&&<p className="search-progress" role="status">Finding members…</p>}{usernameSearchResults.length>0&&<div className="username-search-results" aria-label="Matching Chater members">{usernameSearchResults.slice(0,showAllPeopleResults?100:10).map(result=><div className="username-search-result" key={result.uid}><ProfileAvatar photoURL={result.photoURL} displayName={result.displayName} className="username-search-avatar"/><div><strong>{result.displayName}</strong><span>@{result.username}</span></div></div>)}</div>}{usernameSearchResults.length>10&&!showAllPeopleResults&&<button className="secondary-button people-search-more" type="button" onClick={()=>setShowAllPeopleResults(true)}>See more results ({usernameSearchResults.length-10} more)</button>}{searchNotice&&!usernameSearchResults.length&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
+    </form>:<>{usernameSearchBusy&&<p className="search-progress" role="status">Finding members…</p>}{usernameSearchResults.length>0&&<div className="username-search-results" aria-label="Matching Chater members">{usernameSearchResults.slice(0,showAllPeopleResults?100:10).map(result=><button type="button" className="username-search-result" key={result.uid} onClick={()=>void openPublicProfile(result)} aria-label={`View ${result.displayName} profile`}><ProfileAvatar photoURL={result.photoURL} displayName={result.displayName} className="username-search-avatar"/><div><strong>{result.displayName}</strong><span>@{result.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div>}{usernameSearchResults.length>10&&!showAllPeopleResults&&<button className="secondary-button people-search-more" type="button" onClick={()=>setShowAllPeopleResults(true)}>See more results ({usernameSearchResults.length-10} more)</button>}{searchNotice&&!usernameSearchResults.length&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
+    {publicProfile && <section className="public-profile-screen" role="dialog" aria-modal="true" aria-label={`${publicProfile.displayName} profile`}>
+      <header className="public-profile-toolbar"><button type="button" className="icon-button" aria-label="Back to people search" onClick={closePublicProfile}><ArrowLeft size={21}/></button><strong>Profile</strong></header>
+      <div className="public-profile-content">
+        <div className="public-profile-hero"><ProfileAvatar photoURL={publicProfile.photoURL} displayName={publicProfile.displayName} className="public-profile-avatar"/><h1>{publicProfile.displayName}</h1><p>@{publicProfile.username}</p></div>
+        {publicProfileBusy && <p className="search-progress" role="status">Loading profile…</p>}
+        {publicProfileNotice && <p className="dialog-notice" role="status">{publicProfileNotice}</p>}
+        {(publicProfile.about || publicProfile.location || publicProfile.occupation) ? <section className="public-profile-details" aria-label="Public profile details">
+          {publicProfile.about && <div className="public-profile-detail"><span>About</span><p>{publicProfile.about}</p></div>}
+          {publicProfile.location && <div className="public-profile-detail"><span>Location</span><p>{publicProfile.location}</p></div>}
+          {publicProfile.occupation && <div className="public-profile-detail"><span>Occupation</span><p>{publicProfile.occupation}</p></div>}
+        </section> : !publicProfileBusy && <p className="public-profile-empty">No additional profile information has been shared.</p>}
+        <button type="button" className="primary-button public-profile-message" onClick={openConversationEntry} disabled={!authUser || publicProfile.uid === authUser.uid}><MessageCircle size={18}/>Message</button>
+      </div>
+    </section>}
+    {conversationTarget && <section className="public-profile-screen conversation-entry-screen" role="dialog" aria-modal="true" aria-label={`Conversation with ${conversationTarget.displayName}`}>
+      <header className="public-profile-toolbar"><button type="button" className="icon-button" aria-label="Back to profile" onClick={()=>{setConversationTarget(null);void openPublicProfile(conversationTarget)}}><ArrowLeft size={21}/></button><ProfileAvatar photoURL={conversationTarget.photoURL} displayName={conversationTarget.displayName} className="conversation-entry-avatar"/><div><strong>{conversationTarget.displayName}</strong><span>@{conversationTarget.username}</span></div></header>
+      <div className="conversation-entry-body"><MessageCircle size={38}/><h1>Start a conversation</h1><p>Your private conversation with <strong>{conversationTarget.displayName}</strong> will appear here.</p><p className="conversation-entry-note">Messaging is being connected in Phase 5. Messages cannot be sent yet.</p></div>
+      <form className="conversation-entry-composer" onSubmit={event=>event.preventDefault()}><input aria-label="Message" placeholder="Messaging is not available yet" disabled/><button type="submit" aria-label="Send message" disabled><ArrowUpRight size={19}/></button></form>
+    </section>}
     {activeTab==='Moments' && momentViewerIndex !== null && <MomentViewer groups={momentGroups} initialGroupIndex={momentViewerIndex} onClose={closeMomentViewer}/>}
   </main>
 }
