@@ -10,6 +10,7 @@ type ProfileDetails = { about: string; location: string; occupation: string }
 type MomentEntry = { id: string; uid: string; displayName: string; mediaUrl: string; mediaType: 'image' | 'video' | 'audio'; caption: string; createdAt: number; expiresAt: number }
 type MomentGroup = { uid: string; displayName: string; photoURL: string; previewURL: string; moments: MomentEntry[] }
 type ScheduledCall = { id: string; phone: string; at: string }
+type UsernameSearchResult = { username: string; displayName: string }
 const emptyProfileDetails: ProfileDetails = { about: '', location: '', occupation: '' }
 const tabs: { label: Tab; icon: typeof MessageCircle }[] = [
   { label: 'Chats', icon: MessageCircle }, { label: 'Moments', icon: CirclePlay },
@@ -132,6 +133,8 @@ export default function App() {
   const [securityVerificationBusy, setSecurityVerificationBusy] = useState(false)
   const [username, setUsername] = useState('')
   const [searchNotice, setSearchNotice] = useState('')
+  const [usernameSearchBusy, setUsernameSearchBusy] = useState(false)
+  const [usernameSearchResult, setUsernameSearchResult] = useState<UsernameSearchResult | null>(null)
   const [registrationName, setRegistrationName] = useState('')
   const [registrationEmail, setRegistrationEmail] = useState('')
   const [registrationUsername, setRegistrationUsername] = useState('')
@@ -407,6 +410,39 @@ export default function App() {
     })
     setProfileUsername(normalized)
     try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
+  }
+  const handleUsernameSearch = async () => {
+    const normalized = username.trim().replace(/^@/, '').toLowerCase()
+    setSearchNotice('')
+    setUsernameSearchResult(null)
+    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
+      setSearchNotice('Enter a username with 3–20 lowercase letters, numbers or underscores.')
+      return
+    }
+    if (!authUser || !firestoreDb) {
+      setSearchNotice('Sign in with a verified Chater account to search for people.')
+      return
+    }
+    setUsernameSearchBusy(true)
+    try {
+      const usernameSnapshot = await getDoc(doc(firestoreDb, 'usernames', normalized))
+      if (!usernameSnapshot.exists()) {
+        setSearchNotice(`No Chater account was found with the username @${normalized}.`)
+        return
+      }
+      const ownerUid = usernameSnapshot.data()?.uid
+      if (typeof ownerUid !== 'string' || !ownerUid) throw new Error('This username record is invalid.')
+      const profileSnapshot = await getDoc(doc(firestoreDb, 'users', ownerUid))
+      const profile = profileSnapshot.data() || {}
+      setUsernameSearchResult({
+        username: normalized,
+        displayName: typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName : normalized
+      })
+    } catch {
+      setSearchNotice('Username search is temporarily unavailable. Check your connection and try again.')
+    } finally {
+      setUsernameSearchBusy(false)
+    }
   }
   const handleDisplayNameChange = async (nextName: string) => {
     if (!authUser) throw new Error('Sign in to edit your profile name.')
@@ -817,7 +853,7 @@ export default function App() {
       <button className="primary-button dialog-action" type="submit" disabled={passwordRecoveryBusy}>{passwordRecoveryBusy?'Sending reset email…':'Send reset link'}</button>
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
-    </form>:<><p className="dialog-copy">Search with someone's unique username. Their email address stays private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('')}} placeholder="@username"/><button aria-label="Clear username" onClick={()=>setUsername('')}><X size={15}/></button></label><button className="primary-button dialog-action" onClick={()=>setSearchNotice('Username discovery will be connected when account and discovery services are implemented.')} disabled={!username.trim()}><Search size={17}/> Search username</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
+    </form>:<><p className="dialog-copy">Search for a Chater member using their exact username. Email addresses remain private.</p><label className="search-box dialog-search"><Search size={18}/><input autoFocus value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setUsernameSearchResult(null)}} placeholder="@username"/><button aria-label="Clear username" type="button" onClick={()=>{setUsername('');setSearchNotice('');setUsernameSearchResult(null)}}><X size={15}/></button></label><button className="primary-button dialog-action" type="button" onClick={()=>void handleUsernameSearch()} disabled={!username.trim()||usernameSearchBusy}>{usernameSearchBusy?'Searching…':<><Search size={17}/> Search username</>}</button>{searchNotice&&<p className="dialog-notice" role="status">{searchNotice}</p>}{usernameSearchResult&&<div className="security-status-card username-search-result" role="status"><div><strong>{usernameSearchResult.displayName}</strong><span>@{usernameSearchResult.username}</span><span>Chater member</span></div><span className="security-status verified">Found</span></div>}</>}</section></div>}
     {activeTab==='Moments' && momentViewerIndex !== null && <MomentViewer groups={momentGroups} initialGroupIndex={momentViewerIndex} onClose={closeMomentViewer}/>}
   </main>
 }
