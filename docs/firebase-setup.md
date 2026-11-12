@@ -64,3 +64,19 @@ A block is stored privately at `users/{uid}/blocked/{targetUid}`. Firestore rule
 The direct-message screen has a top-right options menu for profile information, in-chat search, reporting, blocking, chat theme selection, and secondary actions. Reports are created in the private `reports` collection. The current `firestore.rules` file allows authenticated report creation with a limited set of reason codes and denies report reads/updates/deletes from the client.
 
 **Publish the latest `firestore.rules` file again** after adding report support. Clear chat only hides history on the current device; it does not delete the other participant's messages. Chat theme and mute preferences are local to the device. Push notifications and message attachments are not connected yet, so the mute option stores a future preference and the media/links/docs option explains that attachments are not available.
+
+## Account appearance and image chat wallpapers
+
+The general Appearance settings (Dark, Light, or System), general wallpaper preset/image, and message-bubble shape are saved in `users/{uid}.preferences`. The same values are cached locally with the UID in the key, so signing in to another account on the same phone loads that account's own choices.
+
+Each direct conversation can also have its own wallpaper. Per-chat theme and image URL are saved in the signed-in owner's private subcollection `users/{uid}/chatPreferences/{conversationId}`. A personal wallpaper overrides the general wallpaper only in that conversation; removing the personal image restores the general theme.
+
+Image wallpapers use the existing Cloudinary unsigned upload preset and are stored in account-specific folders:
+
+- General theme: `chater/wallpapers/{uid}/general`
+- Individual conversation: `chater/wallpapers/{uid}/chats/{conversationId}`
+
+Image files must be no larger than 8 MB. The uploads use an account-scoped public-ID prefix so the secure `chater-account-deletion` Worker also removes wallpaper images when an account is deleted.
+
+**Publish the latest repository `firestore.rules` file again** in Firebase Console → Firestore Database → Rules → Publish. It contains the owner-only `chatPreferences` rule. The GitHub Pages workflow does not deploy Firestore rules.
+
