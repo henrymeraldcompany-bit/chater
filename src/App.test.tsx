@@ -5,6 +5,7 @@ import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/
 import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
 import ConversationScreen from './components/ConversationScreen'
 import { createConversationId, isValidChatMessage, normalizeChatMessage } from './lib/chat'
+import { CHATER_MEDIA_BASE_URL, isChaterMediaUrl } from './lib/media'
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
@@ -64,6 +65,17 @@ function openApp() {
   act(() => { vi.advanceTimersByTime(1500) })
   vi.useRealTimers()
 }
+
+
+describe('Chater R2 media URLs', () => {
+  it('accepts only HTTPS media paths from the configured Chater R2 Worker', () => {
+    expect(isChaterMediaUrl(CHATER_MEDIA_BASE_URL + '/media/users/member/profile/avatar.png')).toBe(true)
+    expect(isChaterMediaUrl('https://res.cloudinary.com/amzak6nf/image/upload/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('http://chater-media.henrymeraldcompany.workers.dev/media/users/member/profile/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('https://other.example/media/users/member/profile/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('https://chater-media.henrymeraldcompany.workers.dev/not-media/member/avatar.png')).toBe(false)
+  })
+})
 
 describe('Chater QR profile codes', () => {
   it('extracts usernames from Chater QR links and handles while rejecting unrelated links', () => {
@@ -188,7 +200,7 @@ describe('Chater direct-message rules', () => {
 
   it('uploads and saves a custom image theme for one personal conversation', async () => {
     const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
-    const imageUrl = 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/wallpapers/test-user/chats/conversation/background.png'
+    const imageUrl = 'https://chater-media.henrymeraldcompany.workers.dev/media/users/signed-in-user/wallpapers/chats/conversation/background.png'
     const onWallpaperUpload = vi.fn(async () => imageUrl)
     render(<ConversationScreen
       currentUserId="signed-in-user"
@@ -382,7 +394,7 @@ describe('Chater application shell', () => {
         usernameLower: 'mee_maw',
         displayName: 'Mee Maw',
         displayNameLower: 'mee maw',
-        photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg'
+        photoURL: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/target-user/profile/avatar.jpg'
       })
     }
     vi.mocked(getDocs)
@@ -393,7 +405,7 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Mee Maw')).toBeInTheDocument())
     expect(screen.getByText('@mee_maw')).toBeInTheDocument()
-    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/chater/profiles/target-user/avatar.jpg')
+    expect(document.querySelector('.username-search-result img')).toHaveAttribute('src', 'https://chater-media.henrymeraldcompany.workers.dev/media/users/target-user/profile/avatar.jpg')
     const searchIcon = screen.getByRole('button', { name: 'Search people' })
     expect(searchIcon).toHaveClass('people-search-icon')
     expect(document.querySelector('.people-search-submit')).not.toBeInTheDocument()
@@ -620,8 +632,8 @@ describe('Chater application shell', () => {
   })
 
   it('uploads a custom image for the general chat theme and saves its URL to the account', async () => {
-    const user = { uid: 'wallpaper-user', email: 'wallpaper@example.com', emailVerified: true, photoURL: null, displayName: 'Wallpaper User' }
-    const imageUrl = 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/wallpapers/wallpaper-user/general/background.png'
+    const user = { uid: 'wallpaper-user', email: 'wallpaper@example.com', emailVerified: true, photoURL: null, displayName: 'Wallpaper User', getIdToken: vi.fn(async () => 'test-media-token') }
+    const imageUrl = 'https://chater-media.henrymeraldcompany.workers.dev/media/users/wallpaper-user/wallpapers/general/background.png'
     vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(getDoc).mockResolvedValue({
@@ -630,7 +642,7 @@ describe('Chater application shell', () => {
     } as never)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ secure_url: imageUrl })
+      json: async () => ({ success: true, url: imageUrl })
     }))
 
     openApp()
@@ -649,8 +661,8 @@ describe('Chater application shell', () => {
       { merge: true }
     ))
     expect(fetch).toHaveBeenCalledWith(
-      'https://api.cloudinary.com/v1_1/amzak6nf/image/upload',
-      expect.objectContaining({ method: 'POST' })
+      CHATER_MEDIA_BASE_URL + '/upload',
+      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer test-media-token', 'Content-Type': 'image/png' }), body: file })
     )
   })
 
@@ -938,14 +950,14 @@ describe('Chater application shell', () => {
     expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument()
   })
 
-  it('uploads a profile picture to Cloudinary and saves its URL to Firebase Auth', async () => {
-    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+  it('uploads a profile picture to Cloudflare R2 and saves its URL to Firebase Auth', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example', getIdToken: vi.fn(async () => 'test-media-token') }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(updateProfile).mockResolvedValue(undefined)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ secure_url: 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/profiles/test-user/avatar.png' })
+      json: async () => ({ success: true, url: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/test-user/profile/avatar.png' })
     }))
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
@@ -957,24 +969,24 @@ describe('Chater application shell', () => {
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
     fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [file] } })
-    await waitFor(() => expect(document.querySelector('.profile-avatar img')).toHaveAttribute('src', 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/profiles/test-user/avatar.png'))
+    await waitFor(() => expect(document.querySelector('.profile-avatar img')).toHaveAttribute('src', 'https://chater-media.henrymeraldcompany.workers.dev/media/users/test-user/profile/avatar.png'))
     expect(screen.queryByText('Your profile picture has been updated.')).not.toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
-      'https://api.cloudinary.com/v1_1/amzak6nf/image/upload',
-      expect.objectContaining({ method: 'POST' })
+      CHATER_MEDIA_BASE_URL + '/upload',
+      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer test-media-token', 'Content-Type': 'image/png' }), body: file })
     )
     expect(updateProfile).toHaveBeenCalledWith(user, {
-      photoURL: 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/profiles/test-user/avatar.png'
+      photoURL: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/test-user/profile/avatar.png'
     })
   })
 
-  it('shows a clear Cloudinary upload error and resets the uploading state', async () => {
-    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example' }
+  it('shows a clear R2 upload error and resets the uploading state', async () => {
+    const user = { uid: 'test-user', email: 'henry@example.com', emailVerified: true, photoURL: null, displayName: 'Henry Example', getIdToken: vi.fn(async () => 'test-media-token') }
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
-      json: async () => ({ error: { message: 'Upload preset is not allowed' } })
+      json: async () => ({ error: 'R2 upload permission denied' })
     }))
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
@@ -986,7 +998,7 @@ describe('Chater application shell', () => {
 
     const file = new File(['image bytes'], 'avatar.png', { type: 'image/png' })
     fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [file] } })
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Upload preset is not allowed'))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('R2 upload permission denied'))
     expect(screen.getByLabelText('Add or change profile picture')).toBeEnabled()
   })
 
@@ -1063,8 +1075,8 @@ describe('Chater application shell', () => {
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(getDocs).mockResolvedValue({
       docs: [
-        { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://media.example/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
-        { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://media.example/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
+        { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
+        { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
       ]
     } as never)
 

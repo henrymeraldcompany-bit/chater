@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
 import { createConversationId, isValidChatMessage, normalizeChatMessage, timestampToMillis, type ChatMessage, type ChatUser } from '../lib/chat'
+import { isChaterMediaUrl } from '../lib/media'
 
 type ConversationScreenProps = {
   currentUserId: string
@@ -56,7 +57,7 @@ function readChatTheme(userId: string, conversationId: string): ChatTheme {
 function readChatThemeImage(userId: string, conversationId: string): string {
   try {
     const stored = window.localStorage.getItem('chater:chat-theme-image:' + userId + ':' + conversationId) || ''
-    return /^https:\/\/res\\.cloudinary\\.com\//i.test(stored) ? stored : ''
+    return isChaterMediaUrl(stored) ? stored : ''
   } catch {
     return ''
   }
@@ -130,7 +131,7 @@ export default function ConversationScreen({
       if (!active || !snapshot.exists()) return
       const saved = snapshot.data() as Record<string, unknown>
       const savedTheme = chatThemes.some(item => item.id === saved.theme) ? saved.theme as ChatTheme : theme
-      const savedImage = typeof saved.imageUrl === 'string' && /^https:\/\/res\\.cloudinary\\.com\//i.test(saved.imageUrl) ? saved.imageUrl : image
+      const savedImage = isChaterMediaUrl(saved.imageUrl) ? saved.imageUrl : image
       setChatTheme(savedTheme)
       setChatThemeImageUrl(savedImage)
       try {
@@ -450,7 +451,7 @@ export default function ConversationScreen({
     <header className="public-profile-toolbar conversation-entry-toolbar">
       <button type="button" className="icon-button" aria-label="Back to chats" onClick={onClose}><ArrowLeft size={21}/></button>
       <span className="profile-avatar conversation-entry-avatar" aria-label={target.displayName + ' profile picture'}>
-        {target.photoURL ? <img src={target.photoURL} alt="" /> : target.displayName.trim().charAt(0).toUpperCase()}
+        {isChaterMediaUrl(target.photoURL) ? <img src={target.photoURL} alt="" /> : target.displayName.trim().charAt(0).toUpperCase()}
       </span>
       <div><strong>{target.displayName}</strong><span>@{target.username}</span></div>
       <div className="conversation-menu-anchor" ref={menuRef}>
@@ -504,7 +505,7 @@ export default function ConversationScreen({
 
     {contactInfoOpen && <section className="conversation-contact-card" aria-label="Contact information">
       <button type="button" className="conversation-panel-close" aria-label="Close contact information" onClick={() => setContactInfoOpen(false)}><X size={17}/></button>
-      <span className="profile-avatar conversation-contact-avatar">{target.photoURL ? <img src={target.photoURL} alt=""/> : target.displayName.trim().charAt(0).toUpperCase()}</span>
+      <span className="profile-avatar conversation-contact-avatar">{isChaterMediaUrl(target.photoURL) ? <img src={target.photoURL} alt=""/> : target.displayName.trim().charAt(0).toUpperCase()}</span>
       <strong>{target.displayName}</strong>
       <span>@{target.username}</span>
       <small>Chater member</small>

@@ -3,6 +3,7 @@ import { MessageCircle, Plus } from 'lucide-react'
 import { collection, doc, getDoc, onSnapshot, query as firestoreQuery, where } from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
 import { createConversationId, timestampToMillis, type ChatConversation, type ChatUser } from '../lib/chat'
+import { isChaterMediaUrl } from '../lib/media'
 
 type ConversationListProps = {
   userId: string | null
@@ -42,7 +43,7 @@ function readChatClearBefore(conversationId: string): number {
 
 function ConversationAvatar({ user }: { user: ChatUser }) {
   return <span className="profile-avatar conversation-list-avatar" aria-label={user.displayName + ' profile picture'}>
-    {user.photoURL ? <img src={user.photoURL} alt="" /> : user.displayName.trim().charAt(0).toUpperCase()}
+    {isChaterMediaUrl(user.photoURL) ? <img src={user.photoURL} alt="" /> : user.displayName.trim().charAt(0).toUpperCase()}
   </span>
 }
 
@@ -96,7 +97,7 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
               uid: otherUid,
               username,
               displayName,
-              photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+              photoURL: isChaterMediaUrl(profile.photoURL) ? profile.photoURL : ''
             },
             lastMessageText: isClearedOnThisDevice ? '' : typeof data.lastMessageText === 'string' ? data.lastMessageText : '',
             lastMessageSenderId: isClearedOnThisDevice ? '' : typeof data.lastMessageSenderId === 'string' ? data.lastMessageSenderId : '',
@@ -153,7 +154,7 @@ export default function ConversationList({ userId, search, onOpen, onStartConver
               uid: contactUid,
               username,
               displayName,
-              photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+              photoURL: isChaterMediaUrl(profile.photoURL) ? profile.photoURL : ''
             } satisfies ChatUser
           } catch {
             return null

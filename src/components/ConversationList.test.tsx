@@ -28,7 +28,7 @@ describe('ConversationList saved contacts', () => {
       uid: 'ada-user',
       username: 'ada_lovelace',
       displayName: 'Ada Lovelace',
-      photoURL: 'https://media.example/ada.jpg'
+      photoURL: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/ada-user/profile/avatar.jpg'
     }
     vi.mocked(getDoc).mockResolvedValue({
       exists: () => true,
@@ -64,7 +64,7 @@ describe('ConversationList saved contacts', () => {
       uid: 'ada-user',
       username: 'ada_lovelace',
       displayName: 'Ada Lovelace',
-      photoURL: 'https://media.example/ada.jpg'
+      photoURL: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/ada-user/profile/avatar.jpg'
     }))
   })
 
