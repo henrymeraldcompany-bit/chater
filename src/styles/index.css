@@ -1204,9 +1204,6 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .public-profile-screen {
   position: fixed;
   z-index: 120;
-.conversation-contact-profile {
-  z-index: 121;
-}
   inset: 0;
   display: flex;
   flex-direction: column;
@@ -1214,6 +1211,9 @@ body,.app-shell{background:var(--page);color:var(--text)}
   overflow-y: auto;
   background: var(--page, #101010);
   color: var(--text-strong);
+}
+.conversation-contact-profile {
+  z-index: 121;
 }
 .public-profile-toolbar {
   display: flex;
