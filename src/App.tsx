@@ -190,7 +190,7 @@ const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
   return <span className={`profile-avatar ${className}`} aria-label={displayName ? `${displayName} profile picture` : 'Default profile picture'}>
-    {photoURL ? <img src={photoURL} alt="" /> : initial || <UserRound size={20} />}
+    {isChaterMediaUrl(photoURL) ? <img src={photoURL} alt="" /> : initial || <UserRound size={20} />}
   </span>
 }
 
@@ -414,11 +414,11 @@ export default function App() {
         const savedAccent = readSavedAccent(user.uid)
         setAccent(savedAccent)
         setCustomHex(savedAccent)
-        setProfilePhotoUrl(user.photoURL || '')
+        setProfilePhotoUrl(isChaterMediaUrl(user.photoURL) ? user.photoURL : '')
         const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
         const storedProfile = (profileSnapshot?.data() || {}) as Record<string, unknown>
         applyAppearancePreferences(user.uid, storedProfile)
-        if (user.photoURL && storedProfile.photoURL !== user.photoURL && firestoreDb) {
+        if (isChaterMediaUrl(user.photoURL) && storedProfile.photoURL !== user.photoURL && firestoreDb) {
           void setDoc(doc(firestoreDb, 'users', user.uid), {
             uid: user.uid,
             photoURL: user.photoURL,
@@ -482,7 +482,7 @@ export default function App() {
           createdAt: savedAt || (expiresAt ? expiresAt - 86400000 : 0),
           expiresAt
         }
-      }).filter(item => item.mediaUrl && item.expiresAt > now).sort((left, right) => right.createdAt - left.createdAt)
+      }).filter(item => isChaterMediaUrl(item.mediaUrl) && item.expiresAt > now).sort((left, right) => right.createdAt - left.createdAt)
       if (active) setMoments(entries)
     }).catch(() => { if (active) setMoments([]) })
     return () => { active = false }
@@ -619,7 +619,7 @@ export default function App() {
           uid,
           username: savedUsername,
           displayName: displayName || savedUsername,
-          photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+          photoURL: isChaterMediaUrl(profile.photoURL) ? profile.photoURL : ''
         })
       }
       const results = [...unique.values()].sort((a, b) => {
@@ -659,7 +659,7 @@ export default function App() {
             uid: result.uid,
             username: result.username,
             displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : result.displayName,
-            photoURL: typeof data.photoURL === 'string' ? data.photoURL : result.photoURL,
+            photoURL: isChaterMediaUrl(data.photoURL) ? data.photoURL : '',
             about: typeof data.about === 'string' ? data.about.trim() : '',
             location: typeof data.location === 'string' ? data.location.trim() : '',
             occupation: typeof data.occupation === 'string' ? data.occupation.trim() : ''
@@ -876,7 +876,7 @@ export default function App() {
             uid,
             username,
             displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : username,
-            photoURL: typeof data.photoURL === 'string' ? data.photoURL : ''
+            photoURL: isChaterMediaUrl(data.photoURL) ? data.photoURL : ''
           } satisfies UsernameSearchResult
         }))
         if (active) setSavedContacts(profiles.filter((profile): profile is UsernameSearchResult => profile !== null))
@@ -1394,7 +1394,7 @@ export default function App() {
         const savedAccent = readSavedAccent(credential.user.uid)
         setAccent(savedAccent)
         setCustomHex(savedAccent)
-        setProfilePhotoUrl(credential.user.photoURL || '')
+        setProfilePhotoUrl(isChaterMediaUrl(credential.user.photoURL) ? credential.user.photoURL : '')
         // Authentication has already succeeded. A profile-read failure must never
         // keep the sign-in dialog open or make a successful sign-in look unsuccessful.
         let storedProfile: Record<string, unknown> = {}
