@@ -5,7 +5,7 @@ import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/
 import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
 import ConversationScreen from './components/ConversationScreen'
 import { createConversationId, isValidChatMessage, normalizeChatMessage } from './lib/chat'
-import { CHATER_MEDIA_BASE_URL } from './lib/media'
+import { CHATER_MEDIA_BASE_URL, isChaterMediaUrl } from './lib/media'
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),
@@ -65,6 +65,17 @@ function openApp() {
   act(() => { vi.advanceTimersByTime(1500) })
   vi.useRealTimers()
 }
+
+
+describe('Chater R2 media URLs', () => {
+  it('accepts only HTTPS media paths from the configured Chater R2 Worker', () => {
+    expect(isChaterMediaUrl(CHATER_MEDIA_BASE_URL + '/media/users/member/profile/avatar.png')).toBe(true)
+    expect(isChaterMediaUrl('https://res.cloudinary.com/amzak6nf/image/upload/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('http://chater-media.henrymeraldcompany.workers.dev/media/users/member/profile/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('https://other.example/media/users/member/profile/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('https://chater-media.henrymeraldcompany.workers.dev/not-media/member/avatar.png')).toBe(false)
+  })
+})
 
 describe('Chater QR profile codes', () => {
   it('extracts usernames from Chater QR links and handles while rejecting unrelated links', () => {
