@@ -564,6 +564,9 @@ export default function App() {
     formData.append('file', file)
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
     formData.append('folder', folder)
+    // Keep public IDs rooted under the account folder so the secure account-deletion
+    // Worker can remove wallpaper images alongside profiles and Moments.
+    formData.append('use_asset_folder_as_public_id_prefix', 'true')
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 60000)
     try {
