@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
 import { createConversationId, isValidChatMessage, normalizeChatMessage, timestampToMillis, type ChatMessage, type ChatUser } from '../lib/chat'
+import { isChaterMediaUrl } from '../lib/media'
 
 type ConversationScreenProps = {
   currentUserId: string
@@ -56,7 +57,7 @@ function readChatTheme(userId: string, conversationId: string): ChatTheme {
 function readChatThemeImage(userId: string, conversationId: string): string {
   try {
     const stored = window.localStorage.getItem('chater:chat-theme-image:' + userId + ':' + conversationId) || ''
-    return /^https:\/\/res\\.cloudinary\\.com\//i.test(stored) ? stored : ''
+    return isChaterMediaUrl(stored) ? stored : ''
   } catch {
     return ''
   }
@@ -130,7 +131,7 @@ export default function ConversationScreen({
       if (!active || !snapshot.exists()) return
       const saved = snapshot.data() as Record<string, unknown>
       const savedTheme = chatThemes.some(item => item.id === saved.theme) ? saved.theme as ChatTheme : theme
-      const savedImage = typeof saved.imageUrl === 'string' && /^https:\/\/res\\.cloudinary\\.com\//i.test(saved.imageUrl) ? saved.imageUrl : image
+      const savedImage = isChaterMediaUrl(saved.imageUrl) ? saved.imageUrl : image
       setChatTheme(savedTheme)
       setChatThemeImageUrl(savedImage)
       try {
