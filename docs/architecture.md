@@ -62,3 +62,17 @@ Each direct chat includes a top-right options menu for viewing the other member'
 - Export chat creates a plain-text download in the browser.
 - Per-chat theme and mute preferences are stored locally. Push notifications are not yet connected, so muting is currently a saved preference only.
 - Media, links and documents are not available until attachment support exists. Individual conversation shortcuts are also not supported yet.
+
+## Account appearance preferences and chat wallpapers
+
+General appearance settings are stored on the signed-in member's Firestore profile in `users/{uid}.preferences` and are cached locally under keys scoped to that UID. This keeps each account's general Dark/Light/System theme, wallpaper choice, optional general wallpaper image URL, and message-bubble style separate on a shared phone.
+
+- The general wallpaper is inherited by direct conversations using the Default chat theme.
+- A personal conversation can override the general wallpaper with one of the built-in themes or its own uploaded image.
+- Per-chat appearance is stored privately at `users/{uid}/chatPreferences/{conversationId}`.
+- Uploaded wallpaper images are placed in Cloudinary under `chater/wallpapers/{uid}/general` or `chater/wallpapers/{uid}/chats/{conversationId}`.
+- Wallpaper uploads use the authenticated member's UID folder and a public-ID prefix so the account-deletion Worker can delete these assets.
+- Message bubble settings affect the actual sent and received text bubbles, not only the settings preview.
+
+The `chatPreferences` Firestore subcollection is owner-readable and owner-writable only. Publish the current `firestore.rules` file before expecting cross-device per-chat preferences to sync.
+
