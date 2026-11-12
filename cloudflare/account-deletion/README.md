@@ -31,7 +31,7 @@ The Worker has now been created through the Cloudflare API as a separate Worker 
 4. Save/deploy the secret changes.
 5. Open `https://chater-account-deletion.henrymeraldcompany.workers.dev/health`. It should return JSON with `ok: true`.
 
-The Chater frontend has been updated to call `/delete-media` after password reauthentication and before removing Firestore or Firebase Auth records. If the Worker cannot confirm media cleanup, account deletion stops so it can be retried. Do not test `POST /delete-media` against a real account until the secrets are configured and the health check succeeds.
+The Chater frontend has been updated to call `/delete-media` after password reauthentication and before removing Firestore or Firebase Auth records. Wallpaper uploads use the verified UID as a public-ID prefix so this Worker can also delete general and per-chat wallpaper images. If the Worker cannot confirm media cleanup, account deletion stops so it can be retried. Do not test `POST /delete-media` against a real account until the secrets are configured and the health check succeeds.
 
 ## Routes
 
