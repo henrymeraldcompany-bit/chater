@@ -1042,7 +1042,7 @@ export default function App() {
     }
     const cleanupResult = await cleanupResponse.json().catch(() => ({})) as { error?: string; success?: boolean }
     if (!cleanupResponse.ok || cleanupResult.success !== true) {
-      throw new Error(cleanupResult.error || 'Chater could not confirm deletion of your profile pictures and Moments. Your account has not been deleted. Please try again later.')
+      throw new Error(cleanupResult.error || 'Chater could not confirm deletion of your profile pictures, wallpapers and Moments. Your account has not been deleted. Please try again later.')
     }
     const db = firestoreDb
     // Remove this account's Moment records while the user is still authenticated.
