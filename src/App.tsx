@@ -6,6 +6,7 @@ import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart
 import ConversationList from './components/ConversationList'
 import ConversationScreen from './components/ConversationScreen'
 import type { ChatUser } from './lib/chat'
+import { CHATER_MEDIA_BASE_URL, isChaterMediaUrl, uploadChaterMedia } from './lib/media'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
@@ -162,7 +163,7 @@ function readSavedWallpaperImage(userId?: string | null): string {
   try {
     const key = userId ? `${WALLPAPER_IMAGE_STORAGE_KEY}:${userId}` : WALLPAPER_IMAGE_STORAGE_KEY
     const saved = window.localStorage.getItem(key) || ''
-    return /^https:\/\/res\\.cloudinary\\.com\//i.test(saved) ? saved : ''
+    return isChaterMediaUrl(saved) ? saved : ''
   } catch { return '' }
 }
 const THEME_STORAGE_KEY = 'chater:preferences:theme'
@@ -186,9 +187,6 @@ function EmptyIllustration({ icon: Icon }: { icon: LucideIcon }) {
 }
 
 const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'amzak6nf'
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'chater_profiles'
-const CHATER_ACCOUNT_DELETION_URL = 'https://chater-account-deletion.henrymeraldcompany.workers.dev'
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
   return <span className={`profile-avatar ${className}`} aria-label={displayName ? `${displayName} profile picture` : 'Default profile picture'}>
@@ -299,8 +297,7 @@ export default function App() {
     const nextBubbleStyle = bubbleStyles.some(item => item.id === saved.bubbleStyle)
       ? saved.bubbleStyle as BubbleStyle
       : readSavedBubbleStyle(uid)
-    const nextWallpaperImage = typeof saved.wallpaperImageUrl === 'string' &&
-      /^https:\/\/res\\.cloudinary\\.com\//i.test(saved.wallpaperImageUrl)
+    const nextWallpaperImage = isChaterMediaUrl(saved.wallpaperImageUrl)
       ? saved.wallpaperImageUrl
       : readSavedWallpaperImage(uid)
     setTheme(nextTheme)
@@ -493,60 +490,30 @@ export default function App() {
 
 
   const handleShareMoment = async (file: File, caption: string) => {
-    if (!authUser || !firestoreDb) {
-      setMomentNotice('Sign in to publish a Moment. Your selected file has not been uploaded.')
-      return
-    }
+    if (!authUser || !firestoreDb) { setMomentNotice('Sign in to publish a Moment. Your selected file has not been uploaded.'); return }
     const isImage = file.type.startsWith('image/')
     const isVideo = file.type.startsWith('video/')
     const isAudio = file.type.startsWith('audio/')
     if (!isImage && !isVideo && !isAudio) { setMomentNotice('Choose an image, video or audio file.'); return }
+    if (file.size > 50 * 1024 * 1024) { setMomentNotice('Moments must be 50 MB or smaller.'); return }
     setMomentBusy(true)
     setMomentNotice('')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 10 * 60 * 1000)
-    let stage: 'Cloudinary upload' | 'Firestore save' = 'Cloudinary upload'
+    let stage: 'R2 upload' | 'Firestore save' = 'R2 upload'
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-      formData.append('folder', 'chater/moments/' + authUser.uid)
-      const response = await fetch(
-        'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD_NAME + '/' + (isVideo || isAudio ? 'video' : 'image') + '/upload',
-        { method: 'POST', body: formData, signal: controller.signal }
-      )
-      const uploaded = await response.json().catch(() => ({})) as { secure_url?: string; error?: { message?: string } }
-      if (!response.ok || !uploaded.secure_url) throw new Error(uploaded.error?.message || 'The Moment could not be uploaded. Please try again.')
+      const mediaUrl = await uploadChaterMedia(authUser, file, { category: 'moment', timeoutMs: 10 * 60 * 1000 })
       const expiresAt = Date.now() + 24 * 60 * 60 * 1000
       const mediaType: MomentEntry['mediaType'] = isAudio ? 'audio' : isVideo ? 'video' : 'image'
-      const data = {
-        uid: authUser.uid,
-        displayName: authUser.displayName || 'Chater member',
-        mediaUrl: uploaded.secure_url,
-        mediaType,
-        caption: caption.trim().slice(0, 180),
-        createdAt: serverTimestamp(),
-        expiresAt
-      }
+      const data = { uid: authUser.uid, displayName: authUser.displayName || 'Chater member', mediaUrl, mediaType, caption: caption.trim().slice(0, 180), createdAt: serverTimestamp(), expiresAt }
       stage = 'Firestore save'
       const saved = await addDoc(collection(firestoreDb, 'moments'), data)
       setMoments(current => [{ id: saved.id, ...data, createdAt: Date.now() }, ...current])
       setDialog(null)
       setMomentNotice('')
     } catch (error) {
-      const errorCode = typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: unknown }).code || '')
-        : ''
+      const errorCode = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code || '') : ''
       const detail = error instanceof Error ? error.message : 'Please try again.'
-      setMomentNotice(error instanceof Error && error.name === 'AbortError'
-        ? 'The upload took too long. Check your connection and try again.'
-        : stage === 'Firestore save'
-          ? `Cloudinary upload succeeded, but Firestore could not save the Moment${errorCode ? ` (${errorCode})` : ''}: ${detail}`
-          : detail)
-    } finally {
-      window.clearTimeout(timeout)
-      setMomentBusy(false)
-    }
+      setMomentNotice(error instanceof Error && error.name === 'AbortError' ? 'The upload took too long. Check your connection and try again.' : stage === 'Firestore save' ? 'R2 upload succeeded, but Firestore could not save the Moment' + (errorCode ? ' (' + errorCode + ')' : '') + ': ' + detail : detail)
+    } finally { setMomentBusy(false) }
   }
 
   const handleScheduleCall = (phone: string, at: string) => {
@@ -556,37 +523,11 @@ export default function App() {
     setDialog(null)
   }
 
-  const uploadWallpaperImage = async (file: File, folder: string): Promise<string> => {
+  const uploadWallpaperImage = async (file: File, scope: 'general' | 'chat', conversationId?: string): Promise<string> => {
     if (!authUser) throw new Error('Sign in to save a wallpaper to your Chater account.')
     if (!file.type.startsWith('image/')) throw new Error('Choose an image file for your wallpaper.')
     if (file.size > 8 * 1024 * 1024) throw new Error('Choose an image that is 8 MB or smaller.')
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-    formData.append('folder', folder)
-    // Keep public IDs rooted under the account folder so the secure account-deletion
-    // Worker can remove wallpaper images alongside profiles and Moments.
-    formData.append('use_asset_folder_as_public_id_prefix', 'true')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 60000)
-    try {
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: 'POST', body: formData, signal: controller.signal }
-      )
-      const result = await response.json().catch(() => ({})) as { secure_url?: string; error?: { message?: string } }
-      if (!response.ok || !result.secure_url) {
-        throw new Error(result.error?.message || 'Cloudinary could not upload this wallpaper. Please try again.')
-      }
-      return result.secure_url
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('The wallpaper upload timed out. Check your connection and try again.')
-      }
-      throw error
-    } finally {
-      window.clearTimeout(timeout)
-    }
+    return uploadChaterMedia(authUser, file, { category: 'wallpaper', scope, ...(conversationId ? { conversationId } : {}) })
   }
 
   const handleGeneralWallpaperUpload = async (file: File) => {
@@ -594,7 +535,7 @@ export default function App() {
     setWallpaperUploadBusy(true)
     setAppearanceNotice('Uploading your general chat wallpaper…')
     try {
-      const url = await uploadWallpaperImage(file, `chater/wallpapers/${authUser.uid}/general`)
+      const url = await uploadWallpaperImage(file, 'general')
       setWallpaperImageUrl(url)
       setAppearanceNotice('General chat wallpaper uploaded. Saving to your account…')
     } catch (error) {
@@ -606,596 +547,17 @@ export default function App() {
 
   const handlePersonalChatWallpaperUpload = async (file: File, conversationId: string): Promise<string> => {
     if (!authUser) throw new Error('Sign in to add a personal chat wallpaper.')
-    return uploadWallpaperImage(file, `chater/wallpapers/${authUser.uid}/chats/${conversationId}`)
+    return uploadWallpaperImage(file, 'chat', conversationId)
   }
 
   const uploadPhotoForUser = async (user: User, file: File) => {
-    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
-      throw new Error('Profile picture uploads are not configured yet. Please try again later.')
-    }
     if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
     if (file.size > 5 * 1024 * 1024) throw new Error('Your profile picture must be 5 MB or smaller.')
-
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-    formData.append('folder', `chater/profiles/${user.uid}`)
-
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 45000)
-    try {
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: 'POST', body: formData, signal: controller.signal }
-      )
-      const result = await response.json().catch(() => ({})) as {
-        secure_url?: string
-        error?: { message?: string }
-      }
-      if (!response.ok || !result.secure_url) {
-        throw new Error(result.error?.message || 'Cloudinary could not upload this picture. Please try again.')
-      }
-      const photoURL = result.secure_url
-      await updateProfile(user, { photoURL })
-      if (firestoreDb) {
-        await setDoc(doc(firestoreDb, 'users', user.uid), {
-          uid: user.uid,
-          photoURL,
-          updatedAt: serverTimestamp()
-        }, { merge: true })
-      }
-      setProfilePhotoUrl(photoURL)
-      return photoURL
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('The upload took too long. Check your connection and try again.')
-      }
-      throw error
-    } finally {
-      window.clearTimeout(timeout)
-    }
-  }
-  const handleUsernameChange = async (nextUsername: string) => {
-    if (!authUser || !firestoreDb) throw new Error('Sign in and connect to Chater to change your username.')
-    const normalized = nextUsername.trim().toLowerCase()
-    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
-      throw new Error('Username must be 3–20 characters using lowercase letters, numbers or underscores.')
-    }
-    if (normalized === profileUsername) return
-    const oldUsername = profileUsername
-    const oldRef = oldUsername ? doc(firestoreDb, 'usernames', oldUsername) : null
-    const newRef = doc(firestoreDb, 'usernames', normalized)
-    const userRef = doc(firestoreDb, 'users', authUser.uid)
-    await runTransaction(firestoreDb, async transaction => {
-      const newSnapshot = await transaction.get(newRef)
-      const oldSnapshot = oldRef ? await transaction.get(oldRef) : null
-      if (newSnapshot.exists()) {
-        throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
-      }
-      if (oldSnapshot?.exists() && oldSnapshot.data()?.uid !== authUser.uid) {
-        throw new Error('Your current username is not owned by this account. Contact support before changing it.')
-      }
-      transaction.set(newRef, { uid: authUser.uid, username: normalized, createdAt: serverTimestamp() })
-      if (oldRef && oldSnapshot?.exists()) transaction.delete(oldRef)
-      transaction.set(userRef, { uid: authUser.uid, username: normalized, usernameLower: normalized, updatedAt: serverTimestamp() }, { merge: true })
-    })
-    setProfileUsername(normalized)
-    try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
-  }
-  const handleUsernameSearch = useCallback(async (rawInput: string) => {
-    const normalized = rawInput.trim().replace(/^@/, '').toLowerCase().replace(/\s+/g, ' ')
-    const requestId = ++usernameSearchRequest.current
-    setSearchNotice('')
-    setUsernameSearchResults([])
-    if (!normalized.length) {
-      setUsernameSearchBusy(false)
-      return
-    }
-    if (!authUser || !firestoreDb) {
-      setSearchNotice('Sign in with a verified Chater account to find people.')
-      return
-    }
-    setUsernameSearchBusy(true)
-    try {
-      // Read the public member directory, then perform substring matching locally.
-      // This supports matches anywhere in a name or username, including from the
-      // very first typed character; prefix-only Firestore ranges cannot do that.
-      const snapshot = await getDocs(collection(firestoreDb, 'users'))
-      if (requestId !== usernameSearchRequest.current) return
-      const unique = new Map<string, UsernameSearchResult>()
-      for (const member of snapshot.docs) {
-        const profile = member.data() as Record<string, unknown>
-        const uid = typeof profile.uid === 'string' ? profile.uid : member.id
-        const savedUsername = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
-        const displayName = typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : savedUsername
-        const searchableName = displayName.toLowerCase()
-        if (!uid || uid === authUser.uid || !savedUsername) continue
-        if (!searchableName.includes(normalized) && !savedUsername.includes(normalized)) continue
-        unique.set(uid, {
-          uid,
-          username: savedUsername,
-          displayName: displayName || savedUsername,
-          photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
-        })
-      }
-      const results = [...unique.values()].sort((a, b) => {
-        const aStarts = a.displayName.toLowerCase().startsWith(normalized) || a.username.startsWith(normalized)
-        const bStarts = b.displayName.toLowerCase().startsWith(normalized) || b.username.startsWith(normalized)
-        return Number(bStarts) - Number(aStarts) || a.displayName.localeCompare(b.displayName)
-      })
-      setUsernameSearchResults(results)
-      if (!results.length) setSearchNotice('No matching Chater members yet. Try another spelling.')
-    } catch {
-      if (requestId === usernameSearchRequest.current) {
-        setUsernameSearchResults([])
-        setSearchNotice('People search is temporarily unavailable. Check your connection and try again.')
-      }
-    } finally {
-      if (requestId === usernameSearchRequest.current) setUsernameSearchBusy(false)
-    }
-  }, [authUser])
-  const openPublicProfile = useCallback(async (result: UsernameSearchResult) => {
-    if (!authUser || result.uid === authUser.uid) return
-    setConversationTarget(null)
-    setPublicProfileBusy(true)
-    setPublicProfileNotice('')
-    setContactActionNotice('')
-    setProfileBlockConfirmation(false)
-    setProfileBlockNotice('')
-    setPublicProfile({
-      ...result, about: '', location: '', occupation: ''
-    })
-    try {
-      if (firestoreDb) {
-        const snapshot = await getDoc(doc(firestoreDb, 'users', result.uid))
-        if (snapshot.exists()) {
-          const data = snapshot.data() as Record<string, unknown>
-          // Explicitly whitelist public fields. Never copy email or other private account data.
-          setPublicProfile({
-            uid: result.uid,
-            username: result.username,
-            displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : result.displayName,
-            photoURL: typeof data.photoURL === 'string' ? data.photoURL : result.photoURL,
-            about: typeof data.about === 'string' ? data.about.trim() : '',
-            location: typeof data.location === 'string' ? data.location.trim() : '',
-            occupation: typeof data.occupation === 'string' ? data.occupation.trim() : ''
-          })
-        }
-      }
-    } catch {
-      setPublicProfileNotice('Some profile details could not be loaded. Showing available public information.')
-    } finally {
-      setPublicProfileBusy(false)
-    }
-  }, [authUser])
-  const openPublicProfileByUsername = useCallback(async (rawUsername: string): Promise<boolean> => {
-    const normalized = rawUsername.trim().replace(/^@/, '').toLowerCase()
-    if (!authUser || !firestoreDb || !/^[a-z0-9_]{3,20}$/.test(normalized)) return false
-    try {
-      const usernameSnapshot = await getDoc(doc(firestoreDb, 'usernames', normalized))
-      if (!usernameSnapshot.exists()) return false
-      const uid = usernameSnapshot.data()?.uid
-      if (typeof uid !== 'string' || !uid || uid === authUser.uid) return false
-      await openPublicProfile({
-        uid,
-        username: normalized,
-        displayName: normalized,
-        photoURL: ''
-      })
-      return true
-    } catch {
-      return false
-    }
-  }, [authUser, openPublicProfile])
-  const handleScannedQRCode = useCallback(async (rawValue: string): Promise<boolean> => {
-    const normalized = extractChaterUsernameFromQR(rawValue)
-    if (!normalized) {
-      setQrScannerStatus('This QR code is not a valid Chater profile code.')
-      return false
-    }
-    setQrScannerStatus(`Finding @${normalized}…`)
-    const found = await openPublicProfileByUsername(normalized)
-    if (!found) {
-      setQrScannerStatus('No matching Chater account was found. Try another QR code.')
-      return false
-    }
-    setQrScannerOpen(false)
-    setQrManualUsername('')
-    setDialog(null)
-    return true
-  }, [openPublicProfileByUsername])
-  const handleContactSync = async () => {
-    setContactSyncNotice('')
-    setContactMatches([])
-    if (!authUser || !firestoreDb) {
-      setContactSyncNotice('Sign in with a verified Chater account to sync contacts.')
-      return
-    }
-    const contactPicker = (navigator as Navigator & { contacts?: ContactPickerManager }).contacts
-    if (!window.isSecureContext || !contactPicker?.select) {
-      setContactSyncNotice('This browser does not support contact selection. Use the search field above or scan a Chater QR code instead.')
-      return
-    }
-
-    setContactSyncBusy(true)
-    try {
-      // Request names only; device phone numbers, emails and contact photos
-      // are deliberately not requested.
-      const selected = await contactPicker.select(['name'], { multiple: true })
-      const names = selected
-        .map(contact => Array.isArray(contact.name) ? contact.name.join(' ') : '')
-        .map(name => name.trim().replace(/\s+/g, ' '))
-        .filter(name => name.length >= 2 && name.length <= 50)
-      const normalizedNames = [...new Set(names.map(normalizeContactDisplayName).filter(Boolean))]
-      if (!normalizedNames.length) {
-        setContactSyncNotice('No contact names were selected. Nothing was saved.')
-        return
-      }
-
-      const candidateProfiles = new Map<string, UsernameSearchResult>()
-      // Firestore "in" queries are bounded, so query in batches rather than
-      // downloading the entire public member directory.
-      for (let offset = 0; offset < normalizedNames.length; offset += 30) {
-        const nameBatch = normalizedNames.slice(offset, offset + 30)
-        const snapshot = await getDocs(firestoreQuery(
-          collection(firestoreDb, 'users'),
-          where('displayNameLower', 'in', nameBatch)
-        ))
-        for (const member of snapshot.docs) {
-          const profile = member.data() as Record<string, unknown>
-          const uid = typeof profile.uid === 'string' ? profile.uid : member.id
-          const username = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
-          const displayName = typeof profile.displayName === 'string' && profile.displayName.trim()
-            ? profile.displayName.trim()
-            : username
-          if (!uid || uid === authUser.uid || !/^[a-z0-9_]{3,20}$/.test(username)) continue
-          candidateProfiles.set(uid, {
-            uid,
-            username,
-            displayName,
-            photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
-          })
-        }
-      }
-
-      const groups = matchChaterContactsByName(names, [...candidateProfiles.values()], authUser.uid)
-      setContactMatches(groups)
-      const matchCount = groups.reduce((total, group) => total + group.matches.length, 0)
-      setContactSyncNotice(matchCount
-        ? `Found ${matchCount} possible exact-name match${matchCount === 1 ? '' : 'es'}. Review each public profile before adding it.`
-        : 'No exact display-name matches were found. Try searching by Chater username instead.')
-    } catch (error) {
-      const errorName = typeof error === 'object' && error !== null && 'name' in error
-        ? String((error as { name?: unknown }).name || '')
-        : ''
-      setContactSyncNotice(errorName === 'AbortError'
-        ? 'No contacts were shared. Nothing was saved.'
-        : 'Chater could not read the selected contacts. Check your browser support and try again.')
-    } finally {
-      setContactSyncBusy(false)
-    }
-  }
-
-  const savePublicProfileAsContact = async (profile: UsernameSearchResult) => {
-    if (!authUser || !firestoreDb || profile.uid === authUser.uid) return
-    setContactActionBusy(true)
-    setContactActionNotice('')
-    try {
-      await setDoc(doc(firestoreDb, 'users', authUser.uid, 'contacts', profile.uid), {
-        uid: profile.uid,
-        addedAt: serverTimestamp()
-      })
-      setSavedContacts(current => current.some(item => item.uid === profile.uid) ? current : [...current, profile])
-      setContactActionNotice('Contact saved to your Chater account.')
-    } catch {
-      setContactActionNotice('We could not save this contact. Check your connection and try again.')
-    } finally {
-      setContactActionBusy(false)
-    }
-  }
-
-  const removePublicProfileFromContacts = async (profile: UsernameSearchResult) => {
-    if (!authUser || !firestoreDb || profile.uid === authUser.uid) return
-    setContactActionBusy(true)
-    setContactActionNotice('')
-    try {
-      await deleteDoc(doc(firestoreDb, 'users', authUser.uid, 'contacts', profile.uid))
-      setSavedContacts(current => current.filter(item => item.uid !== profile.uid))
-      setContactActionNotice('Contact removed from your Chater contacts.')
-    } catch {
-      setContactActionNotice('We could not remove this contact. Check your connection and try again.')
-    } finally {
-      setContactActionBusy(false)
-    }
-  }
-
-  const blockUser = async (targetUid: string) => {
-    if (!authUser || !firestoreDb || targetUid === authUser.uid) throw new Error('Sign in to block another Chater account.')
-    await setDoc(doc(firestoreDb, 'users', authUser.uid, 'blocked', targetUid), {
-      uid: targetUid,
-      createdAt: serverTimestamp()
-    })
-    setBlockedUserIds(current => current.includes(targetUid) ? current : [...current, targetUid])
-  }
-
-  const unblockUser = async (targetUid: string) => {
-    if (!authUser || !firestoreDb || targetUid === authUser.uid) throw new Error('Sign in to manage your block list.')
-    await deleteDoc(doc(firestoreDb, 'users', authUser.uid, 'blocked', targetUid))
-    setBlockedUserIds(current => current.filter(uid => uid !== targetUid))
-  }
-
-  const handlePublicProfileBlockAction = async () => {
-    if (!publicProfile || !authUser) return
-    const alreadyBlocked = blockedUserIds.includes(publicProfile.uid)
-    setProfileBlockBusy(true)
-    setProfileBlockNotice('')
-    try {
-      if (alreadyBlocked) {
-        await unblockUser(publicProfile.uid)
-        setProfileBlockNotice('You have unblocked @' + publicProfile.username + '.')
-      } else {
-        await blockUser(publicProfile.uid)
-        setProfileBlockNotice('@' + publicProfile.username + ' can no longer contact you on Chater.')
-      }
-      setProfileBlockConfirmation(false)
-    } catch {
-      setProfileBlockNotice('Chater could not update your block list. Check your connection and try again.')
-    } finally {
-      setProfileBlockBusy(false)
-    }
-  }
-
-  const isSavedContact = (uid: string) => savedContacts.some(contact => contact.uid === uid)
-
-  useEffect(() => {
-    if (!contactSyncExpanded || !authUser || !firestoreDb) return
-    const db = firestoreDb
-    let active = true
-    setSavedContactsBusy(true)
-    void (async () => {
-      try {
-        const links = await getDocs(collection(db, 'users', authUser.uid, 'contacts'))
-        const targetIds = [...new Set(links.docs
-          .map(link => {
-            const data = link.data() as Record<string, unknown>
-            return typeof data.uid === 'string' ? data.uid : link.id
-          })
-          .filter(uid => uid && uid !== authUser.uid)
-        )].slice(0, 100)
-        const profiles = await Promise.all(targetIds.map(async uid => {
-          const snapshot = await getDoc(doc(db, 'users', uid))
-          if (!snapshot.exists()) return null
-          const data = snapshot.data() as Record<string, unknown>
-          const username = typeof data.username === 'string' ? data.username.trim().toLowerCase() : ''
-          if (!/^[a-z0-9_]{3,20}$/.test(username)) return null
-          return {
-            uid,
-            username,
-            displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : username,
-            photoURL: typeof data.photoURL === 'string' ? data.photoURL : ''
-          } satisfies UsernameSearchResult
-        }))
-        if (active) setSavedContacts(profiles.filter((profile): profile is UsernameSearchResult => profile !== null))
-      } catch {
-        if (active) setContactSyncNotice('Your saved contacts could not be loaded. Check your connection and try again.')
-      } finally {
-        if (active) setSavedContactsBusy(false)
-      }
-    })()
-    return () => { active = false }
-  }, [contactSyncExpanded, authUser])
-
-  const closePublicProfile = () => {
-    setPublicProfile(null)
-    setPublicProfileNotice('')
-    setProfileBlockConfirmation(false)
-    setProfileBlockNotice('')
-  }
-  const openConversationEntry = () => {
-    if (!publicProfile || !authUser || publicProfile.uid === authUser.uid) return
-    setConversationTarget({
-      uid: publicProfile.uid,
-      username: publicProfile.username,
-      displayName: publicProfile.displayName,
-      photoURL: publicProfile.photoURL
-    })
-    setPublicProfile(null)
-  }
-  useEffect(() => {
-    if (!qrScannerOpen) return
-    let cancelled = false
-    let animationFrame = 0
-    let stream: MediaStream | null = null
-    const Detector = (window as unknown as { BarcodeDetector?: QRCodeDetectorConstructor }).BarcodeDetector
-    if (!Detector) {
-      setQrScannerStatus('QR scanning is not supported in this browser. You can enter a username below.')
-      return
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setQrScannerStatus('Camera access is unavailable. You can enter a username below.')
-      return
-    }
-    const startCamera = async () => {
-      try {
-        const detector = new Detector({ formats: ['qr_code'] })
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false
-        })
-        if (cancelled) {
-          stream.getTracks().forEach(track => track.stop())
-          return
-        }
-        const video = qrVideoRef.current
-        if (!video) return
-        video.srcObject = stream
-        await video.play().catch(() => undefined)
-        setQrScannerStatus('Point your camera at a Chater QR code.')
-        const scanFrame = async () => {
-          if (cancelled) return
-          const currentVideo = qrVideoRef.current
-          if (currentVideo && currentVideo.readyState >= 2) {
-            try {
-              const detected = await detector.detect(currentVideo)
-              const rawValue = detected[0]?.rawValue
-              if (rawValue && await handleScannedQRCode(rawValue)) return
-            } catch {
-              // Keep scanning if a frame is temporarily unreadable.
-            }
-          }
-          if (!cancelled) animationFrame = window.requestAnimationFrame(() => { void scanFrame() })
-        }
-        animationFrame = window.requestAnimationFrame(() => { void scanFrame() })
-      } catch {
-        setQrScannerStatus('Camera permission was not granted or the camera is unavailable. You can enter a username below.')
-      }
-    }
-    void startCamera()
-    return () => {
-      cancelled = true
-      if (animationFrame) window.cancelAnimationFrame(animationFrame)
-      stream?.getTracks().forEach(track => track.stop())
-      if (qrVideoRef.current) qrVideoRef.current.srcObject = null
-    }
-  }, [qrScannerOpen, handleScannedQRCode])
-
-  useEffect(() => {
-    if (!authUser || !firestoreDb) return
-    const params = new URLSearchParams(window.location.search)
-    const linkedUsername = params.get('chater_user')
-    if (!linkedUsername) return
-    params.delete('chater_user')
-    const remaining = params.toString()
-    window.history.replaceState({}, '', window.location.pathname + (remaining ? `?${remaining}` : '') + window.location.hash)
-    void openPublicProfileByUsername(linkedUsername)
-  }, [authUser, openPublicProfileByUsername])
-
-  useEffect(() => {
-    if (dialog !== 'new-chat' && dialog !== 'search') return
-    usernameSearchRequest.current += 1
-    const timer = window.setTimeout(() => { void handleUsernameSearch(username) }, 180)
-    return () => window.clearTimeout(timer)
-  }, [username, dialog, authUser, handleUsernameSearch])
-  const handleDisplayNameChange = async (nextName: string) => {
-    if (!authUser) throw new Error('Sign in to edit your profile name.')
-    const normalized = nextName.trim().replace(/\s+/g, ' ')
-    if (normalized.length < 2 || normalized.length > 50) throw new Error('Your profile name must be 2–50 characters.')
-    if (normalized === (authUser.displayName || '')) return
-    await updateProfile(authUser, { displayName: normalized })
-    const db = firestoreDb
-    if (db) {
-      await runTransaction(db, async transaction => {
-        transaction.set(doc(db, 'users', authUser.uid), {
-          uid: authUser.uid, ...(profileUsername ? { username: profileUsername, usernameLower: profileUsername.toLowerCase() } : {}), displayName: normalized, displayNameLower: normalizeContactDisplayName(normalized), updatedAt: serverTimestamp()
-        }, { merge: true })
-      })
-    }
-    setAuthUser({ ...authUser, displayName: normalized } as User)
-  }
-  const handleProfileDetailsChange = async (nextDetails: ProfileDetails) => {
-    if (!authUser || !firestoreDb) throw new Error('Sign in and connect to Chater to edit your profile details.')
-    const normalized: ProfileDetails = {
-      about: nextDetails.about.trim().replace(/\s+/g, ' '),
-      location: nextDetails.location.trim().replace(/\s+/g, ' '),
-      occupation: nextDetails.occupation.trim().replace(/\s+/g, ' ')
-    }
-    if (normalized.about.length > 160) throw new Error('Your About description must be 160 characters or fewer.')
-    if (normalized.location.length > 60) throw new Error('Location must be 60 characters or fewer.')
-    if (normalized.occupation.length > 60) throw new Error('Occupation must be 60 characters or fewer.')
-    const db = firestoreDb
-    try {
-      await setDoc(doc(db, 'users', authUser.uid), {
-        uid: authUser.uid,
-        ...(profileUsername ? { username: profileUsername } : {}),
-        ...normalized,
-        updatedAt: serverTimestamp()
-      }, { merge: true })
-      setProfileDetails(normalized)
-    } catch (error) {
-      const code = (error as { code?: string })?.code
-      if (code === 'permission-denied') {
-        throw new Error("Firebase blocked this profile update. The latest Chater Firestore security rules must be published in the chater-8f834 project. Open Firebase Console → Firestore Database → Rules, publish the rules from Chater's firestore.rules file, then try again.")
-      }
-      throw error
-    }
-  }
-  const handleAccountDeletion = async (password: string) => {
-    if (!authUser || !firebaseAuth || !authUser.email) throw new Error('Sign in with an email account before deleting it.')
-    if (!firestoreDb) throw new Error('Chater cannot connect to the account database. Try again when connected.')
-    const credential = EmailAuthProvider.credential(authUser.email, password)
-    await reauthenticateWithCredential(authUser, credential)
-    // Delete this user's Cloudinary media first. If cleanup fails, stop here so
-    // the Firestore profile and Firebase sign-in account remain available for retry.
-    const idToken = await authUser.getIdToken(true)
-    let cleanupResponse: Response
-    try {
-      cleanupResponse = await fetch(CHATER_ACCOUNT_DELETION_URL + '/delete-media', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + idToken }
-      })
-    } catch {
-      throw new Error('Chater could not reach its secure media-cleanup service. Your account has not been deleted. Check your connection and try again.')
-    }
-    const cleanupResult = await cleanupResponse.json().catch(() => ({})) as { error?: string; success?: boolean }
-    if (!cleanupResponse.ok || cleanupResult.success !== true) {
-      throw new Error(cleanupResult.error || 'Chater could not confirm deletion of your profile pictures and Moments. Your account has not been deleted. Please try again later.')
-    }
-    const db = firestoreDb
-    // Remove this account's Moment records while the user is still authenticated.
-    // Firestore rules only allow an owner to delete their own Moment documents.
-    const momentsSnapshot = await getDocs(firestoreQuery(collection(db, 'moments'), where('uid', '==', authUser.uid)))
-    const ownedMoments = momentsSnapshot.docs
-    await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
-    // Firestore does not cascade deletes into subcollections. Remove private
-    // contact and block links before deleting the profile document.
-    const [contactSnapshot, blockedSnapshot, chatPreferencesSnapshot, conversationsSnapshot] = await Promise.all([
-      getDocs(collection(db, 'users', authUser.uid, 'contacts')),
-      getDocs(collection(db, 'users', authUser.uid, 'blocked')),
-      getDocs(collection(db, 'users', authUser.uid, 'chatPreferences')),
-      getDocs(firestoreQuery(collection(db, 'conversations'), where('participants', 'array-contains', authUser.uid)))
-    ])
-    await Promise.all([
-      ...contactSnapshot.docs.map(contact => deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))),
-      ...blockedSnapshot.docs.map(block => deleteDoc(doc(db, 'users', authUser.uid, 'blocked', block.id))),
-      ...chatPreferencesSnapshot.docs.map(preference => deleteDoc(doc(db, 'users', authUser.uid, 'chatPreferences', preference.id)))
-    ])
-    // Conversation messages are shared by the two participants. Account
-    // deletion removes these threads and their messages rather than leaving
-    // private message documents orphaned beneath a deleted profile.
-    for (const conversation of conversationsSnapshot.docs) {
-      const messages = await getDocs(collection(db, 'conversations', conversation.id, 'messages'))
-      await Promise.all(messages.docs.map(message =>
-        deleteDoc(doc(db, 'conversations', conversation.id, 'messages', message.id))
-      ))
-      await deleteDoc(doc(db, 'conversations', conversation.id))
-    }
-    const usernameRef = profileUsername ? doc(db, 'usernames', profileUsername) : null
-    const profileRef = doc(db, 'users', authUser.uid)
-    await runTransaction(db, async transaction => {
-      if (usernameRef) {
-        const usernameSnapshot = await transaction.get(usernameRef)
-        if (usernameSnapshot.exists() && usernameSnapshot.data()?.uid === authUser.uid) transaction.delete(usernameRef)
-      }
-      transaction.delete(profileRef)
-    })
-    try {
-      await deleteUser(authUser)
-    } catch {
-      throw new Error('Your profile records were removed, but Firebase could not finish deleting the sign-in account. Sign in again and contact support to complete deletion.')
-    }
-    try {
-      window.localStorage.removeItem(`chater:profile:username:${authUser.uid}`)
-      window.localStorage.removeItem(`${ACCENT_STORAGE_KEY}:${authUser.uid}`)
-    } catch { /* Account deletion remains complete even if local cleanup is unavailable. */ }
-    setAuthUser(null)
-    const savedAccent = readSavedAccent()
-    setAccent(savedAccent)
-    setCustomHex(savedAccent)
-    setProfilePhotoUrl('')
-    setProfileUsername('')
-    setProfileDetails(emptyProfileDetails)
-    setPhotoNotice('')
-    setActiveTab('Chats')
+    const photoURL = await uploadChaterMedia(user, file, { category: 'profile' })
+    await updateProfile(user, { photoURL })
+    if (firestoreDb) await setDoc(doc(firestoreDb, 'users', user.uid), { uid: user.uid, photoURL, updatedAt: serverTimestamp() }, { merge: true })
+    setProfilePhotoUrl(photoURL)
+    return photoURL
   }
   const handleProfilePhotoUpload = async (file: File) => {
     if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
@@ -1385,7 +747,7 @@ export default function App() {
 
     {activeTab==='Calls'&&<button className="compose-button compose-call" aria-label="Make a call" onClick={()=>setDialog('call')}><Phone size={24}/><span className="compose-plus"><Plus size={15}/></span></button>}
     <nav className="bottom-nav" aria-label="Main navigation">{tabs.map(({label,icon:Icon})=><button key={label} aria-current={activeTab===label ? 'page' : undefined} className={activeTab===label?'nav-item active':'nav-item'} onClick={()=>openTab(label)}><Icon size={21} strokeWidth={activeTab===label?2.3:1.8}/><span>{label}</span></button>)}</nav>
-    {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className={dialog==='search'?'dialog-card people-search-screen full-screen-dialog':dialog==='new-chat'?'dialog-card new-chat-screen full-screen-dialog':'dialog-card'} role="dialog" aria-modal="true" aria-labelledby="dialog-title">{dialog==='new-chat'||dialog==='search'?<><h2 id="dialog-title" className="a11y-heading">{dialog==='new-chat'?'Start a conversation':'Find people'}</h2><div className="people-search-toolbar"><button className="icon-button people-search-back" type="button" aria-label="Back" onClick={()=>setDialog(null)}><ArrowLeft size={21}/></button><label className="search-box dialog-search people-search-input"><input autoFocus aria-label="Search names or username" value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setShowAllPeopleResults(false)}} placeholder="Search"/>{username&&<button className="people-search-clear" aria-label="Clear search" type="button" onClick={()=>{setUsername('');setSearchNotice('');setShowAllPeopleResults(false)}}><X size={17}/></button>}<button className="people-search-icon" type="button" aria-label="Search people" disabled={!username.trim()||usernameSearchBusy} onClick={()=>{setShowAllPeopleResults(true);void handleUsernameSearch(username)}}><Search size={20}/></button></label><button className="icon-button people-qr-scan" type="button" aria-label="Scan Chater QR code" title="Scan Chater QR code" onClick={()=>{setQrScannerStatus('Starting camera…');setQrManualUsername('');setQrScannerOpen(true)}}><QrCode size={20}/></button></div>{authUser&&<button className="contact-sync-trigger" type="button" aria-expanded={contactSyncExpanded} onClick={()=>{setContactSyncExpanded(open=>!open);setContactSyncNotice('')}}><Users size={17}/>{contactSyncExpanded?'Hide contact sync':'Sync contacts'}</button>}{contactSyncExpanded&&<section className="contact-sync-panel" aria-label="Contact synchronization"><div className="contact-sync-intro"><strong>Find people from your contacts</strong><p>The names you select are sent to Chater only as exact-match search terms against public profile names. Phone numbers, email addresses and contact photos are not requested or stored.</p><p>Names are not unique, so results are only possible matches. Open a profile and confirm it is the right person before adding them.</p></div><button className="primary-button contact-sync-action" type="button" disabled={contactSyncBusy} onClick={()=>void handleContactSync()}>{contactSyncBusy?'Checking selected names…':'Choose contacts'}</button>{contactSyncNotice&&<p className="contact-sync-notice" role="status">{contactSyncNotice}</p>}{savedContactsBusy&&<p className="search-progress" role="status">Loading your Chater contacts…</p>}{savedContacts.length>0&&<div className="contact-sync-list"><strong>Your Chater contacts</strong><div className="username-search-results">{savedContacts.map(contact=><button type="button" className="username-search-result" key={contact.uid} onClick={()=>void openPublicProfile(contact)} aria-label={`View ${contact.displayName} profile`}><ProfileAvatar photoURL={contact.photoURL} displayName={contact.displayName} className="username-search-avatar"/><div><strong>{contact.displayName}</strong><span>@{contact.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div></div>}{contactMatches.length>0&&<div className="contact-sync-list"><strong>Possible matches</strong>{contactMatches.map(group=><div className="contact-match-group" key={normalizeContactDisplayName(group.contactName)}><span>{group.contactName}</span>{group.matches.length>0?<div className="username-search-results">{group.matches.map(match=><button type="button" className="username-search-result" key={match.uid} onClick={()=>void openPublicProfile(match)} aria-label={`Review possible match ${match.displayName}`}><ProfileAvatar photoURL={match.photoURL} displayName={match.displayName} className="username-search-avatar"/><div><strong>{match.displayName}</strong><span>@{match.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div>:<p>No exact public display-name match. Search by username instead.</p>}</div>)}</div>}</section>}</>:<div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>}{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<>{!securityPanel&&<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">General theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">Your general theme is saved to this Chater account and follows the account when you sign in on another phone.</p>{appearanceNotice&&<p className="appearance-notice" role="status">{appearanceNotice}</p>}</section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">General chat theme</h3><span>{wallpaperImageUrl ? 'Photo wallpaper' : wallpapers.find(item => item.id === wallpaper)?.name}</span></div><p className="accent-help">Choose a wallpaper for all your personal conversations. A wallpaper set inside an individual chat takes priority for that chat.</p><div className="wallpaper-options" role="group" aria-label="Choose a general chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={!wallpaperImageUrl && wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={!wallpaperImageUrl && wallpaper === item.id} onClick={()=>{setWallpaper(item.id);setWallpaperImageUrl('')}}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="General chat theme preview" style={wallpaperImageUrl ? {backgroundImage:`linear-gradient(#0003,#0003), url("${wallpaperImageUrl}")`,backgroundSize:'cover',backgroundPosition:'center'} : undefined}><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><div className="wallpaper-image-controls"><input ref={wallpaperInputRef} className="wallpaper-hidden-input" type="file" accept="image/*" aria-label="Choose general wallpaper image" disabled={!authUser||wallpaperUploadBusy} onChange={event=>{const file=event.target.files?.[0];if(file)void handleGeneralWallpaperUpload(file);event.currentTarget.value=''}}/><button type="button" className="secondary-button" disabled={!authUser||wallpaperUploadBusy} onClick={()=>wallpaperInputRef.current?.click()}><ImagePlus size={17}/>{wallpaperUploadBusy?'Uploading image…':wallpaperImageUrl?'Change wallpaper image':'Add image as general theme'}</button>{wallpaperImageUrl&&<button type="button" className="text-button" onClick={()=>setWallpaperImageUrl('')}>Remove image</button>}</div><p className="accent-help">Image wallpapers are uploaded to your Cloudinary account and saved to this Chater account. Use JPG, PNG, or WebP images up to 8 MB.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><p className="accent-help">This changes the shape of your actual sent and received message bubbles, not only this preview.</p><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div></>}{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
+    {dialog && dialog !== 'moment' && <div className="dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><section className={dialog==='search'?'dialog-card people-search-screen full-screen-dialog':dialog==='new-chat'?'dialog-card new-chat-screen full-screen-dialog':'dialog-card'} role="dialog" aria-modal="true" aria-labelledby="dialog-title">{dialog==='new-chat'||dialog==='search'?<><h2 id="dialog-title" className="a11y-heading">{dialog==='new-chat'?'Start a conversation':'Find people'}</h2><div className="people-search-toolbar"><button className="icon-button people-search-back" type="button" aria-label="Back" onClick={()=>setDialog(null)}><ArrowLeft size={21}/></button><label className="search-box dialog-search people-search-input"><input autoFocus aria-label="Search names or username" value={username} onChange={e=>{setUsername(e.target.value.replace(/^@/,''));setSearchNotice('');setShowAllPeopleResults(false)}} placeholder="Search"/>{username&&<button className="people-search-clear" aria-label="Clear search" type="button" onClick={()=>{setUsername('');setSearchNotice('');setShowAllPeopleResults(false)}}><X size={17}/></button>}<button className="people-search-icon" type="button" aria-label="Search people" disabled={!username.trim()||usernameSearchBusy} onClick={()=>{setShowAllPeopleResults(true);void handleUsernameSearch(username)}}><Search size={20}/></button></label><button className="icon-button people-qr-scan" type="button" aria-label="Scan Chater QR code" title="Scan Chater QR code" onClick={()=>{setQrScannerStatus('Starting camera…');setQrManualUsername('');setQrScannerOpen(true)}}><QrCode size={20}/></button></div>{authUser&&<button className="contact-sync-trigger" type="button" aria-expanded={contactSyncExpanded} onClick={()=>{setContactSyncExpanded(open=>!open);setContactSyncNotice('')}}><Users size={17}/>{contactSyncExpanded?'Hide contact sync':'Sync contacts'}</button>}{contactSyncExpanded&&<section className="contact-sync-panel" aria-label="Contact synchronization"><div className="contact-sync-intro"><strong>Find people from your contacts</strong><p>The names you select are sent to Chater only as exact-match search terms against public profile names. Phone numbers, email addresses and contact photos are not requested or stored.</p><p>Names are not unique, so results are only possible matches. Open a profile and confirm it is the right person before adding them.</p></div><button className="primary-button contact-sync-action" type="button" disabled={contactSyncBusy} onClick={()=>void handleContactSync()}>{contactSyncBusy?'Checking selected names…':'Choose contacts'}</button>{contactSyncNotice&&<p className="contact-sync-notice" role="status">{contactSyncNotice}</p>}{savedContactsBusy&&<p className="search-progress" role="status">Loading your Chater contacts…</p>}{savedContacts.length>0&&<div className="contact-sync-list"><strong>Your Chater contacts</strong><div className="username-search-results">{savedContacts.map(contact=><button type="button" className="username-search-result" key={contact.uid} onClick={()=>void openPublicProfile(contact)} aria-label={`View ${contact.displayName} profile`}><ProfileAvatar photoURL={contact.photoURL} displayName={contact.displayName} className="username-search-avatar"/><div><strong>{contact.displayName}</strong><span>@{contact.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div></div>}{contactMatches.length>0&&<div className="contact-sync-list"><strong>Possible matches</strong>{contactMatches.map(group=><div className="contact-match-group" key={normalizeContactDisplayName(group.contactName)}><span>{group.contactName}</span>{group.matches.length>0?<div className="username-search-results">{group.matches.map(match=><button type="button" className="username-search-result" key={match.uid} onClick={()=>void openPublicProfile(match)} aria-label={`Review possible match ${match.displayName}`}><ProfileAvatar photoURL={match.photoURL} displayName={match.displayName} className="username-search-avatar"/><div><strong>{match.displayName}</strong><span>@{match.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div>:<p>No exact public display-name match. Search by username instead.</p>}</div>)}</div>}</section>}</>:<div className="dialog-head"><div><p className="eyebrow">CHATER</p><h2 id="dialog-title">{dialog==='register'?'Create your account':dialog==='login'?'Sign in':dialog==='recover'?'Reset your password':dialog==='call'?'Make a call':dialog==='schedule'?'Schedule a call':'Settings'}</h2></div><button className="icon-button" aria-label="Close" onClick={()=>setDialog(null)}><X size={20}/></button></div>}{dialog==='call'?<CallComposer/>:dialog==='schedule'?<ScheduleComposer onSave={handleScheduleCall}/>:dialog==='settings'?<>{!securityPanel&&<><section className="theme-settings" aria-labelledby="theme-title"><div className="accent-settings-heading"><h3 id="theme-title">Appearance</h3><span>{theme === 'system' ? 'Follows device' : theme === 'light' ? 'Light mode' : 'Dark mode'}</span></div><label className="theme-select-label" htmlFor="theme-preference">General theme</label><select id="theme-preference" className="theme-select" value={theme} onChange={e=>setTheme(e.target.value as ThemePreference)}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select><p className="accent-help">Your general theme is saved to this Chater account and follows the account when you sign in on another phone.</p>{appearanceNotice&&<p className="appearance-notice" role="status">{appearanceNotice}</p>}</section><section className="wallpaper-settings" aria-labelledby="wallpaper-title"><div className="accent-settings-heading"><h3 id="wallpaper-title">General chat theme</h3><span>{wallpaperImageUrl ? 'Photo wallpaper' : wallpapers.find(item => item.id === wallpaper)?.name}</span></div><p className="accent-help">Choose a wallpaper for all your personal conversations. A wallpaper set inside an individual chat takes priority for that chat.</p><div className="wallpaper-options" role="group" aria-label="Choose a general chat wallpaper">{wallpapers.map(item=><button key={item.id} type="button" className={!wallpaperImageUrl && wallpaper === item.id ? 'wallpaper-option selected' : 'wallpaper-option'} data-wallpaper={item.id} aria-label={item.name} aria-pressed={!wallpaperImageUrl && wallpaper === item.id} onClick={()=>{setWallpaper(item.id);setWallpaperImageUrl('')}}><span className="wallpaper-swatch"/><small>{item.name}</small></button>)}</div><div className="chat-wallpaper-preview" data-wallpaper={wallpaper} aria-label="General chat theme preview" style={wallpaperImageUrl ? {backgroundImage:`linear-gradient(#0003,#0003), url("${wallpaperImageUrl}")`,backgroundSize:'cover',backgroundPosition:'center'} : undefined}><span className="preview-day">TODAY</span><div className="preview-message received">Your conversations, your style.</div><div className="preview-message sent">Choose a wallpaper you like.</div></div><div className="wallpaper-image-controls"><input ref={wallpaperInputRef} className="wallpaper-hidden-input" type="file" accept="image/*" aria-label="Choose general wallpaper image" disabled={!authUser||wallpaperUploadBusy} onChange={event=>{const file=event.target.files?.[0];if(file)void handleGeneralWallpaperUpload(file);event.currentTarget.value=''}}/><button type="button" className="secondary-button" disabled={!authUser||wallpaperUploadBusy} onClick={()=>wallpaperInputRef.current?.click()}><ImagePlus size={17}/>{wallpaperUploadBusy?'Uploading image…':wallpaperImageUrl?'Change wallpaper image':'Add image as general theme'}</button>{wallpaperImageUrl&&<button type="button" className="text-button" onClick={()=>setWallpaperImageUrl('')}>Remove image</button>}</div><p className="accent-help">Image wallpapers are uploaded to your Cloudflare R2 account and saved to this Chater account. Use JPG, PNG, or WebP images up to 8 MB.</p></section><section className="bubble-settings" aria-labelledby="bubble-title"><div className="accent-settings-heading"><h3 id="bubble-title">Message bubbles</h3><span>{bubbleStyles.find(item => item.id === bubbleStyle)?.name}</span></div><p className="accent-help">This changes the shape of your actual sent and received message bubbles, not only this preview.</p><div className="bubble-style-options" role="group" aria-label="Choose a message bubble style">{bubbleStyles.map(item=><button key={item.id} type="button" className={bubbleStyle === item.id ? 'bubble-style-option selected' : 'bubble-style-option'} aria-label={item.name} aria-pressed={bubbleStyle === item.id} onClick={()=>setBubbleStyle(item.id)}><span className="bubble-style-sample" data-bubble-style={item.id}><i/><b/></span><small>{item.name}</small></button>)}</div><div className="bubble-preview" data-bubble-style={bubbleStyle} aria-label="Message bubble preview"><span className="bubble-preview-incoming">Hey! How's your day?</span><span className="bubble-preview-outgoing">Going well, thanks!</span></div></section><section className="accent-settings" aria-labelledby="accent-title"><div className="accent-settings-heading"><h3 id="accent-title">Accent colour</h3><span>{accentPresets.find(item=>item.value===accent)?.name ?? 'Custom'}</span></div><div className="accent-palette" role="group" aria-label="Choose an accent colour">{accentPresets.map(item=><button key={item.value} type="button" className="accent-swatch" style={{'--swatch':item.value} as React.CSSProperties} aria-label={item.name} aria-pressed={accent===item.value} onClick={()=>{setAccent(item.value);setCustomHex(item.value);setCustomHexNotice('')}}><span/></button>)}</div><p className="accent-help">Choose a colour to personalize buttons, highlights and active navigation.</p><div className="custom-accent"><label htmlFor="custom-accent-hex">Custom HEX colour</label><div className="custom-accent-controls"><input id="custom-accent-hex" type="text" inputMode="text" autoCapitalize="characters" maxLength={9} value={customHex} onChange={e=>{setCustomHex(e.target.value);setCustomHexNotice('')}} placeholder="#RRGGBB or #RRGGBBAA" aria-describedby="custom-accent-help"/><button type="button" className="secondary-button" disabled={!normalizedCustomHex} onClick={()=>{setAccent(normalizedCustomHex.toLowerCase());setCustomHex(normalizedCustomHex.toLowerCase());setCustomHexNotice('Custom accent colour applied.')}}>Apply</button></div><p id="custom-accent-help" className="accent-help">Enter a six- or eight-digit HEX value, with or without #.</p>{customHexNotice&&<p className="custom-accent-notice" role="status">{customHexNotice}</p>}</div></section><div className="settings-list"><button onClick={()=>{setDialog(null);openTab('You')}}><UserRound/> Profile <ChevronRight/></button><button><Bell/> Notifications <ChevronRight/></button><button onClick={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('')}}><ShieldCheck/> Privacy and security <ChevronRight/></button><button><HelpCircle/> Help <ChevronRight/></button><button onClick={()=>{setAccountPanel('choices');setAccountNotice('');setAccountPassword('')}}><Settings/> Account <ChevronRight/></button></div></>}{securityPanel&&<section className="account-settings-panel security-settings-panel" aria-label="Privacy and security settings">
   <div className="dialog-head"><div><p className="eyebrow">ACCOUNT PROTECTION</p><h3>Privacy and security</h3></div><button className="icon-button" aria-label="Close security settings" onClick={()=>{setSecurityPanel(false);setSecurityNotice('')}}><X size={18}/></button></div>
   <div className="security-status-card"><div><strong>Email address</strong><span>{authUser?.email || 'No email address available'}</span></div><span className={authUser?.emailVerified?'security-status verified':'security-status pending'}>{authUser?.emailVerified?'Verified':'Not verified'}</span></div>
   <div className="security-divider"/>
