@@ -662,7 +662,7 @@ describe('Chater application shell', () => {
     ))
     expect(fetch).toHaveBeenCalledWith(
       CHATER_MEDIA_BASE_URL + '/upload',
-      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer test-media-token' } })
+      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer test-media-token', 'Content-Type': 'image/png' }), body: file })
     )
   })
 
