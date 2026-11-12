@@ -168,6 +168,33 @@ export default function ConversationScreen({
   }, [menuOpen])
 
   useEffect(() => {
+    const handleAndroidBack = (event: Event) => {
+      let handled = true
+      if (clearConfirmOpen) {
+        setClearConfirmOpen(false)
+      } else if (reportOpen) {
+        setReportOpen(false)
+      } else if (blockConfirmOpen) {
+        setBlockConfirmOpen(false)
+      } else if (searchOpen) {
+        setSearchOpen(false)
+        setMessageSearch('')
+      } else if (contactInfoOpen) {
+        setContactInfoOpen(false)
+      } else if (menuOpen) {
+        if (menuPage !== 'main') setMenuPage('main')
+        else setMenuOpen(false)
+      } else {
+        handled = false
+      }
+      if (handled) event.preventDefault()
+    }
+
+    window.addEventListener('chater:android-back', handleAndroidBack)
+    return () => window.removeEventListener('chater:android-back', handleAndroidBack)
+  }, [blockConfirmOpen, clearConfirmOpen, contactInfoOpen, menuOpen, menuPage, reportOpen, searchOpen])
+
+  useEffect(() => {
     if (!firestoreDb) {
       setMessagesBusy(false)
       setMessageNotice('Chater cannot connect to its message database right now.')
