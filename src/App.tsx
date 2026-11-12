@@ -1533,6 +1533,9 @@ export default function App() {
       currentUserId={authUser.uid}
       target={conversationTarget as ChatUser}
       isBlocked={blockedUserIds.includes(conversationTarget.uid)}
+      generalWallpaper={wallpaper}
+      generalWallpaperImageUrl={wallpaperImageUrl}
+      onWallpaperUpload={handlePersonalChatWallpaperUpload}
       onClose={()=>setConversationTarget(null)}
       onBlock={blockUser}
       onUnblock={unblockUser}
