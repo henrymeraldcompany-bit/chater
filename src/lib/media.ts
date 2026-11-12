@@ -43,19 +43,21 @@ export async function uploadChaterMedia(
   options: ChaterMediaUploadOptions,
 ): Promise<string> {
   const token = await user.getIdToken()
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('category', options.category)
-  if (options.scope) formData.append('scope', options.scope)
-  if (options.conversationId) formData.append('conversationId', options.conversationId)
+  const headers: Record<string, string> = {
+    Authorization: 'Bearer ' + token,
+    'Content-Type': file.type,
+    'X-Chater-Media-Category': options.category,
+  }
+  if (options.scope) headers['X-Chater-Media-Scope'] = options.scope
+  if (options.conversationId) headers['X-Chater-Conversation-Id'] = options.conversationId
 
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 60_000)
   try {
     const response = await fetch(CHATER_MEDIA_BASE_URL + '/upload', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
-      body: formData,
+      headers,
+      body: file,
       signal: controller.signal,
     })
     const result = await response.json().catch(() => ({})) as ChaterMediaUploadResponse
