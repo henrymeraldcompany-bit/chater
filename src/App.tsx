@@ -279,7 +279,13 @@ export default function App() {
   const normalizedCustomHex = /^#?[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(customHex.trim()) ? (customHex.trim().startsWith('#') ? customHex.trim() : `#${customHex.trim()}`) : ''
   const [theme, setTheme] = useState<ThemePreference>(readSavedTheme)
   const [wallpaper, setWallpaper] = useState<Wallpaper>(readSavedWallpaper)
+  const [wallpaperImageUrl, setWallpaperImageUrl] = useState(() => readSavedWallpaperImage())
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStyle>(readSavedBubbleStyle)
+  const [preferencesReady, setPreferencesReady] = useState(true)
+  const [appearanceNotice, setAppearanceNotice] = useState('')
+  const [wallpaperUploadBusy, setWallpaperUploadBusy] = useState(false)
+  const wallpaperInputRef = useRef<HTMLInputElement | null>(null)
+  const appearanceSaveVersion = useRef(0)
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', accent)
     document.documentElement.style.setProperty('--accent-bright', accent)
@@ -304,17 +310,49 @@ export default function App() {
     try { media = window.matchMedia?.('(prefers-color-scheme: dark)') } catch { media = undefined }
     applyTheme()
     media?.addEventListener?.('change', applyTheme)
-    try { window.localStorage.setItem(THEME_STORAGE_KEY, theme) } catch { /* Theme remains active for this session. */ }
+    try {
+      if (preferencesReady) {
+        const key = authUser?.uid ? `${THEME_STORAGE_KEY}:${authUser.uid}` : THEME_STORAGE_KEY
+        window.localStorage.setItem(key, theme)
+      }
+    } catch { /* Theme remains active for this session. */ }
     return () => media?.removeEventListener?.('change', applyTheme)
-  }, [theme])
+  }, [theme, authUser?.uid, preferencesReady])
   useEffect(() => {
     document.documentElement.dataset.bubbleStyle = bubbleStyle
-    try { window.localStorage.setItem(BUBBLE_STORAGE_KEY, bubbleStyle) } catch { /* Bubble style remains active for this session. */ }
-  }, [bubbleStyle])
+    try {
+      if (preferencesReady) {
+        const key = authUser?.uid ? `${BUBBLE_STORAGE_KEY}:${authUser.uid}` : BUBBLE_STORAGE_KEY
+        window.localStorage.setItem(key, bubbleStyle)
+      }
+    } catch { /* Bubble style remains active for this session. */ }
+  }, [bubbleStyle, authUser?.uid, preferencesReady])
   useEffect(() => {
     document.documentElement.dataset.wallpaper = wallpaper
-    try { window.localStorage.setItem(WALLPAPER_STORAGE_KEY, wallpaper) } catch { /* Wallpaper remains active for this session. */ }
-  }, [wallpaper])
+    try {
+      if (preferencesReady) {
+        const key = authUser?.uid ? `${WALLPAPER_STORAGE_KEY}:${authUser.uid}` : WALLPAPER_STORAGE_KEY
+        window.localStorage.setItem(key, wallpaper)
+        const imageKey = authUser?.uid ? `${WALLPAPER_IMAGE_STORAGE_KEY}:${authUser.uid}` : WALLPAPER_IMAGE_STORAGE_KEY
+        if (wallpaperImageUrl) window.localStorage.setItem(imageKey, wallpaperImageUrl)
+        else window.localStorage.removeItem(imageKey)
+      }
+    } catch { /* Wallpaper remains active for this session. */ }
+  }, [wallpaper, wallpaperImageUrl, authUser?.uid, preferencesReady])
+  useEffect(() => {
+    if (!authUser || !firestoreDb || !preferencesReady) return
+    const saveVersion = ++appearanceSaveVersion.current
+    setAppearanceNotice('Saving appearance to your account…')
+    void setDoc(doc(firestoreDb, 'users', authUser.uid), {
+      uid: authUser.uid,
+      preferences: { theme, wallpaper, wallpaperImageUrl, bubbleStyle },
+      updatedAt: serverTimestamp()
+    }, { merge: true }).then(() => {
+      if (appearanceSaveVersion.current === saveVersion) setAppearanceNotice('Appearance saved to your account.')
+    }).catch(() => {
+      if (appearanceSaveVersion.current === saveVersion) setAppearanceNotice('These appearance changes are active here, but could not sync to your account. Check Firestore rules and connection.')
+    })
+  }, [authUser?.uid, preferencesReady, theme, wallpaper, wallpaperImageUrl, bubbleStyle])
   useEffect(() => { const timer = window.setTimeout(() => setShowSplash(false), 600); return () => window.clearTimeout(timer) }, [])
   useEffect(() => {
     if (!firebaseAuth) return
