@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, Download,
-  Flag, FolderOpen, MoreVertical, Palette, Search, ShieldBan,
+  Flag, FolderOpen, ImagePlus, MoreVertical, Palette, Search, ShieldBan,
   ShieldCheck, Smartphone, Trash2, UserRound, Volume2, VolumeX, X
 } from 'lucide-react'
 import {
-  addDoc, collection, doc, onSnapshot, orderBy,
-  query as firestoreQuery, runTransaction, serverTimestamp
+  addDoc, collection, doc, getDoc, onSnapshot, orderBy,
+  query as firestoreQuery, runTransaction, serverTimestamp, setDoc
 } from 'firebase/firestore'
 import { firestoreDb } from '../lib/firebase'
 import { createConversationId, isValidChatMessage, normalizeChatMessage, timestampToMillis, type ChatMessage, type ChatUser } from '../lib/chat'
@@ -18,16 +18,20 @@ type ConversationScreenProps = {
   onClose: () => void
   onBlock: (targetUid: string) => Promise<void>
   onUnblock: (targetUid: string) => Promise<void>
+  generalWallpaper?: string
+  generalWallpaperImageUrl?: string
+  onWallpaperUpload?: (file: File, conversationId: string) => Promise<string>
 }
 
 type MenuPage = 'main' | 'more' | 'theme'
-type ChatTheme = 'default' | 'midnight' | 'forest' | 'rose'
+type ChatTheme = 'default' | 'midnight' | 'forest' | 'rose' | 'custom'
 
 const chatThemes: { id: ChatTheme; label: string }[] = [
   { id: 'default', label: 'Default' },
   { id: 'midnight', label: 'Midnight' },
   { id: 'forest', label: 'Forest' },
-  { id: 'rose', label: 'Rose' }
+  { id: 'rose', label: 'Rose' },
+  { id: 'custom', label: 'Custom image' }
 ]
 
 function formatMessageTime(value: unknown): string {
@@ -36,12 +40,25 @@ function formatMessageTime(value: unknown): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(millis))
 }
 
-function readChatTheme(conversationId: string): ChatTheme {
+function chatPreferenceKey(userId: string, conversationId: string): string {
+  return 'chater:chat-theme:' + userId + ':' + conversationId
+}
+
+function readChatTheme(userId: string, conversationId: string): ChatTheme {
   try {
-    const stored = window.localStorage.getItem('chater:chat-theme:' + conversationId)
+    const stored = window.localStorage.getItem(chatPreferenceKey(userId, conversationId))
     return chatThemes.some(theme => theme.id === stored) ? stored as ChatTheme : 'default'
   } catch {
     return 'default'
+  }
+}
+
+function readChatThemeImage(userId: string, conversationId: string): string {
+  try {
+    const stored = window.localStorage.getItem('chater:chat-theme-image:' + userId + ':' + conversationId) || ''
+    return /^https:\/\/res\\.cloudinary\\.com\//i.test(stored) ? stored : ''
+  } catch {
+    return ''
   }
 }
 
@@ -68,7 +85,10 @@ export default function ConversationScreen({
   isBlocked,
   onClose,
   onBlock,
-  onUnblock
+  onUnblock,
+  generalWallpaper = 'default',
+  generalWallpaperImageUrl = '',
+  onWallpaperUpload
 }: ConversationScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messageDraft, setMessageDraft] = useState('')
@@ -87,18 +107,43 @@ export default function ConversationScreen({
   const [reportBusy, setReportBusy] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [clearBusy, setClearBusy] = useState(false)
-  const [chatTheme, setChatTheme] = useState<ChatTheme>(() => readChatTheme(createConversationId(currentUserId, target.uid)))
+  const [chatTheme, setChatTheme] = useState<ChatTheme>(() => readChatTheme(currentUserId, createConversationId(currentUserId, target.uid)))
+  const [chatThemeImageUrl, setChatThemeImageUrl] = useState(() => readChatThemeImage(currentUserId, createConversationId(currentUserId, target.uid)))
+  const [wallpaperUploadBusy, setWallpaperUploadBusy] = useState(false)
   const [muted, setMuted] = useState(() => readMutedPreference(createConversationId(currentUserId, target.uid)))
   const [clearBefore, setClearBefore] = useState(() => readChatClearBefore(createConversationId(currentUserId, target.uid)))
   const messageEndRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const chatWallpaperInputRef = useRef<HTMLInputElement | null>(null)
   const conversationId = createConversationId(currentUserId, target.uid)
 
   useEffect(() => {
-    setChatTheme(readChatTheme(conversationId))
+    const image = readChatThemeImage(currentUserId, conversationId)
+    const theme = readChatTheme(currentUserId, conversationId)
+    setChatTheme(theme)
+    setChatThemeImageUrl(image)
     setMuted(readMutedPreference(conversationId))
     setClearBefore(readChatClearBefore(conversationId))
-  }, [conversationId])
+    if (!firestoreDb) return
+    let active = true
+    void getDoc(doc(firestoreDb, 'users', currentUserId, 'chatPreferences', conversationId)).then(snapshot => {
+      if (!active || !snapshot.exists()) return
+      const saved = snapshot.data() as Record<string, unknown>
+      const savedTheme = chatThemes.some(item => item.id === saved.theme) ? saved.theme as ChatTheme : theme
+      const savedImage = typeof saved.imageUrl === 'string' && /^https:\/\/res\\.cloudinary\\.com\//i.test(saved.imageUrl) ? saved.imageUrl : image
+      setChatTheme(savedTheme)
+      setChatThemeImageUrl(savedImage)
+      try {
+        window.localStorage.setItem(chatPreferenceKey(currentUserId, conversationId), savedTheme)
+        const key = 'chater:chat-theme-image:' + currentUserId + ':' + conversationId
+        if (savedImage) window.localStorage.setItem(key, savedImage)
+        else window.localStorage.removeItem(key)
+      } catch { /* Firestore remains the source of truth. */ }
+    }).catch(() => {
+      // Local account-scoped preferences remain available if chat preference rules are not published yet.
+    })
+    return () => { active = false }
+  }, [currentUserId, conversationId])
 
   useEffect(() => {
     if (!menuOpen) return
