@@ -559,6 +559,548 @@ export default function App() {
     setProfilePhotoUrl(photoURL)
     return photoURL
   }
+  const handleUsernameChange = async (nextUsername: string) => {
+    if (!authUser || !firestoreDb) throw new Error('Sign in and connect to Chater to change your username.')
+    const normalized = nextUsername.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
+      throw new Error('Username must be 3–20 characters using lowercase letters, numbers or underscores.')
+    }
+    if (normalized === profileUsername) return
+    const oldUsername = profileUsername
+    const oldRef = oldUsername ? doc(firestoreDb, 'usernames', oldUsername) : null
+    const newRef = doc(firestoreDb, 'usernames', normalized)
+    const userRef = doc(firestoreDb, 'users', authUser.uid)
+    await runTransaction(firestoreDb, async transaction => {
+      const newSnapshot = await transaction.get(newRef)
+      const oldSnapshot = oldRef ? await transaction.get(oldRef) : null
+      if (newSnapshot.exists()) {
+        throw Object.assign(new Error('That username is already taken. Choose another username.'), { code: 'chater/username-taken' })
+      }
+      if (oldSnapshot?.exists() && oldSnapshot.data()?.uid !== authUser.uid) {
+        throw new Error('Your current username is not owned by this account. Contact support before changing it.')
+      }
+      transaction.set(newRef, { uid: authUser.uid, username: normalized, createdAt: serverTimestamp() })
+      if (oldRef && oldSnapshot?.exists()) transaction.delete(oldRef)
+      transaction.set(userRef, { uid: authUser.uid, username: normalized, usernameLower: normalized, updatedAt: serverTimestamp() }, { merge: true })
+    })
+    setProfileUsername(normalized)
+    try { window.localStorage.setItem(`chater:profile:username:${authUser.uid}`, normalized) } catch { /* Firestore remains the source of truth. */ }
+  }
+  const handleUsernameSearch = useCallback(async (rawInput: string) => {
+    const normalized = rawInput.trim().replace(/^@/, '').toLowerCase().replace(/\s+/g, ' ')
+    const requestId = ++usernameSearchRequest.current
+    setSearchNotice('')
+    setUsernameSearchResults([])
+    if (!normalized.length) {
+      setUsernameSearchBusy(false)
+      return
+    }
+    if (!authUser || !firestoreDb) {
+      setSearchNotice('Sign in with a verified Chater account to find people.')
+      return
+    }
+    setUsernameSearchBusy(true)
+    try {
+      // Read the public member directory, then perform substring matching locally.
+      // This supports matches anywhere in a name or username, including from the
+      // very first typed character; prefix-only Firestore ranges cannot do that.
+      const snapshot = await getDocs(collection(firestoreDb, 'users'))
+      if (requestId !== usernameSearchRequest.current) return
+      const unique = new Map<string, UsernameSearchResult>()
+      for (const member of snapshot.docs) {
+        const profile = member.data() as Record<string, unknown>
+        const uid = typeof profile.uid === 'string' ? profile.uid : member.id
+        const savedUsername = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
+        const displayName = typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : savedUsername
+        const searchableName = displayName.toLowerCase()
+        if (!uid || uid === authUser.uid || !savedUsername) continue
+        if (!searchableName.includes(normalized) && !savedUsername.includes(normalized)) continue
+        unique.set(uid, {
+          uid,
+          username: savedUsername,
+          displayName: displayName || savedUsername,
+          photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+        })
+      }
+      const results = [...unique.values()].sort((a, b) => {
+        const aStarts = a.displayName.toLowerCase().startsWith(normalized) || a.username.startsWith(normalized)
+        const bStarts = b.displayName.toLowerCase().startsWith(normalized) || b.username.startsWith(normalized)
+        return Number(bStarts) - Number(aStarts) || a.displayName.localeCompare(b.displayName)
+      })
+      setUsernameSearchResults(results)
+      if (!results.length) setSearchNotice('No matching Chater members yet. Try another spelling.')
+    } catch {
+      if (requestId === usernameSearchRequest.current) {
+        setUsernameSearchResults([])
+        setSearchNotice('People search is temporarily unavailable. Check your connection and try again.')
+      }
+    } finally {
+      if (requestId === usernameSearchRequest.current) setUsernameSearchBusy(false)
+    }
+  }, [authUser])
+  const openPublicProfile = useCallback(async (result: UsernameSearchResult) => {
+    if (!authUser || result.uid === authUser.uid) return
+    setConversationTarget(null)
+    setPublicProfileBusy(true)
+    setPublicProfileNotice('')
+    setContactActionNotice('')
+    setProfileBlockConfirmation(false)
+    setProfileBlockNotice('')
+    setPublicProfile({
+      ...result, about: '', location: '', occupation: ''
+    })
+    try {
+      if (firestoreDb) {
+        const snapshot = await getDoc(doc(firestoreDb, 'users', result.uid))
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Record<string, unknown>
+          // Explicitly whitelist public fields. Never copy email or other private account data.
+          setPublicProfile({
+            uid: result.uid,
+            username: result.username,
+            displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : result.displayName,
+            photoURL: typeof data.photoURL === 'string' ? data.photoURL : result.photoURL,
+            about: typeof data.about === 'string' ? data.about.trim() : '',
+            location: typeof data.location === 'string' ? data.location.trim() : '',
+            occupation: typeof data.occupation === 'string' ? data.occupation.trim() : ''
+          })
+        }
+      }
+    } catch {
+      setPublicProfileNotice('Some profile details could not be loaded. Showing available public information.')
+    } finally {
+      setPublicProfileBusy(false)
+    }
+  }, [authUser])
+  const openPublicProfileByUsername = useCallback(async (rawUsername: string): Promise<boolean> => {
+    const normalized = rawUsername.trim().replace(/^@/, '').toLowerCase()
+    if (!authUser || !firestoreDb || !/^[a-z0-9_]{3,20}$/.test(normalized)) return false
+    try {
+      const usernameSnapshot = await getDoc(doc(firestoreDb, 'usernames', normalized))
+      if (!usernameSnapshot.exists()) return false
+      const uid = usernameSnapshot.data()?.uid
+      if (typeof uid !== 'string' || !uid || uid === authUser.uid) return false
+      await openPublicProfile({
+        uid,
+        username: normalized,
+        displayName: normalized,
+        photoURL: ''
+      })
+      return true
+    } catch {
+      return false
+    }
+  }, [authUser, openPublicProfile])
+  const handleScannedQRCode = useCallback(async (rawValue: string): Promise<boolean> => {
+    const normalized = extractChaterUsernameFromQR(rawValue)
+    if (!normalized) {
+      setQrScannerStatus('This QR code is not a valid Chater profile code.')
+      return false
+    }
+    setQrScannerStatus(`Finding @${normalized}…`)
+    const found = await openPublicProfileByUsername(normalized)
+    if (!found) {
+      setQrScannerStatus('No matching Chater account was found. Try another QR code.')
+      return false
+    }
+    setQrScannerOpen(false)
+    setQrManualUsername('')
+    setDialog(null)
+    return true
+  }, [openPublicProfileByUsername])
+  const handleContactSync = async () => {
+    setContactSyncNotice('')
+    setContactMatches([])
+    if (!authUser || !firestoreDb) {
+      setContactSyncNotice('Sign in with a verified Chater account to sync contacts.')
+      return
+    }
+    const contactPicker = (navigator as Navigator & { contacts?: ContactPickerManager }).contacts
+    if (!window.isSecureContext || !contactPicker?.select) {
+      setContactSyncNotice('This browser does not support contact selection. Use the search field above or scan a Chater QR code instead.')
+      return
+    }
+
+    setContactSyncBusy(true)
+    try {
+      // Request names only; device phone numbers, emails and contact photos
+      // are deliberately not requested.
+      const selected = await contactPicker.select(['name'], { multiple: true })
+      const names = selected
+        .map(contact => Array.isArray(contact.name) ? contact.name.join(' ') : '')
+        .map(name => name.trim().replace(/\s+/g, ' '))
+        .filter(name => name.length >= 2 && name.length <= 50)
+      const normalizedNames = [...new Set(names.map(normalizeContactDisplayName).filter(Boolean))]
+      if (!normalizedNames.length) {
+        setContactSyncNotice('No contact names were selected. Nothing was saved.')
+        return
+      }
+
+      const candidateProfiles = new Map<string, UsernameSearchResult>()
+      // Firestore "in" queries are bounded, so query in batches rather than
+      // downloading the entire public member directory.
+      for (let offset = 0; offset < normalizedNames.length; offset += 30) {
+        const nameBatch = normalizedNames.slice(offset, offset + 30)
+        const snapshot = await getDocs(firestoreQuery(
+          collection(firestoreDb, 'users'),
+          where('displayNameLower', 'in', nameBatch)
+        ))
+        for (const member of snapshot.docs) {
+          const profile = member.data() as Record<string, unknown>
+          const uid = typeof profile.uid === 'string' ? profile.uid : member.id
+          const username = typeof profile.username === 'string' ? profile.username.trim().toLowerCase() : ''
+          const displayName = typeof profile.displayName === 'string' && profile.displayName.trim()
+            ? profile.displayName.trim()
+            : username
+          if (!uid || uid === authUser.uid || !/^[a-z0-9_]{3,20}$/.test(username)) continue
+          candidateProfiles.set(uid, {
+            uid,
+            username,
+            displayName,
+            photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+          })
+        }
+      }
+
+      const groups = matchChaterContactsByName(names, [...candidateProfiles.values()], authUser.uid)
+      setContactMatches(groups)
+      const matchCount = groups.reduce((total, group) => total + group.matches.length, 0)
+      setContactSyncNotice(matchCount
+        ? `Found ${matchCount} possible exact-name match${matchCount === 1 ? '' : 'es'}. Review each public profile before adding it.`
+        : 'No exact display-name matches were found. Try searching by Chater username instead.')
+    } catch (error) {
+      const errorName = typeof error === 'object' && error !== null && 'name' in error
+        ? String((error as { name?: unknown }).name || '')
+        : ''
+      setContactSyncNotice(errorName === 'AbortError'
+        ? 'No contacts were shared. Nothing was saved.'
+        : 'Chater could not read the selected contacts. Check your browser support and try again.')
+    } finally {
+      setContactSyncBusy(false)
+    }
+  }
+
+  const savePublicProfileAsContact = async (profile: UsernameSearchResult) => {
+    if (!authUser || !firestoreDb || profile.uid === authUser.uid) return
+    setContactActionBusy(true)
+    setContactActionNotice('')
+    try {
+      await setDoc(doc(firestoreDb, 'users', authUser.uid, 'contacts', profile.uid), {
+        uid: profile.uid,
+        addedAt: serverTimestamp()
+      })
+      setSavedContacts(current => current.some(item => item.uid === profile.uid) ? current : [...current, profile])
+      setContactActionNotice('Contact saved to your Chater account.')
+    } catch {
+      setContactActionNotice('We could not save this contact. Check your connection and try again.')
+    } finally {
+      setContactActionBusy(false)
+    }
+  }
+
+  const removePublicProfileFromContacts = async (profile: UsernameSearchResult) => {
+    if (!authUser || !firestoreDb || profile.uid === authUser.uid) return
+    setContactActionBusy(true)
+    setContactActionNotice('')
+    try {
+      await deleteDoc(doc(firestoreDb, 'users', authUser.uid, 'contacts', profile.uid))
+      setSavedContacts(current => current.filter(item => item.uid !== profile.uid))
+      setContactActionNotice('Contact removed from your Chater contacts.')
+    } catch {
+      setContactActionNotice('We could not remove this contact. Check your connection and try again.')
+    } finally {
+      setContactActionBusy(false)
+    }
+  }
+
+  const blockUser = async (targetUid: string) => {
+    if (!authUser || !firestoreDb || targetUid === authUser.uid) throw new Error('Sign in to block another Chater account.')
+    await setDoc(doc(firestoreDb, 'users', authUser.uid, 'blocked', targetUid), {
+      uid: targetUid,
+      createdAt: serverTimestamp()
+    })
+    setBlockedUserIds(current => current.includes(targetUid) ? current : [...current, targetUid])
+  }
+
+  const unblockUser = async (targetUid: string) => {
+    if (!authUser || !firestoreDb || targetUid === authUser.uid) throw new Error('Sign in to manage your block list.')
+    await deleteDoc(doc(firestoreDb, 'users', authUser.uid, 'blocked', targetUid))
+    setBlockedUserIds(current => current.filter(uid => uid !== targetUid))
+  }
+
+  const handlePublicProfileBlockAction = async () => {
+    if (!publicProfile || !authUser) return
+    const alreadyBlocked = blockedUserIds.includes(publicProfile.uid)
+    setProfileBlockBusy(true)
+    setProfileBlockNotice('')
+    try {
+      if (alreadyBlocked) {
+        await unblockUser(publicProfile.uid)
+        setProfileBlockNotice('You have unblocked @' + publicProfile.username + '.')
+      } else {
+        await blockUser(publicProfile.uid)
+        setProfileBlockNotice('@' + publicProfile.username + ' can no longer contact you on Chater.')
+      }
+      setProfileBlockConfirmation(false)
+    } catch {
+      setProfileBlockNotice('Chater could not update your block list. Check your connection and try again.')
+    } finally {
+      setProfileBlockBusy(false)
+    }
+  }
+
+  const isSavedContact = (uid: string) => savedContacts.some(contact => contact.uid === uid)
+
+  useEffect(() => {
+    if (!contactSyncExpanded || !authUser || !firestoreDb) return
+    const db = firestoreDb
+    let active = true
+    setSavedContactsBusy(true)
+    void (async () => {
+      try {
+        const links = await getDocs(collection(db, 'users', authUser.uid, 'contacts'))
+        const targetIds = [...new Set(links.docs
+          .map(link => {
+            const data = link.data() as Record<string, unknown>
+            return typeof data.uid === 'string' ? data.uid : link.id
+          })
+          .filter(uid => uid && uid !== authUser.uid)
+        )].slice(0, 100)
+        const profiles = await Promise.all(targetIds.map(async uid => {
+          const snapshot = await getDoc(doc(db, 'users', uid))
+          if (!snapshot.exists()) return null
+          const data = snapshot.data() as Record<string, unknown>
+          const username = typeof data.username === 'string' ? data.username.trim().toLowerCase() : ''
+          if (!/^[a-z0-9_]{3,20}$/.test(username)) return null
+          return {
+            uid,
+            username,
+            displayName: typeof data.displayName === 'string' && data.displayName.trim() ? data.displayName.trim() : username,
+            photoURL: typeof data.photoURL === 'string' ? data.photoURL : ''
+          } satisfies UsernameSearchResult
+        }))
+        if (active) setSavedContacts(profiles.filter((profile): profile is UsernameSearchResult => profile !== null))
+      } catch {
+        if (active) setContactSyncNotice('Your saved contacts could not be loaded. Check your connection and try again.')
+      } finally {
+        if (active) setSavedContactsBusy(false)
+      }
+    })()
+    return () => { active = false }
+  }, [contactSyncExpanded, authUser])
+
+  const closePublicProfile = () => {
+    setPublicProfile(null)
+    setPublicProfileNotice('')
+    setProfileBlockConfirmation(false)
+    setProfileBlockNotice('')
+  }
+  const openConversationEntry = () => {
+    if (!publicProfile || !authUser || publicProfile.uid === authUser.uid) return
+    setConversationTarget({
+      uid: publicProfile.uid,
+      username: publicProfile.username,
+      displayName: publicProfile.displayName,
+      photoURL: publicProfile.photoURL
+    })
+    setPublicProfile(null)
+  }
+  useEffect(() => {
+    if (!qrScannerOpen) return
+    let cancelled = false
+    let animationFrame = 0
+    let stream: MediaStream | null = null
+    const Detector = (window as unknown as { BarcodeDetector?: QRCodeDetectorConstructor }).BarcodeDetector
+    if (!Detector) {
+      setQrScannerStatus('QR scanning is not supported in this browser. You can enter a username below.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setQrScannerStatus('Camera access is unavailable. You can enter a username below.')
+      return
+    }
+    const startCamera = async () => {
+      try {
+        const detector = new Detector({ formats: ['qr_code'] })
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        })
+        if (cancelled) {
+          stream.getTracks().forEach(track => track.stop())
+          return
+        }
+        const video = qrVideoRef.current
+        if (!video) return
+        video.srcObject = stream
+        await video.play().catch(() => undefined)
+        setQrScannerStatus('Point your camera at a Chater QR code.')
+        const scanFrame = async () => {
+          if (cancelled) return
+          const currentVideo = qrVideoRef.current
+          if (currentVideo && currentVideo.readyState >= 2) {
+            try {
+              const detected = await detector.detect(currentVideo)
+              const rawValue = detected[0]?.rawValue
+              if (rawValue && await handleScannedQRCode(rawValue)) return
+            } catch {
+              // Keep scanning if a frame is temporarily unreadable.
+            }
+          }
+          if (!cancelled) animationFrame = window.requestAnimationFrame(() => { void scanFrame() })
+        }
+        animationFrame = window.requestAnimationFrame(() => { void scanFrame() })
+      } catch {
+        setQrScannerStatus('Camera permission was not granted or the camera is unavailable. You can enter a username below.')
+      }
+    }
+    void startCamera()
+    return () => {
+      cancelled = true
+      if (animationFrame) window.cancelAnimationFrame(animationFrame)
+      stream?.getTracks().forEach(track => track.stop())
+      if (qrVideoRef.current) qrVideoRef.current.srcObject = null
+    }
+  }, [qrScannerOpen, handleScannedQRCode])
+
+  useEffect(() => {
+    if (!authUser || !firestoreDb) return
+    const params = new URLSearchParams(window.location.search)
+    const linkedUsername = params.get('chater_user')
+    if (!linkedUsername) return
+    params.delete('chater_user')
+    const remaining = params.toString()
+    window.history.replaceState({}, '', window.location.pathname + (remaining ? `?${remaining}` : '') + window.location.hash)
+    void openPublicProfileByUsername(linkedUsername)
+  }, [authUser, openPublicProfileByUsername])
+
+  useEffect(() => {
+    if (dialog !== 'new-chat' && dialog !== 'search') return
+    usernameSearchRequest.current += 1
+    const timer = window.setTimeout(() => { void handleUsernameSearch(username) }, 180)
+    return () => window.clearTimeout(timer)
+  }, [username, dialog, authUser, handleUsernameSearch])
+  const handleDisplayNameChange = async (nextName: string) => {
+    if (!authUser) throw new Error('Sign in to edit your profile name.')
+    const normalized = nextName.trim().replace(/\s+/g, ' ')
+    if (normalized.length < 2 || normalized.length > 50) throw new Error('Your profile name must be 2–50 characters.')
+    if (normalized === (authUser.displayName || '')) return
+    await updateProfile(authUser, { displayName: normalized })
+    const db = firestoreDb
+    if (db) {
+      await runTransaction(db, async transaction => {
+        transaction.set(doc(db, 'users', authUser.uid), {
+          uid: authUser.uid, ...(profileUsername ? { username: profileUsername, usernameLower: profileUsername.toLowerCase() } : {}), displayName: normalized, displayNameLower: normalizeContactDisplayName(normalized), updatedAt: serverTimestamp()
+        }, { merge: true })
+      })
+    }
+    setAuthUser({ ...authUser, displayName: normalized } as User)
+  }
+  const handleProfileDetailsChange = async (nextDetails: ProfileDetails) => {
+    if (!authUser || !firestoreDb) throw new Error('Sign in and connect to Chater to edit your profile details.')
+    const normalized: ProfileDetails = {
+      about: nextDetails.about.trim().replace(/\s+/g, ' '),
+      location: nextDetails.location.trim().replace(/\s+/g, ' '),
+      occupation: nextDetails.occupation.trim().replace(/\s+/g, ' ')
+    }
+    if (normalized.about.length > 160) throw new Error('Your About description must be 160 characters or fewer.')
+    if (normalized.location.length > 60) throw new Error('Location must be 60 characters or fewer.')
+    if (normalized.occupation.length > 60) throw new Error('Occupation must be 60 characters or fewer.')
+    const db = firestoreDb
+    try {
+      await setDoc(doc(db, 'users', authUser.uid), {
+        uid: authUser.uid,
+        ...(profileUsername ? { username: profileUsername } : {}),
+        ...normalized,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+      setProfileDetails(normalized)
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      if (code === 'permission-denied') {
+        throw new Error("Firebase blocked this profile update. The latest Chater Firestore security rules must be published in the chater-8f834 project. Open Firebase Console → Firestore Database → Rules, publish the rules from Chater's firestore.rules file, then try again.")
+      }
+      throw error
+    }
+  }
+  const handleAccountDeletion = async (password: string) => {
+    if (!authUser || !firebaseAuth || !authUser.email) throw new Error('Sign in with an email account before deleting it.')
+    if (!firestoreDb) throw new Error('Chater cannot connect to the account database. Try again when connected.')
+    const credential = EmailAuthProvider.credential(authUser.email, password)
+    await reauthenticateWithCredential(authUser, credential)
+    // Delete this user's R2 media first. If cleanup fails, stop here so
+    // the Firestore profile and Firebase sign-in account remain available for retry.
+    const idToken = await authUser.getIdToken(true)
+    let cleanupResponse: Response
+    try {
+      cleanupResponse = await fetch(CHATER_MEDIA_BASE_URL + '/delete-account-media', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + idToken }
+      })
+    } catch {
+      throw new Error('Chater could not reach its secure R2 media service. Your account has not been deleted. Check your connection and try again.')
+    }
+    const cleanupResult = await cleanupResponse.json().catch(() => ({})) as { error?: string; success?: boolean }
+    if (!cleanupResponse.ok || cleanupResult.success !== true) {
+      throw new Error(cleanupResult.error || 'Chater could not confirm deletion of your profile pictures and Moments. Your account has not been deleted. Please try again later.')
+    }
+    const db = firestoreDb
+    // Remove this account's Moment records while the user is still authenticated.
+    // Firestore rules only allow an owner to delete their own Moment documents.
+    const momentsSnapshot = await getDocs(firestoreQuery(collection(db, 'moments'), where('uid', '==', authUser.uid)))
+    const ownedMoments = momentsSnapshot.docs
+    await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
+    // Firestore does not cascade deletes into subcollections. Remove private
+    // contact and block links before deleting the profile document.
+    const [contactSnapshot, blockedSnapshot, chatPreferencesSnapshot, conversationsSnapshot] = await Promise.all([
+      getDocs(collection(db, 'users', authUser.uid, 'contacts')),
+      getDocs(collection(db, 'users', authUser.uid, 'blocked')),
+      getDocs(collection(db, 'users', authUser.uid, 'chatPreferences')),
+      getDocs(firestoreQuery(collection(db, 'conversations'), where('participants', 'array-contains', authUser.uid)))
+    ])
+    await Promise.all([
+      ...contactSnapshot.docs.map(contact => deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))),
+      ...blockedSnapshot.docs.map(block => deleteDoc(doc(db, 'users', authUser.uid, 'blocked', block.id))),
+      ...chatPreferencesSnapshot.docs.map(preference => deleteDoc(doc(db, 'users', authUser.uid, 'chatPreferences', preference.id)))
+    ])
+    // Conversation messages are shared by the two participants. Account
+    // deletion removes these threads and their messages rather than leaving
+    // private message documents orphaned beneath a deleted profile.
+    for (const conversation of conversationsSnapshot.docs) {
+      const messages = await getDocs(collection(db, 'conversations', conversation.id, 'messages'))
+      await Promise.all(messages.docs.map(message =>
+        deleteDoc(doc(db, 'conversations', conversation.id, 'messages', message.id))
+      ))
+      await deleteDoc(doc(db, 'conversations', conversation.id))
+    }
+    const usernameRef = profileUsername ? doc(db, 'usernames', profileUsername) : null
+    const profileRef = doc(db, 'users', authUser.uid)
+    await runTransaction(db, async transaction => {
+      if (usernameRef) {
+        const usernameSnapshot = await transaction.get(usernameRef)
+        if (usernameSnapshot.exists() && usernameSnapshot.data()?.uid === authUser.uid) transaction.delete(usernameRef)
+      }
+      transaction.delete(profileRef)
+    })
+    try {
+      await deleteUser(authUser)
+    } catch {
+      throw new Error('Your profile records were removed, but Firebase could not finish deleting the sign-in account. Sign in again and contact support to complete deletion.')
+    }
+    try {
+      window.localStorage.removeItem(`chater:profile:username:${authUser.uid}`)
+      window.localStorage.removeItem(`${ACCENT_STORAGE_KEY}:${authUser.uid}`)
+    } catch { /* Account deletion remains complete even if local cleanup is unavailable. */ }
+    setAuthUser(null)
+    const savedAccent = readSavedAccent()
+    setAccent(savedAccent)
+    setCustomHex(savedAccent)
+    setProfilePhotoUrl('')
+    setProfileUsername('')
+    setProfileDetails(emptyProfileDetails)
+    setPhotoNotice('')
+    setActiveTab('Chats')
+  }
   const handleProfilePhotoUpload = async (file: File) => {
     if (!authUser) { setPhotoNotice('Create an account first to save your profile picture.'); return }
     setPhotoBusy(true)
