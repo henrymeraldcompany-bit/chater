@@ -382,7 +382,13 @@ export default function App() {
     return onAuthStateChanged(firebaseAuth, async user => {
       if (registrationInProgress.current || loginInProgress.current) return
       if (!user) {
+        setPreferencesReady(true)
         setAuthUser(null)
+        setTheme(readSavedTheme())
+        setWallpaper(readSavedWallpaper())
+        setWallpaperImageUrl(readSavedWallpaperImage())
+        setBubbleStyle(readSavedBubbleStyle())
+        setAppearanceNotice('')
         setConversationTarget(null)
         setPublicProfile(null)
         setBlockedUserIds([])
@@ -406,13 +412,15 @@ export default function App() {
           await signOut(firebaseAuth)
           return
         }
+        setPreferencesReady(false)
         setAuthUser(user)
         const savedAccent = readSavedAccent(user.uid)
         setAccent(savedAccent)
         setCustomHex(savedAccent)
         setProfilePhotoUrl(user.photoURL || '')
         const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
-        const storedProfile = profileSnapshot?.data() || {}
+        const storedProfile = (profileSnapshot?.data() || {}) as Record<string, unknown>
+        applyAppearancePreferences(user.uid, storedProfile)
         if (user.photoURL && storedProfile.photoURL !== user.photoURL && firestoreDb) {
           void setDoc(doc(firestoreDb, 'users', user.uid), {
             uid: user.uid,
@@ -433,6 +441,7 @@ export default function App() {
         if (resolvedUsername) window.localStorage.setItem(`chater:profile:username:${user.uid}`, resolvedUsername)
       } catch {
         // Keep the authenticated session if only the Firestore profile lookup is denied.
+        applyAppearancePreferences(user.uid, {})
         setAuthUser(user)
         const savedAccent = readSavedAccent(user.uid)
         setAccent(savedAccent)
