@@ -67,6 +67,22 @@ service cloud.firestore {
         allow delete: if signedIn() && request.auth.uid == userId;
       }
 
+      // Per-account, per-conversation wallpaper and theme preferences.
+      // Only the owner can read or change their own chat appearance settings.
+      match /chatPreferences/{conversationId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['theme', 'imageUrl', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['theme', 'imageUrl', 'updatedAt'])
+          && request.resource.data.theme in ['default', 'midnight', 'forest', 'rose', 'custom']
+          && request.resource.data.imageUrl is string
+          && request.resource.data.imageUrl.size() <= 2048
+          && (request.resource.data.theme != 'custom' || request.resource.data.imageUrl.size() > 0)
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
+
       // A block is private to the account that placed it.
       match /blocked/{blockedUid} {
         allow read: if signedIn() && request.auth.uid == userId;
