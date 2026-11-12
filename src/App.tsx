@@ -443,7 +443,7 @@ export default function App() {
         const savedAccent = readSavedAccent(user.uid)
         setAccent(savedAccent)
         setCustomHex(savedAccent)
-        setProfilePhotoUrl(user.photoURL || '')
+        setProfilePhotoUrl(isChaterMediaUrl(user.photoURL) ? user.photoURL : '')
         setProfileDetails(emptyProfileDetails)
         const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
         setProfileUsername(localUsername)
@@ -757,7 +757,7 @@ export default function App() {
             uid,
             username,
             displayName,
-            photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+            photoURL: isChaterMediaUrl(profile.photoURL) ? profile.photoURL : ''
           })
         }
       }
