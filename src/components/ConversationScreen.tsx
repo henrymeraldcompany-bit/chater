@@ -340,13 +340,58 @@ export default function ConversationScreen({
     setMessageNotice('Chat export prepared.')
   }
 
-  const handleThemeChange = (theme: ChatTheme) => {
+  const saveChatAppearance = async (theme: ChatTheme, imageUrl: string) => {
     setChatTheme(theme)
+    setChatThemeImageUrl(imageUrl)
     try {
-      window.localStorage.setItem('chater:chat-theme:' + conversationId, theme)
+      window.localStorage.setItem(chatPreferenceKey(currentUserId, conversationId), theme)
+      const imageKey = 'chater:chat-theme-image:' + currentUserId + ':' + conversationId
+      if (imageUrl) window.localStorage.setItem(imageKey, imageUrl)
+      else window.localStorage.removeItem(imageKey)
     } catch {
-      // Keep the choice for this open conversation even when local storage is unavailable.
+      // Keep the selection active in this conversation if local storage is unavailable.
     }
+    if (!firestoreDb) {
+      setMessageNotice('This chat theme is active on this device, but cannot sync without the Chater database.')
+      return
+    }
+    try {
+      await setDoc(doc(firestoreDb, 'users', currentUserId, 'chatPreferences', conversationId), {
+        theme,
+        imageUrl,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+      setMessageNotice('This chat theme is saved to your Chater account.')
+    } catch {
+      setMessageNotice('This chat theme is active on this device, but could not sync to your account. Publish the latest Firestore rules and check your connection.')
+    }
+  }
+
+  const handleThemeChange = async (theme: ChatTheme) => {
+    await saveChatAppearance(theme, '')
+    closeMenu()
+  }
+
+  const handleChatWallpaperFile = async (file: File) => {
+    if (!onWallpaperUpload) {
+      setMessageNotice('Image wallpapers are not configured yet.')
+      return
+    }
+    setWallpaperUploadBusy(true)
+    setMessageNotice('Uploading this chat wallpaper…')
+    try {
+      const imageUrl = await onWallpaperUpload(file, conversationId)
+      await saveChatAppearance('custom', imageUrl)
+      closeMenu()
+    } catch (error) {
+      setMessageNotice(error instanceof Error ? error.message : 'The chat wallpaper could not be uploaded.')
+    } finally {
+      setWallpaperUploadBusy(false)
+    }
+  }
+
+  const handleRemoveChatWallpaper = async () => {
+    await saveChatAppearance('default', '')
     closeMenu()
   }
 
@@ -369,7 +414,12 @@ export default function ConversationScreen({
     ? visibleMessages.filter(message => message.text.toLowerCase().includes(messageSearch.trim().toLowerCase()))
     : visibleMessages
 
-  return <section className="public-profile-screen conversation-entry-screen live-conversation-screen" role="dialog" aria-modal="true" aria-label={'Conversation with ' + target.displayName} data-chat-theme={chatTheme}>
+  const activeWallpaperImage = chatThemeImageUrl || (chatTheme === 'default' ? generalWallpaperImageUrl : '')
+  const conversationThreadStyle = activeWallpaperImage
+    ? { backgroundImage: `linear-gradient(#0005,#0005), url("${activeWallpaperImage}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : undefined
+
+  return <section className="public-profile-screen conversation-entry-screen live-conversation-screen" role="dialog" aria-modal="true" aria-label={'Conversation with ' + target.displayName} data-chat-theme={chatTheme} data-general-wallpaper={generalWallpaper}>
     <header className="public-profile-toolbar conversation-entry-toolbar">
       <button type="button" className="icon-button" aria-label="Back to chats" onClick={onClose}><ArrowLeft size={21}/></button>
       <span className="profile-avatar conversation-entry-avatar" aria-label={target.displayName + ' profile picture'}>
@@ -397,7 +447,9 @@ export default function ConversationScreen({
           </>}
           {menuPage === 'theme' && <>
             <button type="button" className="conversation-menu-back" onClick={() => setMenuPage('main')}><ChevronLeft size={18}/>Back</button>
-            {chatThemes.map(theme => <button type="button" role="menuitemradio" aria-checked={chatTheme === theme.id} key={theme.id} onClick={() => handleThemeChange(theme.id)}><span className={'conversation-theme-dot theme-' + theme.id}/>{theme.label}{chatTheme === theme.id && <Check size={17}/>}</button>)}
+            {chatThemes.filter(theme => theme.id !== 'custom').map(theme => <button type="button" role="menuitemradio" aria-checked={chatTheme === theme.id && !chatThemeImageUrl} key={theme.id} onClick={() => void handleThemeChange(theme.id)}><span className={'conversation-theme-dot theme-' + theme.id}/>{theme.label}{chatTheme === theme.id && !chatThemeImageUrl && <Check size={17}/>}</button>)}
+            <button type="button" role="menuitem" disabled={wallpaperUploadBusy || !onWallpaperUpload} onClick={() => chatWallpaperInputRef.current?.click()}><ImagePlus size={18}/>{wallpaperUploadBusy ? 'Uploading image…' : chatThemeImageUrl ? 'Change wallpaper image' : 'Add image as chat theme'}</button>
+            {chatThemeImageUrl && <button type="button" role="menuitem" onClick={() => void handleRemoveChatWallpaper()}><X size={18}/>Remove personal image</button>}
           </>}
           {menuPage === 'more' && <>
             <button type="button" className="conversation-menu-back" onClick={() => setMenuPage('main')}><ChevronLeft size={18}/>Back</button>
@@ -409,6 +461,19 @@ export default function ConversationScreen({
         </div>}
       </div>
     </header>
+    <input
+      ref={chatWallpaperInputRef}
+      className="wallpaper-hidden-input"
+      type="file"
+      accept="image/*"
+      aria-label="Choose this chat wallpaper image"
+      disabled={wallpaperUploadBusy}
+      onChange={event => {
+        const file = event.target.files?.[0]
+        if (file) void handleChatWallpaperFile(file)
+        event.currentTarget.value = ''
+      }}
+    />
 
     {contactInfoOpen && <section className="conversation-contact-card" aria-label="Contact information">
       <button type="button" className="conversation-panel-close" aria-label="Close contact information" onClick={() => setContactInfoOpen(false)}><X size={17}/></button>
@@ -457,7 +522,7 @@ export default function ConversationScreen({
       </div>
     </form>}
 
-    <div className="conversation-thread" role="log" aria-label="Messages" aria-live="polite">
+    <div className="conversation-thread" role="log" aria-label="Messages" aria-live="polite" style={conversationThreadStyle}>
       {messagesBusy && <p className="conversation-thread-notice" role="status">Loading messages…</p>}
       {!messagesBusy && messages.length === 0 && <div className="conversation-start-note"><strong>No messages yet</strong><p>Start the conversation. There are no message requests or approval steps on Chater.</p></div>}
       {searchOpen && messageSearch.trim() && filteredMessages.length === 0 && <p className="conversation-thread-notice" role="status">No matching messages found.</p>}
