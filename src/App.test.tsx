@@ -218,6 +218,34 @@ describe('Chater direct-message rules', () => {
     ))
   })
 
+
+  it('uses Android Back to step through the chat options menu and its theme submenu', async () => {
+    const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    render(<ConversationScreen
+      currentUserId="signed-in-user"
+      target={target}
+      isBlocked={false}
+      onClose={vi.fn()}
+      onBlock={vi.fn(async () => undefined)}
+      onUnblock={vi.fn(async () => undefined)}
+    />)
+
+    await screen.findByText('No messages yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Chat theme' }))
+    expect(screen.getByRole('menuitemradio', { name: 'Forest' })).toBeInTheDocument()
+
+    const submenuBack = new Event('chater:android-back', { cancelable: true })
+    act(() => { window.dispatchEvent(submenuBack) })
+    expect(submenuBack.defaultPrevented).toBe(true)
+    expect(screen.getByRole('menuitem', { name: 'View contact' })).toBeInTheDocument()
+
+    const menuBack = new Event('chater:android-back', { cancelable: true })
+    act(() => { window.dispatchEvent(menuBack) })
+    expect(menuBack.defaultPrevented).toBe(true)
+    expect(screen.queryByRole('menu', { name: 'Chat options menu' })).not.toBeInTheDocument()
+  })
+
   it('clears chat only from this device without deleting the shared conversation', async () => {
     const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
     render(<ConversationScreen
@@ -991,6 +1019,27 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Your name' })).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.queryByText('Henry Example')).not.toBeInTheDocument()
+  })
+
+
+  it('uses Android system Back to close Settings and return to the current Chater tab', () => {
+    openApp()
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }))
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate')) })
+    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Chats' })[0]).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('uses Android system Back to return through previously visited tabs', () => {
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    expect(screen.getAllByRole('button', { name: 'You' })[0]).toHaveAttribute('aria-current', 'page')
+
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate')) })
+    expect(screen.getAllByRole('button', { name: 'Moments' })[0]).toHaveAttribute('aria-current', 'page')
   })
 
   it('shows only the horizontal Moments cards with blank space below', () => {
