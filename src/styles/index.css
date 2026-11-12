@@ -1212,6 +1212,9 @@ body,.app-shell{background:var(--page);color:var(--text)}
   background: var(--page, #101010);
   color: var(--text-strong);
 }
+.conversation-contact-profile {
+  z-index: 121;
+}
 .public-profile-toolbar {
   display: flex;
   align-items: center;

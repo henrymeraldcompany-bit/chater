@@ -165,8 +165,9 @@ describe('Chater direct-message rules', () => {
     expect(screen.getByRole('menuitem', { name: 'Add shortcut' })).toBeInTheDocument()
   })
 
-  it('opens the contact card and lets members choose a chat theme', async () => {
+  it('opens the full contact profile from the chat menu and keeps chat theme controls available', async () => {
     const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    const onViewContact = vi.fn()
     render(<ConversationScreen
       currentUserId="signed-in-user"
       target={target}
@@ -174,12 +175,16 @@ describe('Chater direct-message rules', () => {
       onClose={vi.fn()}
       onBlock={vi.fn(async () => undefined)}
       onUnblock={vi.fn(async () => undefined)}
+      onViewContact={onViewContact}
     />)
 
     await screen.findByText('No messages yet')
     fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'View contact' }))
-    expect(screen.getByRole('region', { name: 'Contact information' })).toBeInTheDocument()
+    expect(onViewContact).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('region', { name: 'Contact information' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu', { name: 'Chat options menu' })).not.toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Chat theme' }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Forest' }))
@@ -448,11 +453,29 @@ describe('Chater application shell', () => {
     fireEvent.click(sendButton)
     await waitFor(() => expect(runTransaction).toHaveBeenCalled())
     expect(messageInput).toHaveValue('')
+
     fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Block' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'View contact' }))
+    const chatContactProfile = await screen.findByRole('dialog', { name: 'Mee Maw profile' })
+    expect(chatContactProfile).toHaveClass('conversation-contact-profile')
+    expect(screen.getByRole('button', { name: 'Back to chat' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Message' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add to contacts' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Block account' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to contacts' }))
+    await waitFor(() => expect(screen.getByText('Contact saved to your Chater account.')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Remove from contacts' })).toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'Block account' }))
-    await waitFor(() => expect(screen.getByText('You blocked this account. Unblock them to send messages again.')).toBeInTheDocument())
+    expect(screen.getByRole('group', { name: 'Confirm block account' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm block' }))
+    await waitFor(() => expect(screen.getByText('@mee_maw can no longer contact you on Chater.')).toBeInTheDocument())
     expect(setDoc).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ uid: 'target-user', createdAt: 'SERVER_TIMESTAMP' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }))
+    expect(screen.getByRole('dialog', { name: 'Conversation with Mee Maw' })).toBeInTheDocument()
+    expect(screen.getByText('You blocked this account. Unblock them to send messages again.')).toBeInTheDocument()
   })
 
   it('opens a scanned Chater QR username as the matching public profile', async () => {

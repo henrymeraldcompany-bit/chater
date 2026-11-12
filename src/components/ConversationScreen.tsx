@@ -18,6 +18,7 @@ type ConversationScreenProps = {
   onClose: () => void
   onBlock: (targetUid: string) => Promise<void>
   onUnblock: (targetUid: string) => Promise<void>
+  onViewContact?: () => void
   generalWallpaper?: string
   generalWallpaperImageUrl?: string
   onWallpaperUpload?: (file: File, conversationId: string) => Promise<string>
@@ -86,6 +87,7 @@ export default function ConversationScreen({
   onClose,
   onBlock,
   onUnblock,
+  onViewContact,
   generalWallpaper = 'default',
   generalWallpaperImageUrl = '',
   onWallpaperUpload
@@ -99,7 +101,6 @@ export default function ConversationScreen({
   const [blockBusy, setBlockBusy] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPage, setMenuPage] = useState<MenuPage>('main')
-  const [contactInfoOpen, setContactInfoOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [messageSearch, setMessageSearch] = useState('')
   const [reportOpen, setReportOpen] = useState(false)
@@ -182,8 +183,6 @@ export default function ConversationScreen({
       } else if (menuOpen) {
         if (menuPage !== 'main') setMenuPage('main')
         else setMenuOpen(false)
-      } else if (contactInfoOpen) {
-        setContactInfoOpen(false)
       } else {
         handled = false
       }
@@ -192,7 +191,7 @@ export default function ConversationScreen({
 
     window.addEventListener('chater:android-back', handleAndroidBack)
     return () => window.removeEventListener('chater:android-back', handleAndroidBack)
-  }, [blockConfirmOpen, clearConfirmOpen, contactInfoOpen, menuOpen, menuPage, reportOpen, searchOpen])
+  }, [blockConfirmOpen, clearConfirmOpen, menuOpen, menuPage, reportOpen, searchOpen])
 
   useEffect(() => {
     if (!firestoreDb) {
@@ -464,7 +463,7 @@ export default function ConversationScreen({
         ><MoreVertical size={22}/></button>
         {menuOpen && <div className="conversation-dropdown" role="menu" aria-label="Chat options menu">
           {menuPage === 'main' && <>
-            <button type="button" role="menuitem" onClick={() => { setContactInfoOpen(open => !open); closeMenu() }}><UserRound size={18}/>View contact</button>
+            <button type="button" role="menuitem" onClick={() => { closeMenu(); onViewContact?.() }}><UserRound size={18}/>View contact</button>
             <button type="button" role="menuitem" onClick={() => { setSearchOpen(true); setMessageSearch(''); closeMenu() }}><Search size={18}/>Search</button>
             <button type="button" role="menuitem" onClick={() => { setReportOpen(true); closeMenu() }}><Flag size={18}/>Report</button>
             <button type="button" role="menuitem" onClick={() => { setBlockConfirmOpen(true); closeMenu() }}>{isBlocked ? <ShieldCheck size={18}/> : <ShieldBan size={18}/>} {isBlocked ? 'Unblock' : 'Block'}</button>
@@ -501,14 +500,6 @@ export default function ConversationScreen({
         event.currentTarget.value = ''
       }}
     />
-
-    {contactInfoOpen && <section className="conversation-contact-card" aria-label="Contact information">
-      <button type="button" className="conversation-panel-close" aria-label="Close contact information" onClick={() => setContactInfoOpen(false)}><X size={17}/></button>
-      <span className="profile-avatar conversation-contact-avatar">{target.photoURL ? <img src={target.photoURL} alt=""/> : target.displayName.trim().charAt(0).toUpperCase()}</span>
-      <strong>{target.displayName}</strong>
-      <span>@{target.username}</span>
-      <small>Chater member</small>
-    </section>}
 
     {searchOpen && <div className="conversation-search-bar">
       <Search size={18}/>

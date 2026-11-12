@@ -229,6 +229,7 @@ export default function App() {
   const [usernameSearchResults, setUsernameSearchResults] = useState<UsernameSearchResult[]>([])
   const [showAllPeopleResults, setShowAllPeopleResults] = useState(false)
   const [publicProfile, setPublicProfile] = useState<PublicUserProfile | null>(null)
+  const [publicProfileFromChat, setPublicProfileFromChat] = useState(false)
   const [publicProfileBusy, setPublicProfileBusy] = useState(false)
   const [publicProfileNotice, setPublicProfileNotice] = useState('')
   const [conversationTarget, setConversationTarget] = useState<UsernameSearchResult | null>(null)
@@ -734,9 +735,10 @@ export default function App() {
       if (requestId === usernameSearchRequest.current) setUsernameSearchBusy(false)
     }
   }, [authUser])
-  const openPublicProfile = useCallback(async (result: UsernameSearchResult) => {
+  const openPublicProfile = useCallback(async (result: UsernameSearchResult, fromConversation = false) => {
     if (!authUser || result.uid === authUser.uid) return
-    setConversationTarget(null)
+    if (!fromConversation) setConversationTarget(null)
+    setPublicProfileFromChat(fromConversation)
     setPublicProfileBusy(true)
     setPublicProfileNotice('')
     setContactActionNotice('')
@@ -987,6 +989,7 @@ export default function App() {
 
   const closePublicProfile = () => {
     setPublicProfile(null)
+    setPublicProfileFromChat(false)
     setPublicProfileNotice('')
     setProfileBlockConfirmation(false)
     setProfileBlockNotice('')
@@ -1000,6 +1003,7 @@ export default function App() {
       photoURL: publicProfile.photoURL
     })
     setPublicProfile(null)
+    setPublicProfileFromChat(false)
   }
   useEffect(() => {
     if (!qrScannerOpen) return
@@ -1285,6 +1289,7 @@ export default function App() {
         setMomentViewerIndex(null)
       } else if (current.publicProfile) {
         setPublicProfile(null)
+        setPublicProfileFromChat(false)
         setPublicProfileNotice('')
         setProfileBlockConfirmation(false)
         setProfileBlockNotice('')
@@ -1590,8 +1595,8 @@ export default function App() {
       {passwordRecoveryNotice&&<p className="dialog-notice" role="status">{passwordRecoveryNotice}</p>}
       <button className="text-button" type="button" onClick={()=>{setLoginNotice('');setDialog('login')}}>Back to sign in</button>
     </form>:<>{usernameSearchBusy&&<p className="search-progress" role="status">Finding members…</p>}{usernameSearchResults.length>0&&<div className="username-search-results" aria-label="Matching Chater members">{usernameSearchResults.slice(0,showAllPeopleResults?100:10).map(result=><button type="button" className="username-search-result" key={result.uid} onClick={()=>void openPublicProfile(result)} aria-label={`View ${result.displayName} profile`}><ProfileAvatar photoURL={result.photoURL} displayName={result.displayName} className="username-search-avatar"/><div><strong>{result.displayName}</strong><span>@{result.username}</span></div><ChevronRight size={18} aria-hidden="true"/></button>)}</div>}{usernameSearchResults.length>10&&!showAllPeopleResults&&<button className="secondary-button people-search-more" type="button" onClick={()=>setShowAllPeopleResults(true)}>See more results ({usernameSearchResults.length-10} more)</button>}{searchNotice&&!usernameSearchResults.length&&<p className="dialog-notice" role="status">{searchNotice}</p>}</>}</section></div>}
-    {publicProfile && <section className="public-profile-screen" role="dialog" aria-modal="true" aria-label={`${publicProfile.displayName} profile`}>
-      <header className="public-profile-toolbar"><button type="button" className="icon-button" aria-label="Back to people search" onClick={closePublicProfile}><ArrowLeft size={21}/></button><strong>Profile</strong></header>
+    {publicProfile && <section className={publicProfileFromChat ? 'public-profile-screen conversation-contact-profile' : 'public-profile-screen'} role="dialog" aria-modal="true" aria-label={`${publicProfile.displayName} profile`}>
+      <header className="public-profile-toolbar"><button type="button" className="icon-button" aria-label={publicProfileFromChat ? 'Back to chat' : 'Back to people search'} onClick={closePublicProfile}><ArrowLeft size={21}/></button><strong>Profile</strong></header>
       <div className="public-profile-content">
         <div className="public-profile-hero"><ProfileAvatar photoURL={publicProfile.photoURL} displayName={publicProfile.displayName} className="public-profile-avatar"/><h1>{publicProfile.displayName}</h1><p>@{publicProfile.username}</p></div>
         {publicProfileBusy && <p className="search-progress" role="status">Loading profile…</p>}
@@ -1616,6 +1621,7 @@ export default function App() {
       onClose={()=>setConversationTarget(null)}
       onBlock={blockUser}
       onUnblock={unblockUser}
+      onViewContact={()=>void openPublicProfile(conversationTarget, true)}
     />}
     {qrDisplayOpen && authUser && profileUsername && <section className="chater-qr-overlay" role="dialog" aria-modal="true" aria-label="Your Chater QR code">
       <div className="chater-qr-card">
