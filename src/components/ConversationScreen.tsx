@@ -179,11 +179,11 @@ export default function ConversationScreen({
       } else if (searchOpen) {
         setSearchOpen(false)
         setMessageSearch('')
-      } else if (contactInfoOpen) {
-        setContactInfoOpen(false)
       } else if (menuOpen) {
         if (menuPage !== 'main') setMenuPage('main')
         else setMenuOpen(false)
+      } else if (contactInfoOpen) {
+        setContactInfoOpen(false)
       } else {
         handled = false
       }
