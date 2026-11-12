@@ -1284,7 +1284,10 @@ export default function App() {
       } else if (current.momentViewerIndex !== null) {
         setMomentViewerIndex(null)
       } else if (current.publicProfile) {
-        closePublicProfile()
+        setPublicProfile(null)
+        setPublicProfileNotice('')
+        setProfileBlockConfirmation(false)
+        setProfileBlockNotice('')
       } else if (current.conversationTarget) {
         setConversationTarget(null)
       } else if (current.accountPanel !== 'closed') {
