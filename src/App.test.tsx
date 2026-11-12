@@ -165,8 +165,9 @@ describe('Chater direct-message rules', () => {
     expect(screen.getByRole('menuitem', { name: 'Add shortcut' })).toBeInTheDocument()
   })
 
-  it('opens the contact card and lets members choose a chat theme', async () => {
+  it('opens the full contact profile from the chat menu and keeps chat theme controls available', async () => {
     const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    const onViewContact = vi.fn()
     render(<ConversationScreen
       currentUserId="signed-in-user"
       target={target}
@@ -174,12 +175,16 @@ describe('Chater direct-message rules', () => {
       onClose={vi.fn()}
       onBlock={vi.fn(async () => undefined)}
       onUnblock={vi.fn(async () => undefined)}
+      onViewContact={onViewContact}
     />)
 
     await screen.findByText('No messages yet')
     fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'View contact' }))
-    expect(screen.getByRole('region', { name: 'Contact information' })).toBeInTheDocument()
+    expect(onViewContact).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('region', { name: 'Contact information' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu', { name: 'Chat options menu' })).not.toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Chat theme' }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Forest' }))
