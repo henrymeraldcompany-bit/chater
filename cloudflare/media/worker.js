@@ -135,7 +135,7 @@ async function verifyFirebaseToken(token, requireRecentAuth = false) {
 }
 
 async function requireUser(request, origin, requireRecentAuth = false) {
-  const match = (request.headers.get("authorization") || "").match(/^Bearer\\s+(.+)$/i);
+  const match = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
   if (!match) return { response: json({ error: "Sign in to continue." }, 401, origin) };
   try {
     const claims = await verifyFirebaseToken(match[1], requireRecentAuth);
@@ -245,11 +245,10 @@ function decodeMediaKey(pathname) {
   if (!raw || raw.length > 1200) return null;
   try {
     const key = raw.split("/").map(decodeURIComponent).join("/");
-    if (!/^users\\/[A-Za-z0-9_-]{1,128}\\/(profile|moments|wallpapers)\\/[A-Za-z0-9_./%-]+$/.test(key)) {
-      // Conversation wallpaper keys contain an additional safe folder segment.
-      if (!/^users\\/[A-Za-z0-9_-]{1,128}\\/wallpapers\\/chats\\/[A-Za-z0-9_%-]{1,512}\\/[A-Za-z0-9_.-]+$/.test(key)) return null;
-    }
-    if (key.includes("..") || key.includes("//")) return null;
+    const allowed = new RegExp(
+      "^users/[A-Za-z0-9_-]{1,128}/(?:profile/[A-Za-z0-9_.-]+|moments/[A-Za-z0-9_.-]+|wallpapers/(?:general/[A-Za-z0-9_.-]+|chats/[A-Za-z0-9_%-]{1,512}/[A-Za-z0-9_.-]+))$",
+    );
+    if (!allowed.test(key) || key.includes("..") || key.includes("//")) return null;
     return key;
   } catch {
     return null;
