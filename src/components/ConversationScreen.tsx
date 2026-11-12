@@ -87,6 +87,7 @@ export default function ConversationScreen({
   onClose,
   onBlock,
   onUnblock,
+  onViewContact,
   generalWallpaper = 'default',
   generalWallpaperImageUrl = '',
   onWallpaperUpload
