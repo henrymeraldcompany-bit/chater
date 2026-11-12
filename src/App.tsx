@@ -556,6 +556,56 @@ export default function App() {
     setDialog(null)
   }
 
+  const uploadWallpaperImage = async (file: File, folder: string): Promise<string> => {
+    if (!authUser) throw new Error('Sign in to save a wallpaper to your Chater account.')
+    if (!file.type.startsWith('image/')) throw new Error('Choose an image file for your wallpaper.')
+    if (file.size > 8 * 1024 * 1024) throw new Error('Choose an image that is 8 MB or smaller.')
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
+    formData.append('folder', folder)
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 60000)
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        { method: 'POST', body: formData, signal: controller.signal }
+      )
+      const result = await response.json().catch(() => ({})) as { secure_url?: string; error?: { message?: string } }
+      if (!response.ok || !result.secure_url) {
+        throw new Error(result.error?.message || 'Cloudinary could not upload this wallpaper. Please try again.')
+      }
+      return result.secure_url
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('The wallpaper upload timed out. Check your connection and try again.')
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }
+
+  const handleGeneralWallpaperUpload = async (file: File) => {
+    if (!authUser) return
+    setWallpaperUploadBusy(true)
+    setAppearanceNotice('Uploading your general chat wallpaper…')
+    try {
+      const url = await uploadWallpaperImage(file, `chater/wallpapers/${authUser.uid}/general`)
+      setWallpaperImageUrl(url)
+      setAppearanceNotice('General chat wallpaper uploaded. Saving to your account…')
+    } catch (error) {
+      setAppearanceNotice(error instanceof Error ? error.message : 'Wallpaper upload failed. Please try again.')
+    } finally {
+      setWallpaperUploadBusy(false)
+    }
+  }
+
+  const handlePersonalChatWallpaperUpload = async (file: File, conversationId: string): Promise<string> => {
+    if (!authUser) throw new Error('Sign in to add a personal chat wallpaper.')
+    return uploadWallpaperImage(file, `chater/wallpapers/${authUser.uid}/chats/${conversationId}`)
+  }
+
   const uploadPhotoForUser = async (user: User, file: File) => {
     if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
       throw new Error('Profile picture uploads are not configured yet. Please try again later.')
