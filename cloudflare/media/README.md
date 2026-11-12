@@ -18,7 +18,7 @@ The Cloudflare account currently returns API error **10042: "Please enable R2 th
 ## Worker behavior
 
 - `GET /health`: non-sensitive deployment and bucket-binding check.
-- `POST /upload`: requires a verified Firebase ID-token signature. The Worker derives the owner UID from the token and never accepts a user ID or object key from the browser.
+- `POST /upload`: streams the raw browser `File` body directly into R2. The request uses `Content-Type`, `Content-Length`, `X-Chater-Media-Category`, and optional wallpaper scope/conversation headers. It requires a verified Firebase ID-token signature; the Worker derives the owner UID from the token and never accepts a user ID or object key from the browser.
 - `GET /media/{objectKey}`: streams public Chater media through the Worker. The bucket itself remains private; the Worker is the only delivery path.
 - `POST /delete-account-media`: requires a recently authenticated, email-verified Firebase account and deletes only `users/{token-subject}/` objects.
 - `DELETE /object`: deletes one object only when its key belongs to the authenticated account.
@@ -61,6 +61,7 @@ Do not merge the application-side R2 cutover until this health check succeeds an
 
 - Firebase ID tokens are signature-verified against Google's Secure Token JWKS.
 - Upload object prefixes are always derived from the verified Firebase UID.
+- Uploads stream directly from the browser through the Worker into R2; the Worker does not buffer a multipart form body in memory. Chater's largest Moment upload is 50 MB.
 - The R2 bucket should not be made public and no S3 credentials belong in browser code.
 - Media URLs are public through the Worker, matching the current public profile/Moment-image behavior. The R2 bucket itself stays private.
 - Account deletion paginates through only the authenticated UID prefix and deletes in bounded batches.
