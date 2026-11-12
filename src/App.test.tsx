@@ -186,6 +186,38 @@ describe('Chater direct-message rules', () => {
     expect(document.querySelector('.live-conversation-screen')).toHaveAttribute('data-chat-theme', 'forest')
   })
 
+  it('uploads and saves a custom image theme for one personal conversation', async () => {
+    const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
+    const imageUrl = 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/wallpapers/test-user/chats/conversation/background.png'
+    const onWallpaperUpload = vi.fn(async () => imageUrl)
+    render(<ConversationScreen
+      currentUserId="signed-in-user"
+      target={target}
+      isBlocked={false}
+      onClose={vi.fn()}
+      onBlock={vi.fn(async () => undefined)}
+      onUnblock={vi.fn(async () => undefined)}
+      generalWallpaper="ocean"
+      onWallpaperUpload={onWallpaperUpload}
+    />)
+
+    await screen.findByText('No messages yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Chat theme' }))
+    const imageInput = screen.getByLabelText('Choose this chat wallpaper image')
+    const file = new File(['personal wallpaper'], 'background.png', { type: 'image/png' })
+    fireEvent.change(imageInput, { target: { files: [file] } })
+
+    await waitFor(() => expect(onWallpaperUpload).toHaveBeenCalledWith(file, createConversationId('signed-in-user', 'other-user')))
+    await waitFor(() => expect(document.querySelector('.live-conversation-screen')).toHaveAttribute('data-chat-theme', 'custom'))
+    expect(document.querySelector('.conversation-thread')?.getAttribute('style')).toContain(imageUrl)
+    await waitFor(() => expect(setDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ theme: 'custom', imageUrl }),
+      { merge: true }
+    ))
+  })
+
   it('clears chat only from this device without deleting the shared conversation', async () => {
     const target = { uid: 'other-user', username: 'other_user', displayName: 'Other User', photoURL: '' }
     render(<ConversationScreen
