@@ -286,6 +286,29 @@ export default function App() {
   const [wallpaperUploadBusy, setWallpaperUploadBusy] = useState(false)
   const wallpaperInputRef = useRef<HTMLInputElement | null>(null)
   const appearanceSaveVersion = useRef(0)
+  const applyAppearancePreferences = (uid: string, profile: Record<string, unknown>) => {
+    const saved = profile.preferences && typeof profile.preferences === 'object'
+      ? profile.preferences as Record<string, unknown>
+      : {}
+    const nextTheme = saved.theme === 'light' || saved.theme === 'system' || saved.theme === 'dark'
+      ? saved.theme
+      : readSavedTheme(uid)
+    const nextWallpaper = wallpapers.some(item => item.id === saved.wallpaper)
+      ? saved.wallpaper as Wallpaper
+      : readSavedWallpaper(uid)
+    const nextBubbleStyle = bubbleStyles.some(item => item.id === saved.bubbleStyle)
+      ? saved.bubbleStyle as BubbleStyle
+      : readSavedBubbleStyle(uid)
+    const nextWallpaperImage = typeof saved.wallpaperImageUrl === 'string' &&
+      /^https:\/\/res\\.cloudinary\\.com\//i.test(saved.wallpaperImageUrl)
+      ? saved.wallpaperImageUrl
+      : readSavedWallpaperImage(uid)
+    setTheme(nextTheme)
+    setWallpaper(nextWallpaper)
+    setBubbleStyle(nextBubbleStyle)
+    setWallpaperImageUrl(nextWallpaperImage)
+    setPreferencesReady(true)
+  }
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', accent)
     document.documentElement.style.setProperty('--accent-bright', accent)
