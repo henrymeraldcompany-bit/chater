@@ -136,9 +136,10 @@ type BubbleStyle = 'rounded' | 'soft' | 'square'
 const bubbleStyles: { id: BubbleStyle; name: string }[] = [
   { id: 'rounded', name: 'Rounded' }, { id: 'soft', name: 'Soft' }, { id: 'square', name: 'Square' }
 ]
-function readSavedBubbleStyle(): BubbleStyle {
+function readSavedBubbleStyle(userId?: string | null): BubbleStyle {
   try {
-    const saved = window.localStorage.getItem(BUBBLE_STORAGE_KEY)
+    const key = userId ? `${BUBBLE_STORAGE_KEY}:${userId}` : BUBBLE_STORAGE_KEY
+    const saved = window.localStorage.getItem(key)
     return bubbleStyles.some(item => item.id === saved) ? saved as BubbleStyle : 'rounded'
   } catch { return 'rounded' }
 }
@@ -149,17 +150,27 @@ const wallpapers: { id: Wallpaper; name: string }[] = [
   { id: 'ocean', name: 'Ocean' }, { id: 'aurora', name: 'Aurora' },
   { id: 'sand', name: 'Sand' }, { id: 'rose', name: 'Rose' }
 ]
-function readSavedWallpaper(): Wallpaper {
+function readSavedWallpaper(userId?: string | null): Wallpaper {
   try {
-    const saved = window.localStorage.getItem(WALLPAPER_STORAGE_KEY)
+    const key = userId ? `${WALLPAPER_STORAGE_KEY}:${userId}` : WALLPAPER_STORAGE_KEY
+    const saved = window.localStorage.getItem(key)
     return wallpapers.some(item => item.id === saved) ? saved as Wallpaper : 'default'
   } catch { return 'default' }
 }
+const WALLPAPER_IMAGE_STORAGE_KEY = 'chater:preferences:wallpaper-image'
+function readSavedWallpaperImage(userId?: string | null): string {
+  try {
+    const key = userId ? `${WALLPAPER_IMAGE_STORAGE_KEY}:${userId}` : WALLPAPER_IMAGE_STORAGE_KEY
+    const saved = window.localStorage.getItem(key) || ''
+    return /^https:\/\/res\\.cloudinary\\.com\//i.test(saved) ? saved : ''
+  } catch { return '' }
+}
 const THEME_STORAGE_KEY = 'chater:preferences:theme'
 type ThemePreference = 'dark' | 'light' | 'system'
-function readSavedTheme(): ThemePreference {
+function readSavedTheme(userId?: string | null): ThemePreference {
   try {
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY)
+    const key = userId ? `${THEME_STORAGE_KEY}:${userId}` : THEME_STORAGE_KEY
+    const saved = window.localStorage.getItem(key)
     return saved === 'light' || saved === 'system' || saved === 'dark' ? saved : 'dark'
   } catch { return 'dark' }
 }
