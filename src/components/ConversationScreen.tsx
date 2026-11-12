@@ -451,7 +451,7 @@ export default function ConversationScreen({
     <header className="public-profile-toolbar conversation-entry-toolbar">
       <button type="button" className="icon-button" aria-label="Back to chats" onClick={onClose}><ArrowLeft size={21}/></button>
       <span className="profile-avatar conversation-entry-avatar" aria-label={target.displayName + ' profile picture'}>
-        {target.photoURL ? <img src={target.photoURL} alt="" /> : target.displayName.trim().charAt(0).toUpperCase()}
+        {isChaterMediaUrl(target.photoURL) ? <img src={target.photoURL} alt="" /> : target.displayName.trim().charAt(0).toUpperCase()}
       </span>
       <div><strong>{target.displayName}</strong><span>@{target.username}</span></div>
       <div className="conversation-menu-anchor" ref={menuRef}>
@@ -505,7 +505,7 @@ export default function ConversationScreen({
 
     {contactInfoOpen && <section className="conversation-contact-card" aria-label="Contact information">
       <button type="button" className="conversation-panel-close" aria-label="Close contact information" onClick={() => setContactInfoOpen(false)}><X size={17}/></button>
-      <span className="profile-avatar conversation-contact-avatar">{target.photoURL ? <img src={target.photoURL} alt=""/> : target.displayName.trim().charAt(0).toUpperCase()}</span>
+      <span className="profile-avatar conversation-contact-avatar">{isChaterMediaUrl(target.photoURL) ? <img src={target.photoURL} alt=""/> : target.displayName.trim().charAt(0).toUpperCase()}</span>
       <strong>{target.displayName}</strong>
       <span>@{target.username}</span>
       <small>Chater member</small>
