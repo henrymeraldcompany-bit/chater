@@ -1,7 +1,7 @@
 export const CHATER_MEDIA_BASE_URL = (
   import.meta.env.VITE_CHATER_MEDIA_URL ||
   'https://chater-media.henrymeraldcompany.workers.dev'
-).replace(/\\/$/, '')
+).replace(/\/$/, '')
 
 export type ChaterMediaCategory = 'profile' | 'moment' | 'wallpaper'
 export type ChaterWallpaperScope = 'general' | 'chat'
