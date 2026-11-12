@@ -1145,14 +1145,16 @@ export default function App() {
     await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
     // Firestore does not cascade deletes into subcollections. Remove private
     // contact and block links before deleting the profile document.
-    const [contactSnapshot, blockedSnapshot, conversationsSnapshot] = await Promise.all([
+    const [contactSnapshot, blockedSnapshot, chatPreferencesSnapshot, conversationsSnapshot] = await Promise.all([
       getDocs(collection(db, 'users', authUser.uid, 'contacts')),
       getDocs(collection(db, 'users', authUser.uid, 'blocked')),
+      getDocs(collection(db, 'users', authUser.uid, 'chatPreferences')),
       getDocs(firestoreQuery(collection(db, 'conversations'), where('participants', 'array-contains', authUser.uid)))
     ])
     await Promise.all([
       ...contactSnapshot.docs.map(contact => deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))),
-      ...blockedSnapshot.docs.map(block => deleteDoc(doc(db, 'users', authUser.uid, 'blocked', block.id)))
+      ...blockedSnapshot.docs.map(block => deleteDoc(doc(db, 'users', authUser.uid, 'blocked', block.id))),
+      ...chatPreferencesSnapshot.docs.map(preference => deleteDoc(doc(db, 'users', authUser.uid, 'chatPreferences', preference.id)))
     ])
     // Conversation messages are shared by the two participants. Account
     // deletion removes these threads and their messages rather than leaving
