@@ -1207,6 +1207,20 @@ export default function App() {
       setPhotoNotice(error instanceof Error ? error.message : 'The picture could not be uploaded. Please try again.')
     } finally { setPhotoBusy(false) }
   }
+  const tabHistoryRef = useRef<Tab[]>(['Chats'])
+  const appBackStateRef = useRef({
+    qrScannerOpen, qrDisplayOpen, momentViewerIndex, publicProfile,
+    conversationTarget, accountPanel, securityPanel, dialog, activeTab
+  })
+  appBackStateRef.current = {
+    qrScannerOpen, qrDisplayOpen, momentViewerIndex, publicProfile,
+    conversationTarget, accountPanel, securityPanel, dialog, activeTab
+  }
+  useEffect(() => {
+    const lastTab = tabHistoryRef.current[tabHistoryRef.current.length - 1]
+    if (lastTab !== activeTab) tabHistoryRef.current.push(activeTab)
+  }, [activeTab])
+
   const pageCopy = useMemo(() => ({
     Moments: { eyebrow: 'LIFE IN MOMENTS', title: 'Moments', description: 'Share a little piece of your day. Moments disappear after 24 hours.', action: 'Share a Moment', icon: CirclePlay },
     Groups: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Groups', description: 'Create group chats, bring people together, and share with everyone in the group.', action: 'Create a group', icon: Users },
@@ -1245,6 +1259,61 @@ export default function App() {
     return [ownGroup, ...groups.filter(group => group.uid !== authUser?.uid)]
   }, [moments, authUser?.uid, authUser?.displayName, profilePhotoUrl])
   const closeMomentViewer = useCallback(() => setMomentViewerIndex(null), [])
+  useEffect(() => {
+    if (showSplash) return
+
+    const addAppBackEntry = () => {
+      window.history.pushState({ chaterAppBackEntry: true }, '', window.location.href)
+    }
+    addAppBackEntry()
+
+    const handleAndroidBack = () => {
+      const nestedBack = new Event('chater:android-back', { cancelable: true })
+      window.dispatchEvent(nestedBack)
+      if (nestedBack.defaultPrevented) {
+        addAppBackEntry()
+        return
+      }
+
+      const current = appBackStateRef.current
+      let handled = true
+      if (current.qrScannerOpen) {
+        setQrScannerOpen(false)
+      } else if (current.qrDisplayOpen) {
+        setQrDisplayOpen(false)
+      } else if (current.momentViewerIndex !== null) {
+        setMomentViewerIndex(null)
+      } else if (current.publicProfile) {
+        closePublicProfile()
+      } else if (current.conversationTarget) {
+        setConversationTarget(null)
+      } else if (current.accountPanel !== 'closed') {
+        setAccountPanel(current.accountPanel === 'choices' ? 'closed' : 'choices')
+        setAccountNotice('')
+        setAccountPassword('')
+      } else if (current.securityPanel) {
+        setSecurityPanel(false)
+        setSecurityNotice('')
+      } else if (current.dialog) {
+        setDialog(null)
+      } else if (tabHistoryRef.current.length > 1) {
+        tabHistoryRef.current.pop()
+        const previousTab = tabHistoryRef.current[tabHistoryRef.current.length - 1] || 'Chats'
+        const currentIndex = tabs.findIndex(item => item.label === current.activeTab)
+        const previousIndex = tabs.findIndex(item => item.label === previousTab)
+        if (previousIndex !== currentIndex) setSlideDirection(previousIndex > currentIndex ? 'forward' : 'backward')
+        setActiveTab(previousTab)
+      } else {
+        handled = false
+      }
+
+      if (handled) addAppBackEntry()
+    }
+
+    window.addEventListener('popstate', handleAndroidBack)
+    return () => window.removeEventListener('popstate', handleAndroidBack)
+  }, [showSplash])
+
   if (showSplash) return <SplashScreen />
   const openTab = (tab: Tab) => {
     const currentIndex = tabs.findIndex(item => item.label === activeTab)
