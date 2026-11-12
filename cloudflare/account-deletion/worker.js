@@ -234,6 +234,9 @@ async function handleMediaDeletion(request, env) {
         }
       }
     }
+    // Wallpaper uploads use the verified account UID as their public-ID prefix,
+    // covering the general theme and every nested personal-chat wallpaper folder.
+    allAssets.push(...await listLegacyPrefixAssets(env, "chater/wallpapers/" + uid));
     const unique = new Map();
     for (const asset of allAssets) {
       unique.set(asset.resource_type + "/" + asset.type + "/" + asset.public_id, asset);
