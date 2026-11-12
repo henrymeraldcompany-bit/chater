@@ -518,6 +518,82 @@ describe('Chater application shell', () => {
     expect(window.localStorage.getItem('chater:preferences:theme')).toBe('dark')
   })
 
+  it('loads appearance settings from the signed-in account and saves changes back to that account', async () => {
+    const user = { uid: 'appearance-user', email: 'appearance@example.com', emailVerified: true, photoURL: null, displayName: 'Appearance User' }
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        uid: user.uid,
+        username: 'appearance_user',
+        preferences: { theme: 'light', wallpaper: 'ocean', wallpaperImageUrl: '', bubbleStyle: 'soft' }
+      })
+    } as never)
+
+    openApp()
+    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'light'))
+    expect(document.documentElement).toHaveAttribute('data-wallpaper', 'ocean')
+    expect(document.documentElement).toHaveAttribute('data-bubble-style', 'soft')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    expect(screen.getByLabelText('General theme')).toHaveValue('light')
+    expect(screen.getByRole('button', { name: 'Soft' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByLabelText('General theme'), { target: { value: 'dark' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Square' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Midnight' }))
+
+    await waitFor(() => expect(setDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        uid: user.uid,
+        preferences: expect.objectContaining({
+          theme: 'dark',
+          wallpaper: 'midnight',
+          bubbleStyle: 'square'
+        })
+      }),
+      { merge: true }
+    ))
+    expect(window.localStorage.getItem('chater:preferences:theme:' + user.uid)).toBe('dark')
+    expect(window.localStorage.getItem('chater:preferences:bubble-style:' + user.uid)).toBe('square')
+  })
+
+  it('uploads a custom image for the general chat theme and saves its URL to the account', async () => {
+    const user = { uid: 'wallpaper-user', email: 'wallpaper@example.com', emailVerified: true, photoURL: null, displayName: 'Wallpaper User' }
+    const imageUrl = 'https://res.cloudinary.com/amzak6nf/image/upload/v1/chater/wallpapers/wallpaper-user/general/background.png'
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback) => { if (typeof callback === 'function') callback(user as never); return vi.fn() })
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.mocked(getDoc).mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: user.uid, username: 'wallpaper_user' })
+    } as never)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ secure_url: imageUrl })
+    }))
+
+    openApp()
+    await waitFor(() => expect(getDoc).toHaveBeenCalled())
+    fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+    const file = new File(['wallpaper image'], 'background.png', { type: 'image/png' })
+    fireEvent.change(screen.getByLabelText('Choose general wallpaper image'), { target: { files: [file] } })
+
+    await waitFor(() => expect(document.querySelector('.chat-wallpaper-preview')?.getAttribute('style')).toContain(imageUrl))
+    await waitFor(() => expect(setDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        uid: user.uid,
+        preferences: expect.objectContaining({ wallpaperImageUrl: imageUrl })
+      }),
+      { merge: true }
+    ))
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.cloudinary.com/v1_1/amzak6nf/image/upload',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
   it('offers chat wallpaper presets and updates the preview', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
