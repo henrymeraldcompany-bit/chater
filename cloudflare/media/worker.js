@@ -33,7 +33,7 @@ function isAllowedOrigin(origin) {
 function corsHeaders(origin, publicMedia = false) {
   const headers = new Headers({
     "access-control-allow-methods": "GET, HEAD, POST, DELETE, OPTIONS",
-    "access-control-allow-headers": "Authorization, Content-Type",
+    "access-control-allow-headers": "Authorization, Content-Type, X-Chater-Media-Category, X-Chater-Media-Scope, X-Chater-Conversation-Id",
     "access-control-max-age": "86400",
     "vary": "Origin",
   });
@@ -176,56 +176,50 @@ function publicMediaUrl(key) {
 }
 
 async function uploadMedia(request, env, origin) {
-  if (!env.MEDIA) return json({ error: "Chater media storage is not configured yet." }, 503, origin);
+  if (!env.MEDIA) return json({ error: 'Chater media storage is not configured yet.' }, 503, origin);
   const authenticated = await requireUser(request, origin);
   if (authenticated.response) return authenticated.response;
 
-  let form;
-  try {
-    form = await request.formData();
-  } catch {
-    return json({ error: "Send the file as multipart form data." }, 400, origin);
-  }
-
-  const file = form.get("file");
-  const category = form.get("category");
-  const scope = form.get("scope");
-  const conversationId = form.get("conversationId");
-  if (!(file instanceof File) || file.size < 1) {
-    return json({ error: "Choose a file to upload." }, 400, origin);
-  }
-  if (typeof category !== "string" || !["profile", "moment", "wallpaper"].includes(category)) {
-    return json({ error: "Choose a valid Chater media category." }, 400, origin);
-  }
-
-  const mimeType = file.type.toLowerCase();
+  const category = request.headers.get('x-chater-media-category') || '';
+  const scope = request.headers.get('x-chater-media-scope') || '';
+  const conversationId = request.headers.get('x-chater-conversation-id') || '';
+  const mimeType = (request.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
   const extension = Object.hasOwn(MIME_EXTENSIONS, mimeType) ? MIME_EXTENSIONS[mimeType] : undefined;
+  const contentLength = Number(request.headers.get('content-length'));
+
+  if (!['profile', 'moment', 'wallpaper'].includes(category)) {
+    return json({ error: 'Choose a valid Chater media category.' }, 400, origin);
+  }
   if (!extension) {
-    return json({ error: "This image, video or audio format is not supported." }, 415, origin);
+    return json({ error: 'This image, video or audio format is not supported.' }, 415, origin);
   }
-  const isImage = mimeType.startsWith("image/");
-  if (category === "profile" && (!isImage || file.size > MAX_PROFILE_BYTES)) {
-    return json({ error: "Profile pictures must be JPG, PNG, WebP or GIF and no larger than 5 MB." }, 413, origin);
+  if (!request.body || !Number.isSafeInteger(contentLength) || contentLength < 1) {
+    return json({ error: 'The upload must include a readable file and a valid content length.' }, 411, origin);
   }
-  if (category === "wallpaper" && (!isImage || file.size > MAX_WALLPAPER_BYTES)) {
-    return json({ error: "Chat wallpapers must be JPG, PNG, WebP or GIF and no larger than 8 MB." }, 413, origin);
+
+  const isImage = mimeType.startsWith('image/');
+  if (category === 'profile' && (!isImage || contentLength > MAX_PROFILE_BYTES)) {
+    return json({ error: 'Profile pictures must be JPG, PNG, WebP or GIF and no larger than 5 MB.' }, 413, origin);
   }
-  if (category === "moment" && file.size > MAX_MOMENT_BYTES) {
-    return json({ error: "Moments must be 50 MB or smaller." }, 413, origin);
+  if (category === 'wallpaper' && (!isImage || contentLength > MAX_WALLPAPER_BYTES)) {
+    return json({ error: 'Chat wallpapers must be JPG, PNG, WebP or GIF and no larger than 8 MB.' }, 413, origin);
+  }
+  if (category === 'moment' && contentLength > MAX_MOMENT_BYTES) {
+    return json({ error: 'Moments must be 50 MB or smaller.' }, 413, origin);
   }
 
   let key;
   try {
     key = mediaObjectKey(authenticated.uid, category, scope, conversationId, extension);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Invalid upload details." }, 400, origin);
+    return json({ error: error instanceof Error ? error.message : 'Invalid upload details.' }, 400, origin);
   }
 
   try {
-    await env.MEDIA.put(key, file.stream(), {
+    await env.MEDIA.put(key, request.body, {
       httpMetadata: {
         contentType: mimeType,
-        cacheControl: "public, max-age=31536000, immutable",
+        cacheControl: 'public, max-age=31536000, immutable',
       },
       customMetadata: {
         owner: authenticated.uid,
@@ -235,7 +229,7 @@ async function uploadMedia(request, env, origin) {
     });
     return json({ success: true, url: publicMediaUrl(key), objectKey: key }, 201, origin);
   } catch {
-    return json({ error: "Cloudflare R2 could not save this file. Check your connection and retry." }, 502, origin);
+    return json({ error: 'Cloudflare R2 could not save this file. Check your connection and retry.' }, 502, origin);
   }
 }
 
