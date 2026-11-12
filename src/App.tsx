@@ -1358,6 +1358,7 @@ export default function App() {
           setLoginNotice('Your email is not verified yet. We have sent another verification email if possible. Check your inbox and Spam or Junk folder, open the verification link, then return here and sign in again.')
           return
         }
+        setPreferencesReady(false)
         setAuthUser(credential.user)
         const savedAccent = readSavedAccent(credential.user.uid)
         setAccent(savedAccent)
@@ -1372,6 +1373,7 @@ export default function App() {
         } catch {
           // The profile can be repaired/loaded later; Firebase Auth remains valid.
         }
+        applyAppearancePreferences(credential.user.uid, storedProfile)
         const storedUsername = storedProfile.username
         const localUsername = window.localStorage.getItem(`chater:profile:username:${credential.user.uid}`) || ''
         const resolvedUsername = typeof storedUsername === 'string' ? storedUsername : localUsername
