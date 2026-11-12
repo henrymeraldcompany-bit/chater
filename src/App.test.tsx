@@ -1075,8 +1075,8 @@ describe('Chater application shell', () => {
     vi.mocked(reload).mockResolvedValue(undefined)
     vi.mocked(getDocs).mockResolvedValue({
       docs: [
-        { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://media.example/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
-        { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://media.example/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
+        { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
+        { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
       ]
     } as never)
 
