@@ -199,7 +199,7 @@ async function uploadMedia(request, env, origin) {
   }
 
   const mimeType = file.type.toLowerCase();
-  const extension = MIME_EXTENSIONS[mimeType];
+  const extension = Object.hasOwn(MIME_EXTENSIONS, mimeType) ? MIME_EXTENSIONS[mimeType] : undefined;
   if (!extension) {
     return json({ error: "This image, video or audio format is not supported." }, 415, origin);
   }
@@ -230,7 +230,6 @@ async function uploadMedia(request, env, origin) {
       customMetadata: {
         owner: authenticated.uid,
         category,
-        originalName: file.name.slice(0, 160),
         uploadedAt: new Date().toISOString(),
       },
     });
