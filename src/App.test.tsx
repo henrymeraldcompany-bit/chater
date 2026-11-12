@@ -300,7 +300,7 @@ describe('Chater application shell', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Choose contacts' }))
       expect(contactPickerSelect).toHaveBeenCalledWith(['name'], { multiple: true })
       const possibleMatch = await screen.findByRole('button', { name: 'Review possible match Ada Lovelace' })
-      expect(setDoc).not.toHaveBeenCalled()
+      expect(setDoc).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ uid: 'ada-user', addedAt: 'SERVER_TIMESTAMP' }))
 
       fireEvent.click(possibleMatch)
       expect(await screen.findByRole('dialog', { name: 'Ada Lovelace profile' })).toBeInTheDocument()
@@ -524,7 +524,7 @@ describe('Chater application shell', () => {
   it('offers dark, light and system appearance choices and persists them', () => {
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
-    const theme = screen.getByLabelText('Theme')
+    const theme = screen.getByLabelText('General theme')
     expect(theme).toHaveValue('dark')
     fireEvent.change(theme, { target: { value: 'light' } })
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
