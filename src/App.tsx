@@ -479,14 +479,42 @@ export default function App() {
           mediaUrl: typeof data.mediaUrl === 'string' ? data.mediaUrl : '',
           mediaType: data.mediaType === 'audio' ? 'audio' as const : data.mediaType === 'video' ? 'video' as const : 'image' as const,
           caption: typeof data.caption === 'string' ? data.caption : '',
-          createdAt: savedAt || (expiresAt ? expiresAt - 86400000 : 0),
+          createdAt: savedAt || (expiresAt ? expiresAt - MOMENT_LIFETIME_MS : 0),
           expiresAt
         }
-      }).filter(item => isChaterMediaUrl(item.mediaUrl) && item.expiresAt > now).sort((left, right) => right.createdAt - left.createdAt)
-      if (active) setMoments(entries)
+      })
+      const expiredDocs = snapshot.docs.filter(item => {
+        const expiresAt = item.data().expiresAt
+        return typeof expiresAt === 'number' && expiresAt <= now
+      })
+      // Expired Moment records may be cleaned up by any signed-in member;
+      // their R2 files are removed by the media Worker's scheduled expiry sweep.
+      void Promise.all(expiredDocs.map(item =>
+        deleteDoc(doc(firestoreDb, 'moments', item.id)).catch(() => undefined)
+      ))
+      const activeEntries = entries
+        .filter(item => isChaterMediaUrl(item.mediaUrl) && isMomentActive(item.expiresAt, now))
+        .sort((left, right) => right.createdAt - left.createdAt)
+      if (active) setMoments(activeEntries)
     }).catch(() => { if (active) setMoments([]) })
     return () => { active = false }
-  }, [authUser])
+  }, [authUser?.uid])
+
+  // Keep the Moments feed in sync with each item's exact 24-hour expiry
+  // while Chater remains open, instead of waiting for a reload.
+  useEffect(() => {
+    if (!authUser || !firestoreDb || moments.length === 0) return
+    const timer = window.setInterval(() => {
+      const now = Date.now()
+      const expired = moments.filter(item => !isMomentActive(item.expiresAt, now))
+      if (expired.length === 0) return
+      setMoments(current => filterActiveMoments(current, now))
+      void Promise.all(expired.map(item =>
+        deleteDoc(doc(firestoreDb, 'moments', item.id)).catch(() => undefined)
+      ))
+    }, 10_000)
+    return () => window.clearInterval(timer)
+  }, [authUser?.uid, moments])
 
 
   const handleShareMoment = async (file: File, caption: string) => {
@@ -500,8 +528,8 @@ export default function App() {
     setMomentNotice('')
     let stage: 'R2 upload' | 'Firestore save' = 'R2 upload'
     try {
-      const mediaUrl = await uploadChaterMedia(authUser, file, { category: 'moment', timeoutMs: 10 * 60 * 1000 })
-      const expiresAt = Date.now() + 24 * 60 * 60 * 1000
+      const expiresAt = Date.now() + MOMENT_LIFETIME_MS
+      const mediaUrl = await uploadChaterMedia(authUser, file, { category: 'moment', expiresAt, timeoutMs: 10 * 60 * 1000 })
       const mediaType: MomentEntry['mediaType'] = isAudio ? 'audio' : isVideo ? 'video' : 'image'
       const data = { uid: authUser.uid, displayName: authUser.displayName || 'Chater member', mediaUrl, mediaType, caption: caption.trim().slice(0, 180), createdAt: serverTimestamp(), expiresAt }
       stage = 'Firestore save'
