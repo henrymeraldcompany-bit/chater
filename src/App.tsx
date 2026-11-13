@@ -2157,17 +2157,19 @@ function ProfileScreen({user,photoURL,username,details,onShowQr,onUsernameChange
   useEffect(() => { setUsernameDraft(username) }, [username])
   useEffect(() => { setDetailsDraft(details) }, [details])
   return <div className="profile-page">
-    <style>{`.profile-card{position:relative}.profile-card-heading{position:static;display:flex;align-items:flex-start;justify-content:center}.profile-edit-trigger{position:absolute;right:1rem;top:1rem;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--border, #ffffff22);background:var(--surface-raised, #ffffff0a);color:var(--text, inherit);cursor:pointer}.profile-edit-trigger:hover{border-color:var(--accent);color:var(--accent)}.profile-avatar-wrap{position:relative;width:max-content;margin:0 auto 1rem}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
+    <style>{`.profile-card{position:relative}.profile-card-heading{position:static;display:flex;align-items:flex-start;justify-content:center}.profile-edit-trigger{position:absolute;right:1rem;top:1rem;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--border, #ffffff22);background:var(--surface-raised, #ffffff0a);color:var(--text, inherit);cursor:pointer}.profile-edit-trigger:hover{border-color:var(--accent);color:var(--accent)}.profile-avatar-wrap{width:76px;margin:0 auto 1rem;display:flex;flex-direction:column;align-items:center;gap:8px}.profile-avatar-frame{position:relative;width:76px;height:76px;flex:0 0 76px}.profile-photo-remove{margin:0;padding:5px 0;white-space:nowrap;font-size:11px}.profile-avatar-add{position:absolute;right:2px;bottom:2px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#111;border:3px solid var(--surface, #111);box-shadow:0 2px 10px #0005;cursor:pointer;z-index:2}.profile-avatar-add input{display:none}.profile-avatar-add:has(input:disabled){opacity:.75;cursor:wait}.profile-avatar-spinner{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:profile-avatar-spin .7s linear infinite}@keyframes profile-avatar-spin{to{transform:rotate(360deg)}}`}</style><p className="eyebrow">YOUR CHATER IDENTITY</p><h1>You<span className="heading-dot">.</span></h1><div className="profile-card">
     <div className="profile-card-heading">
       <div className="profile-avatar-wrap">
-        <ProfileAvatar className="large" photoURL={photoURL} displayName={user?.displayName}/>
-        {user && <label className="profile-avatar-add" aria-label={photoBusy ? 'Uploading profile picture' : 'Add or change profile picture'} title={photoBusy ? 'Uploading picture…' : 'Add or change profile picture'}>
-          {photoBusy ? <span className="profile-avatar-spinner" aria-hidden="true"/> : <Plus size={17} strokeWidth={2.5}/>}
-          <input type="file" accept="image/*" disabled={photoBusy} onChange={e=>{const file=e.target.files?.[0];if(file)onPhotoUpload(file);e.currentTarget.value=''}}/>
-        </label>}
-        {user && photoURL && <button type="button" className="text-button profile-photo-remove" disabled={photoBusy} onClick={onPhotoRemove}><Trash2 size={15}/>{photoBusy ? 'Removing…' : 'Remove profile picture'}</button>}
+        <div className="profile-avatar-frame">
+          <ProfileAvatar className="large" photoURL={photoURL} displayName={user?.displayName}/>
+          {user && <label className="profile-avatar-add" aria-label={photoBusy ? 'Uploading profile picture' : 'Add or change profile picture'} title={photoBusy ? 'Uploading picture…' : 'Add or change profile picture'}>
+            {photoBusy ? <span className="profile-avatar-spinner" aria-hidden="true"/> : <Plus size={17} strokeWidth={2.5}/>}
+            <input type="file" accept="image/*" disabled={photoBusy} onChange={e=>{const file=e.target.files?.[0];if(file)onPhotoUpload(file);e.currentTarget.value=''}}/>
+          </label>}
+        </div>
+        {user && editingProfile && photoURL && <button type="button" className="text-button profile-photo-remove" disabled={photoBusy} onClick={onPhotoRemove}><Trash2 size={15}/>{photoBusy ? 'Removing…' : 'Remove profile picture'}</button>}
       </div>
-      {user && <button className="profile-edit-trigger" type="button" aria-label="Edit your profile" title="Edit your profile" onClick={()=>{
+      {user && <button className="profile-edit-trigger" type="button" aria-label="Edit your profile" aria-expanded={editingProfile} title="Edit your profile" onClick={()=>{
         setNameDraft(user.displayName || '')
         setUsernameDraft(username)
         setDetailsDraft(details)
