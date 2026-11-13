@@ -70,7 +70,7 @@ function openApp() {
 describe('Chater R2 media URLs', () => {
   it('accepts only HTTPS media paths from the configured Chater R2 Worker', () => {
     expect(isChaterMediaUrl(CHATER_MEDIA_BASE_URL + '/media/users/member/profile/avatar.png')).toBe(true)
-    expect(isChaterMediaUrl('https://res.cloudinary.com/amzak6nf/image/upload/avatar.png')).toBe(false)
+    expect(isChaterMediaUrl('https://uploads.example.invalid/avatar.png')).toBe(false)
     expect(isChaterMediaUrl('http://chater-media.henrymeraldcompany.workers.dev/media/users/member/profile/avatar.png')).toBe(false)
     expect(isChaterMediaUrl('https://other.example/media/users/member/profile/avatar.png')).toBe(false)
     expect(isChaterMediaUrl('https://chater-media.henrymeraldcompany.workers.dev/not-media/member/avatar.png')).toBe(false)
