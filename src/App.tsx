@@ -7,6 +7,7 @@ import ConversationList from './components/ConversationList'
 import ConversationScreen from './components/ConversationScreen'
 import type { ChatUser } from './lib/chat'
 import { CHATER_MEDIA_BASE_URL, deleteChaterMedia, isChaterMediaUrl, uploadChaterMedia } from './lib/media'
+import { filterActiveMoments, isMomentActive, MOMENT_LIFETIME_MS } from './lib/moments'
 
 type Tab = 'Chats' | 'Moments' | 'Groups' | 'Calls' | 'You'
 type Filter = 'All' | 'Unread' | 'Favorites' | 'Groups'
