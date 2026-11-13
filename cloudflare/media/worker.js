@@ -22,6 +22,7 @@ const MIME_EXTENSIONS = {
 const MAX_PROFILE_BYTES = 5 * 1024 * 1024;
 const MAX_WALLPAPER_BYTES = 8 * 1024 * 1024;
 const MAX_MOMENT_BYTES = 50 * 1024 * 1024;
+const MOMENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 function isAllowedOrigin(origin) {
   return !origin ||
@@ -33,7 +34,7 @@ function isAllowedOrigin(origin) {
 function corsHeaders(origin, publicMedia = false) {
   const headers = new Headers({
     "access-control-allow-methods": "GET, HEAD, POST, DELETE, OPTIONS",
-    "access-control-allow-headers": "Authorization, Content-Type, X-Chater-Media-Category, X-Chater-Media-Scope, X-Chater-Conversation-Id",
+    "access-control-allow-headers": "Authorization, Content-Type, X-Chater-Media-Category, X-Chater-Media-Scope, X-Chater-Conversation-Id, X-Chater-Moment-Expires-At",
     "access-control-max-age": "86400",
     "vary": "Origin",
   });
@@ -183,6 +184,7 @@ async function uploadMedia(request, env, origin) {
   const category = request.headers.get('x-chater-media-category') || '';
   const scope = request.headers.get('x-chater-media-scope') || '';
   const conversationId = request.headers.get('x-chater-conversation-id') || '';
+  const momentExpiresAt = Number(request.headers.get('x-chater-moment-expires-at'));
   const mimeType = (request.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
   const extension = Object.hasOwn(MIME_EXTENSIONS, mimeType) ? MIME_EXTENSIONS[mimeType] : undefined;
   const contentLength = Number(request.headers.get('content-length'));
@@ -207,6 +209,13 @@ async function uploadMedia(request, env, origin) {
   if (category === 'moment' && contentLength > MAX_MOMENT_BYTES) {
     return json({ error: 'Moments must be 50 MB or smaller.' }, 413, origin);
   }
+  if (category === 'moment' && (
+    !Number.isSafeInteger(momentExpiresAt) ||
+    momentExpiresAt <= Date.now() ||
+    momentExpiresAt > Date.now() + MOMENT_LIFETIME_MS + 5 * 60 * 1000
+  )) {
+    return json({ error: 'A Moment must have a valid expiry time within 24 hours.' }, 400, origin);
+  }
 
   let key;
   try {
@@ -225,6 +234,7 @@ async function uploadMedia(request, env, origin) {
         owner: authenticated.uid,
         category,
         uploadedAt: new Date().toISOString(),
+        ...(category === 'moment' ? { expiresAt: String(momentExpiresAt) } : {}),
       },
     });
     return json({ success: true, url: publicMediaUrl(key), objectKey: key }, 201, origin);
@@ -267,6 +277,40 @@ async function serveMedia(request, env, url) {
 
   if (request.method === "HEAD") return new Response(null, { headers });
   return new Response(object.body, { headers });
+}
+
+async function deleteExpiredMomentMedia(env, now = Date.now()) {
+  if (!env.MEDIA) throw new Error("Chater media storage is not configured.");
+  let cursor;
+  let deletedCount = 0;
+  do {
+    const page = await env.MEDIA.list({
+      prefix: "users/",
+      cursor,
+      limit: 1000,
+      include: ["customMetadata"],
+    });
+    const expiredKeys = page.objects
+      .filter(object => {
+        if (!/^users\/[A-Za-z0-9_-]{1,128}\/moments\/[A-Za-z0-9_.-]+$/.test(object.key)) return false;
+        const savedExpiry = Number(object.customMetadata?.expiresAt);
+        const uploadedAt = object.uploaded instanceof Date
+          ? object.uploaded.getTime()
+          : new Date(object.uploaded).getTime();
+        const expiresAt = Number.isSafeInteger(savedExpiry) && savedExpiry > 0
+          ? savedExpiry
+          : uploadedAt + MOMENT_LIFETIME_MS;
+        return Number.isFinite(expiresAt) && expiresAt <= now;
+      })
+      .map(object => object.key);
+    if (expiredKeys.length > 0) {
+      await env.MEDIA.delete(expiredKeys);
+      deletedCount += expiredKeys.length;
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+    if (page.truncated && !cursor) throw new Error("R2 did not return a continuation cursor.");
+  } while (cursor);
+  return deletedCount;
 }
 
 async function deleteAccountMedia(request, env, origin) {
@@ -346,5 +390,14 @@ export default {
       return deleteOneMediaObject(request, env, origin);
     }
     return json({ error: "Not found." }, 404, origin);
+  },
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(
+      deleteExpiredMomentMedia(env)
+        .then(deleted => {
+          if (deleted > 0) console.info("Expired Chater Moments removed from R2:", deleted);
+        })
+        .catch(error => console.error("Moment expiry cleanup failed:", error))
+    );
   },
 };
