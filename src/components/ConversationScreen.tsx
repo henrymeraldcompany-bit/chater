@@ -22,6 +22,7 @@ type ConversationScreenProps = {
   generalWallpaper?: string
   generalWallpaperImageUrl?: string
   onWallpaperUpload?: (file: File, conversationId: string) => Promise<string>
+  onWallpaperDelete?: (mediaUrl: string) => Promise<void>
 }
 
 type MenuPage = 'main' | 'more' | 'theme'
@@ -89,7 +90,8 @@ export default function ConversationScreen({
   onUnblock,
   generalWallpaper = 'default',
   generalWallpaperImageUrl = '',
-  onWallpaperUpload
+  onWallpaperUpload,
+  onWallpaperDelete
 }: ConversationScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [messageDraft, setMessageDraft] = useState('')
@@ -368,7 +370,7 @@ export default function ConversationScreen({
     setMessageNotice('Chat export prepared.')
   }
 
-  const saveChatAppearance = async (theme: ChatTheme, imageUrl: string) => {
+  const saveChatAppearance = async (theme: ChatTheme, imageUrl: string): Promise<boolean> => {
     setChatTheme(theme)
     setChatThemeImageUrl(imageUrl)
     try {
@@ -381,7 +383,7 @@ export default function ConversationScreen({
     }
     if (!firestoreDb) {
       setMessageNotice('This chat theme is active on this device, but cannot sync without the Chater database.')
-      return
+      return false
     }
     try {
       await setDoc(doc(firestoreDb, 'users', currentUserId, 'chatPreferences', conversationId), {
@@ -390,8 +392,10 @@ export default function ConversationScreen({
         updatedAt: serverTimestamp()
       }, { merge: true })
       setMessageNotice('This chat theme is saved to your Chater account.')
+      return true
     } catch {
       setMessageNotice('This chat theme is active on this device, but could not sync to your account. Publish the latest Firestore rules and check your connection.')
+      return false
     }
   }
 
@@ -408,8 +412,16 @@ export default function ConversationScreen({
     setWallpaperUploadBusy(true)
     setMessageNotice('Uploading this chat wallpaper…')
     try {
+      const previousImageUrl = chatThemeImageUrl
       const imageUrl = await onWallpaperUpload(file, conversationId)
-      await saveChatAppearance('custom', imageUrl)
+      const saved = await saveChatAppearance('custom', imageUrl)
+      if (saved && previousImageUrl && previousImageUrl !== imageUrl && onWallpaperDelete) {
+        try {
+          await onWallpaperDelete(previousImageUrl)
+        } catch {
+          setMessageNotice('Your new chat wallpaper is saved, but the previous image could not be cleaned up from Cloudflare R2.')
+        }
+      }
       closeMenu()
     } catch (error) {
       setMessageNotice(error instanceof Error ? error.message : 'The chat wallpaper could not be uploaded.')
@@ -419,7 +431,22 @@ export default function ConversationScreen({
   }
 
   const handleRemoveChatWallpaper = async () => {
-    await saveChatAppearance('default', '')
+    const previousImageUrl = chatThemeImageUrl
+    const saved = await saveChatAppearance('default', '')
+    if (!saved) return
+    if (previousImageUrl && onWallpaperDelete) {
+      setWallpaperUploadBusy(true)
+      try {
+        await onWallpaperDelete(previousImageUrl)
+        setMessageNotice('Personal chat wallpaper removed and deleted from Cloudflare R2.')
+      } catch (error) {
+        setMessageNotice(error instanceof Error
+          ? 'The wallpaper was removed from this chat, but its stored image could not be deleted: ' + error.message
+          : 'The wallpaper was removed from this chat, but its stored image could not be deleted from Cloudflare R2.')
+      } finally {
+        setWallpaperUploadBusy(false)
+      }
+    }
     closeMenu()
   }
 
@@ -477,7 +504,7 @@ export default function ConversationScreen({
             <button type="button" className="conversation-menu-back" onClick={() => setMenuPage('main')}><ChevronLeft size={18}/>Back</button>
             {chatThemes.filter(theme => theme.id !== 'custom').map(theme => <button type="button" role="menuitemradio" aria-checked={chatTheme === theme.id && !chatThemeImageUrl} key={theme.id} onClick={() => void handleThemeChange(theme.id)}><span className={'conversation-theme-dot theme-' + theme.id}/>{theme.label}{chatTheme === theme.id && !chatThemeImageUrl && <Check size={17}/>}</button>)}
             <button type="button" role="menuitem" disabled={wallpaperUploadBusy || !onWallpaperUpload} onClick={() => chatWallpaperInputRef.current?.click()}><ImagePlus size={18}/>{wallpaperUploadBusy ? 'Uploading image…' : chatThemeImageUrl ? 'Change wallpaper image' : 'Add image as chat theme'}</button>
-            {chatThemeImageUrl && <button type="button" role="menuitem" onClick={() => void handleRemoveChatWallpaper()}><X size={18}/>Remove personal image</button>}
+            {chatThemeImageUrl && <button type="button" role="menuitem" disabled={wallpaperUploadBusy} onClick={() => void handleRemoveChatWallpaper()}><X size={18}/>{wallpaperUploadBusy ? 'Removing image…' : 'Remove personal image'}</button>}
           </>}
           {menuPage === 'more' && <>
             <button type="button" className="conversation-menu-back" onClick={() => setMenuPage('main')}><ChevronLeft size={18}/>Back</button>
