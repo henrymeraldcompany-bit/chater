@@ -44,7 +44,7 @@ Object prefixes are always generated from the verified Firebase ID token subject
 - General wallpaper: `users/{uid}/wallpapers/general/{uuid}.{ext}` (maximum 8 MB)
 - Individual chat wallpaper: `users/{uid}/wallpapers/chats/{conversationId}/{uuid}.{ext}` (maximum 8 MB)
 
-The Worker verifies Firebase ID-token signatures against Google's Secure Token public keys. Account deletion requires recent authentication and removes only the authenticated user's R2 object prefix before Chater removes the Firebase/Firestore records. The R2 bucket itself remains private; media is delivered through the Worker.
+The Worker verifies Firebase ID-token signatures against Google's Secure Token public keys. Account deletion requires recent authentication and removes only the authenticated user's R2 object prefix before Chater removes the Firebase/Firestore records. The R2 bucket itself remains private; media is delivered through the Worker. The 15-minute Moment media expiry schedule is currently enabled on the preview/test Worker only; the production Worker must receive the same Worker code and Cron Trigger during the approved production cutover.
 
 All current Chater media uploads and deletions use the authenticated R2 media Worker. The frontend does not need credentials, SDKs, upload presets, or direct connections to a third-party media host. Any files stored by a previous media service are separate and are not automatically imported into R2.
 
@@ -80,7 +80,7 @@ The general Appearance settings (Dark, Light, or System), general wallpaper pres
 
 Each direct conversation can also have its own wallpaper. Per-chat theme and image URL are saved in the signed-in owner's private subcollection `users/{uid}/chatPreferences/{conversationId}`. A personal wallpaper overrides the general wallpaper only in that conversation; removing the personal image restores the general theme.
 
-General and personal chat wallpaper images are uploaded through the `chater-media` Worker into the authenticated account's private R2 object prefix. General wallpapers use `users/{uid}/wallpapers/general/`; personal chat wallpapers use `users/{uid}/wallpapers/chats/{conversationId}/`. Each wallpaper must be 8 MB or smaller. The account-deletion endpoint removes these wallpapers along with profile pictures and Moments. A scheduled Worker expiry sweep removes Moment media after 24 hours without affecting profile pictures or wallpapers.
+General and personal chat wallpaper images are uploaded through the `chater-media` Worker into the authenticated account's private R2 object prefix. General wallpapers use `users/{uid}/wallpapers/general/`; personal chat wallpapers use `users/{uid}/wallpapers/chats/{conversationId}/`. Each wallpaper must be 8 MB or smaller. The account-deletion endpoint removes these wallpapers along with profile pictures and Moments. A scheduled Worker expiry sweep removes Moment media after 24 hours without affecting profile pictures or wallpapers. The schedule is enabled on the preview/test Worker only at present; production scheduling remains pending cutover.
 
 **Publish the latest repository `firestore.rules` file again** in Firebase Console → Firestore Database → Rules → Publish. It contains the owner-only `chatPreferences` rule. The GitHub Pages workflow does not deploy Firestore rules.
 
