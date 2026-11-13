@@ -22,7 +22,14 @@ service cloud.firestore {
         && request.resource.data.username == username
         && username.matches('^[a-z0-9_]{3,20}$');
       allow update: if false;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn()
+        && (
+          resource.data.uid == request.auth.uid
+          || (
+            (resource.data.expiresAt is int || resource.data.expiresAt is float)
+            && resource.data.expiresAt <= request.time.toMillis()
+          )
+        );
     }
 
     match /moments/{momentId} {
