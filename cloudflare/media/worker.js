@@ -1,6 +1,9 @@
 const FIREBASE_PROJECT_ID = "chater-8f834";
-const ALLOWED_ORIGIN = "https://henrymeraldcompany-bit.github.io";
-const PUBLIC_MEDIA_BASE = "https://chater-media.henrymeraldcompany.workers.dev";
+const ALLOWED_ORIGINS = [
+  "https://henrymeraldcompany-bit.github.io",
+  "https://chater-r2-preview.pages.dev",
+];
+const DEFAULT_PUBLIC_MEDIA_BASE = "https://chater-media.henrymeraldcompany.workers.dev";
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 
 const MIME_EXTENSIONS = {
@@ -26,7 +29,7 @@ const MOMENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 function isAllowedOrigin(origin) {
   return !origin ||
-    origin === ALLOWED_ORIGIN ||
+    ALLOWED_ORIGINS.includes(origin) ||
     origin === "http://localhost:5173" ||
     origin === "http://127.0.0.1:5173";
 }
@@ -43,7 +46,7 @@ function corsHeaders(origin, publicMedia = false) {
   } else if (origin && isAllowedOrigin(origin)) {
     headers.set("access-control-allow-origin", origin);
   } else if (!origin) {
-    headers.set("access-control-allow-origin", ALLOWED_ORIGIN);
+    headers.set("access-control-allow-origin", ALLOWED_ORIGINS[0]);
   }
   return headers;
 }
@@ -172,8 +175,9 @@ function mediaObjectKey(uid, category, scope, conversationId, extension) {
   throw new Error("Choose a valid Chater media category.");
 }
 
-function publicMediaUrl(key) {
-  return PUBLIC_MEDIA_BASE + "/media/" + key.split("/").map(encodeURIComponent).join("/");
+function publicMediaUrl(key, env) {
+  const base = env.CHATER_MEDIA_PUBLIC_BASE_URL || DEFAULT_PUBLIC_MEDIA_BASE;
+  return base.replace(/\/$/, "") + "/media/" + key.split("/").map(encodeURIComponent).join("/");
 }
 
 async function uploadMedia(request, env, origin) {
@@ -237,7 +241,7 @@ async function uploadMedia(request, env, origin) {
         ...(category === 'moment' ? { expiresAt: String(momentExpiresAt) } : {}),
       },
     });
-    return json({ success: true, url: publicMediaUrl(key), objectKey: key }, 201, origin);
+    return json({ success: true, url: publicMediaUrl(key, env), objectKey: key }, 201, origin);
   } catch {
     return json({ error: 'Cloudflare R2 could not save this file. Check your connection and retry.' }, 502, origin);
   }
