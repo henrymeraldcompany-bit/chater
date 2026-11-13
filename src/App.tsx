@@ -464,8 +464,9 @@ export default function App() {
   }, [authUser?.uid])
   useEffect(() => {
     if (!authUser || !firestoreDb) { setMoments([]); return }
+    const db = firestoreDb
     let active = true
-    getDocs(collection(firestoreDb, 'moments')).then(snapshot => {
+    getDocs(collection(db, 'moments')).then(snapshot => {
       const now = Date.now()
       const entries = snapshot.docs.map(item => {
         const data = item.data()
@@ -491,7 +492,7 @@ export default function App() {
       // Expired Moment records may be cleaned up by any signed-in member;
       // their R2 files are removed by the media Worker's scheduled expiry sweep.
       void Promise.all(expiredDocs.map(item =>
-        deleteDoc(doc(firestoreDb, 'moments', item.id)).catch(() => undefined)
+        deleteDoc(doc(db, 'moments', item.id)).catch(() => undefined)
       ))
       const activeEntries = entries
         .filter(item => isChaterMediaUrl(item.mediaUrl) && isMomentActive(item.expiresAt, now))
@@ -505,6 +506,7 @@ export default function App() {
   // while Chater remains open, instead of waiting for a reload.
   useEffect(() => {
     if (!authUser || !firestoreDb || moments.length === 0) return
+    const db = firestoreDb
     const timer = window.setInterval(() => {
       const now = Date.now()
       const expired = moments.filter(item => !isMomentActive(item.expiresAt, now))
