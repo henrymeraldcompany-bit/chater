@@ -70,8 +70,8 @@ General appearance settings are stored on the signed-in member's Firestore profi
 - The general wallpaper is inherited by direct conversations using the Default chat theme.
 - A personal conversation can override the general wallpaper with one of the built-in themes or its own uploaded image.
 - Per-chat appearance is stored privately at `users/{uid}/chatPreferences/{conversationId}`.
-- Uploaded wallpaper images are placed in Cloudinary under `chater/wallpapers/{uid}/general` or `chater/wallpapers/{uid}/chats/{conversationId}`.
-- Wallpaper uploads use the authenticated member's UID folder and a public-ID prefix so the account-deletion Worker can delete these assets.
+- Uploaded wallpaper images are stored in the private Cloudflare R2 bucket under `users/{uid}/wallpapers/general/` or `users/{uid}/wallpapers/chats/{conversationId}/`.
+- The authenticated Chater media Worker verifies Firebase ID tokens, assigns the object key from the authenticated UID, and serves media through the Worker. Account deletion removes only objects under that authenticated UID's `users/{uid}/` prefix.
 - Message bubble settings affect the actual sent and received text bubbles, not only the settings preview.
 
 The `chatPreferences` Firestore subcollection is owner-readable and owner-writable only. Publish the current `firestore.rules` file before expecting cross-device per-chat preferences to sync.
