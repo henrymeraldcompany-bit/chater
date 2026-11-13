@@ -4,15 +4,15 @@ This Worker is the single media gateway for Chater. It serves profile pictures, 
 
 ## Deployed resources
 
-- Worker: `chater-media`
-- Worker URL: `https://chater-media.henrymeraldcompany.workers.dev`
+- Production Worker: `chater-media`
+- Production Worker URL: `https://chater-media.henrymeraldcompany.workers.dev`
 - R2 bucket: `chater-media`
 - R2 binding: `MEDIA`
 - Bucket location: `WEUR`
 - Firebase project: `chater-8f834`
-- Allowed app origin: `https://henrymeraldcompany-bit.github.io`
+- Production app origin: `https://henrymeraldcompany-bit.github.io`
 
-The bucket and Worker were created and deployed on 2026-11-12. The Cloudflare API confirms that the Worker has the `MEDIA` binding to the `chater-media` bucket. The live health endpoint and authenticated app upload/download/delete flow still require end-to-end verification before merging the frontend cutover.
+The production bucket and Worker were created and deployed on 2026-11-12. The Cloudflare API confirms that the production Worker has the `MEDIA` binding to the `chater-media` bucket. The branch preview uses a separate `chater-r2-test` Worker (also bound to the `chater-media` bucket). Keep the production Worker and production app unchanged until preview checks and the cutover are approved.
 
 ## Worker behavior
 
@@ -21,7 +21,7 @@ The bucket and Worker were created and deployed on 2026-11-12. The Cloudflare AP
 - `GET /media/{objectKey}`: streams Chater media through the Worker. The bucket itself remains private; the Worker is the delivery path.
 - `POST /delete-account-media`: requires a recently authenticated, email-verified Firebase account and deletes only `users/{token-subject}/` objects.
 - `DELETE /object`: deletes one object only when its key belongs to the authenticated account.
-- Scheduled expiry sweep: removes Moment media after its 24-hour lifetime. The schedule runs every 15 minutes, so storage cleanup can occur shortly after the exact feed expiry.
+- Scheduled expiry sweep: removes Moment media after its 24-hour lifetime. The preview/test Worker `chater-r2-test` is currently configured to run this sweep every 15 minutes. The production Worker `chater-media` is not yet updated; apply the same Worker code and Cron Trigger as part of the production cutover.
 
 Supported uploads:
 
@@ -61,7 +61,7 @@ Then verify from a signed-in Chater session:
 4. Delete or replace media where the app supports it.
 5. Confirm account media deletion succeeds only for the authenticated account.
 
-Do not merge the application-side R2 cutover until the live health check and authenticated upload/download/delete checks succeed. Keep the existing app deployment unchanged until then.
+Do not merge the application-side R2 cutover until the live health check, authenticated upload/download/delete checks, and Moment expiry checks succeed. Before production cutover, deploy the current Worker code to `chater-media`, configure its `*/15 * * * *` Cron Trigger, and change the production app media URL to that Worker. Keep the existing production app and Worker unchanged until then.
 
 ## Security notes
 
