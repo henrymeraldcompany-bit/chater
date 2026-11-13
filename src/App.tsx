@@ -1118,27 +1118,19 @@ export default function App() {
     await Promise.all(ownedMoments.map(moment => deleteDoc(doc(db, 'moments', moment.id))))
     // Firestore does not cascade deletes into subcollections. Remove private
     // contact and block links before deleting the profile document.
-    const [contactSnapshot, blockedSnapshot, chatPreferencesSnapshot, conversationsSnapshot] = await Promise.all([
+    const [contactSnapshot, blockedSnapshot, chatPreferencesSnapshot] = await Promise.all([
       getDocs(collection(db, 'users', authUser.uid, 'contacts')),
       getDocs(collection(db, 'users', authUser.uid, 'blocked')),
-      getDocs(collection(db, 'users', authUser.uid, 'chatPreferences')),
-      getDocs(firestoreQuery(collection(db, 'conversations'), where('participants', 'array-contains', authUser.uid)))
+      getDocs(collection(db, 'users', authUser.uid, 'chatPreferences'))
     ])
     await Promise.all([
       ...contactSnapshot.docs.map(contact => deleteDoc(doc(db, 'users', authUser.uid, 'contacts', contact.id))),
       ...blockedSnapshot.docs.map(block => deleteDoc(doc(db, 'users', authUser.uid, 'blocked', block.id))),
       ...chatPreferencesSnapshot.docs.map(preference => deleteDoc(doc(db, 'users', authUser.uid, 'chatPreferences', preference.id)))
     ])
-    // Conversation messages are shared by the two participants. Account
-    // deletion removes these threads and their messages rather than leaving
-    // private message documents orphaned beneath a deleted profile.
-    for (const conversation of conversationsSnapshot.docs) {
-      const messages = await getDocs(collection(db, 'conversations', conversation.id, 'messages'))
-      await Promise.all(messages.docs.map(message =>
-        deleteDoc(doc(db, 'conversations', conversation.id, 'messages', message.id))
-      ))
-      await deleteDoc(doc(db, 'conversations', conversation.id))
-    }
+    // Conversations and messages are shared history. Keep them intact so
+    // the other participant does not lose their chat when this account is deleted.
+    // ConversationList displays a neutral fallback when the deleted profile is gone.
     const usernameRef = profileUsername ? doc(db, 'usernames', profileUsername) : null
     const profileRef = doc(db, 'users', authUser.uid)
     await runTransaction(db, async transaction => {
