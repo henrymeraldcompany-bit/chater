@@ -15,6 +15,7 @@ type ChaterMediaUploadOptions = {
   category: ChaterMediaCategory
   scope?: ChaterWallpaperScope
   conversationId?: string
+  expiresAt?: number
   timeoutMs?: number
 }
 
@@ -91,6 +92,7 @@ export async function uploadChaterMedia(
   }
   if (options.scope) headers['X-Chater-Media-Scope'] = options.scope
   if (options.conversationId) headers['X-Chater-Conversation-Id'] = options.conversationId
+  if (options.category === 'moment' && options.expiresAt) headers['X-Chater-Moment-Expires-At'] = String(options.expiresAt)
 
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 60_000)
