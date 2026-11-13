@@ -978,6 +978,16 @@ describe('Chater application shell', () => {
     expect(updateProfile).toHaveBeenCalledWith(user, {
       photoURL: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/test-user/profile/avatar.png'
     })
+
+    expect(screen.queryByRole('button', { name: 'Remove profile picture' })).not.toBeInTheDocument()
+    const avatarFrame = document.querySelector('.profile-avatar-frame')
+    expect(avatarFrame).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit your profile' }))
+    expect(screen.getByRole('button', { name: 'Remove profile picture' })).toBeInTheDocument()
+    expect(document.querySelector('.profile-avatar-frame')).toBe(avatarFrame)
+    expect(screen.getByRole('button', { name: 'Edit your profile' })).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('button', { name: 'Remove profile picture' })).not.toBeInTheDocument()
   })
 
   it('shows a clear R2 upload error and resets the uploading state', async () => {
