@@ -1,6 +1,6 @@
 # Chater Cloudflare R2 media Worker
 
-This Worker is the single media gateway for Chater. It replaces direct Cloudinary uploads and keeps the R2 bucket private behind an R2 binding.
+This Worker is the single media gateway for Chater. It serves profile pictures, Moments, and chat wallpapers from the private R2 bucket.
 
 ## Deployed resources
 
@@ -21,6 +21,7 @@ The bucket and Worker were created and deployed on 2026-11-12. The Cloudflare AP
 - `GET /media/{objectKey}`: streams Chater media through the Worker. The bucket itself remains private; the Worker is the delivery path.
 - `POST /delete-account-media`: requires a recently authenticated, email-verified Firebase account and deletes only `users/{token-subject}/` objects.
 - `DELETE /object`: deletes one object only when its key belongs to the authenticated account.
+- Scheduled expiry sweep: removes Moment media after its 24-hour lifetime. The schedule runs every 15 minutes, so storage cleanup can occur shortly after the exact feed expiry.
 
 Supported uploads:
 
@@ -55,7 +56,7 @@ Expected response:
 Then verify from a signed-in Chater session:
 
 1. Upload a profile picture and confirm the returned media URL displays.
-2. Upload a Moment and confirm it appears and plays/displays.
+2. Upload a Moment and confirm it appears and plays/displays; verify it disappears from the feed after 24 hours and its R2 file is removed by the scheduled sweep.
 3. Upload a general wallpaper and a personal chat wallpaper.
 4. Delete or replace media where the app supports it.
 5. Confirm account media deletion succeeds only for the authenticated account.
@@ -70,3 +71,4 @@ Do not merge the application-side R2 cutover until the live health check and aut
 - The R2 bucket should not be made public and no S3 credentials belong in browser code.
 - Media URLs are delivered through the Worker, matching the app's current profile/Moment media behavior. The R2 bucket itself stays private; anyone with a media URL can view that media.
 - Account deletion paginates through only the authenticated UID prefix and deletes in bounded batches.
+- Moment cleanup is limited to object keys under `users/{uid}/moments/`; profile pictures and wallpapers are not affected.
