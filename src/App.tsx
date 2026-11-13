@@ -513,7 +513,7 @@ export default function App() {
       if (expired.length === 0) return
       setMoments(current => filterActiveMoments(current, now))
       void Promise.all(expired.map(item =>
-        deleteDoc(doc(firestoreDb, 'moments', item.id)).catch(() => undefined)
+        deleteDoc(doc(db, 'moments', item.id)).catch(() => undefined)
       ))
     }, 10_000)
     return () => window.clearInterval(timer)
