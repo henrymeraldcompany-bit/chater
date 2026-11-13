@@ -2055,3 +2055,60 @@ body,.app-shell{background:var(--page);color:var(--text)}
   background: var(--page);
 }
 
+
+
+/* R2 media removal controls */
+.profile-photo-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  margin: .65rem auto 0;
+  color: var(--muted, #aab2ba);
+}
+.profile-photo-remove:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+.moment-story-delete {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border: 1px solid #ffffff44;
+  border-radius: 50%;
+  background: #101619cc;
+  color: #fff;
+  cursor: pointer;
+}
+.moment-story-delete:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+.moment-delete-confirm {
+  position: absolute;
+  z-index: 8;
+  left: 1rem;
+  right: 1rem;
+  bottom: 4.5rem;
+  padding: 1rem;
+  border: 1px solid #ffffff28;
+  border-radius: 1rem;
+  background: #151b20f5;
+  color: #fff;
+  box-shadow: 0 12px 36px #0008;
+}
+.moment-delete-confirm p {
+  margin: .45rem 0 .8rem;
+  color: #d3dbe0;
+  font-size: .9rem;
+}
+.moment-delete-confirm .moment-delete-notice {
+  color: #ffc6c6;
+}
+.moment-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .6rem;
+}
