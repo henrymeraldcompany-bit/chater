@@ -1,7 +1,5 @@
-# Retired Chater Cloudinary account-deletion Worker
+# Legacy account-deletion Worker
 
-The Cloudinary-based `chater-account-deletion` Worker is retired as part of the move to Cloudflare R2.
+This folder documents an older account-cleanup service that is no longer part of the current Chater application code.
 
-The replacement service is documented in [../media/README.md](../media/README.md). The replacement `chater-media` Worker handles authenticated uploads, media delivery, and deletion of an account's own R2 objects.
-
-Do not configure new Cloudinary API credentials or use this Worker for Chater. The legacy Cloudflare Worker should be deleted only after the R2 Worker is deployed, its health check succeeds, and the Chater production app is switched to it.
+The current application uses the authenticated R2 media Worker documented in [../media/README.md](../media/README.md). Keep this legacy deployed service isolated until the production application has been switched to the R2 media Worker and account-deletion behavior has been verified. Do not add credentials for an external media provider to Chater.
