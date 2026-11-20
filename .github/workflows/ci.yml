@@ -2,7 +2,7 @@ name: Chater quality checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, cloudflare-r2-storage]
   pull_request:
     branches: [main]
 
