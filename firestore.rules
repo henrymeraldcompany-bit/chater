@@ -335,14 +335,16 @@ service cloud.firestore {
         allow read: if isGroupMember();
 
         allow create: if isGroupMember()
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'createdAt'])
-          && request.resource.data.keys().hasAll(['senderId', 'senderName', 'text', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'kind', 'createdAt'])
+          && request.resource.data.keys().hasAll(['senderId', 'senderName', 'text', 'kind', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
           && request.resource.data.senderName.size() <= 50
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 4000
+          && request.resource.data.kind in ['text', 'announcement']
+          && (request.resource.data.kind == 'text' || isGroupAdmin())
           && request.resource.data.createdAt == request.time;
 
         allow update: if false;
