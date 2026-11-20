@@ -5,6 +5,7 @@ import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query 
 import { MessageCircle, CirclePlay, Users, Phone, PhoneCall, CalendarDays, Heart, Camera, UserRound, Search, Plus, MoreHorizontal, ChevronRight, Pencil, Settings, ShieldCheck, ShieldBan, HelpCircle, Bell, X, Type, Music2, LayoutGrid, Mic, ImagePlus, Video, Check, ArrowLeft, QrCode, Trash2, type LucideIcon } from 'lucide-react'
 import ConversationList from './components/ConversationList'
 import ConversationScreen from './components/ConversationScreen'
+import GroupsScreen from './components/GroupsScreen'
 import type { ChatUser } from './lib/chat'
 import { CHATER_MEDIA_BASE_URL, deleteChaterMedia, isChaterMediaUrl, uploadChaterMedia } from './lib/media'
 import { filterActiveMoments, isMomentActive, MOMENT_LIFETIME_MS } from './lib/moments'
@@ -1425,7 +1426,7 @@ export default function App() {
           />
         </>}
         {activeTab==='Moments'&&<><h1 className="a11y-heading">Moments</h1><p className="a11y-heading">Share photos and videos that disappear after 24 hours.</p><MomentsScreen groups={momentGroups} userId={authUser?.uid || ''} photoURL={profilePhotoUrl} displayName={authUser?.displayName || 'My Moments'} onAdd={()=>{setMomentNotice('');setDialog(authUser ? 'moment' : 'login')}} onView={groupIndex=>setMomentViewerIndex(groupIndex)}/></>}
-        {activeTab==='Groups'&&<FeatureEmpty data={pageCopy.Groups} onAction={()=>setDialog('new-chat')}/>}
+        {activeTab==='Groups'&&<GroupsScreen userId={authUser?.uid || ''} displayName={authUser?.displayName || 'Chater member'}/ >}
         {activeTab==='Calls'&&<CallsScreen scheduledCalls={scheduledCalls} onStartCall={()=>setDialog('call')} onScheduleCall={()=>setDialog('schedule')}/>}
         {activeTab==='You'&&<ProfileScreen user={authUser} photoURL={profilePhotoUrl} username={profileUsername} details={profileDetails} onShowQr={()=>{setQrCopied(false);setQrDisplayOpen(true)}} onUsernameChange={handleUsernameChange} onDisplayNameChange={handleDisplayNameChange} onDetailsChange={handleProfileDetailsChange} onPhotoUpload={handleProfilePhotoUpload} onPhotoRemove={handleProfilePhotoRemove} photoBusy={photoBusy} photoNotice={photoNotice} onSettings={()=>{setSecurityPanel(false);setDialog('settings')}} onSecurity={()=>{setSecurityPanel(true);setSecurityNotice('');setSecurityCurrentPassword('');setSecurityNewPassword('');setSecurityConfirmPassword('');setDialog('settings')}} onRegister={()=>{setRegistrationNotice('');setDialog('register')}} onLogin={()=>{setLoginNotice('');setDialog('login')}}/>}
       </div>
