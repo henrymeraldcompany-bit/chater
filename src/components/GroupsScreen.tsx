@@ -172,7 +172,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           senderId: typeof data.senderId === 'string' ? data.senderId : '',
           senderName: typeof data.senderName === 'string' ? data.senderName : 'Chater member',
           text: typeof data.text === 'string' ? data.text : '',
-          kind: data.kind === 'announcement' ? 'announcement' : 'text',
+          kind: data.kind === 'announcement' ? 'announcement' as const : 'text' as const,
           createdAt: data.createdAt
         }
       }).filter(message => message.senderId && message.text))
