@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthenticateWithCredential, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, reload, updateProfile } from 'firebase/auth'
-import { getDoc, getDocs, query, runTransaction, setDoc, where } from 'firebase/firestore'
+import { addDoc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, where } from 'firebase/firestore'
 import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
 import ConversationScreen from './components/ConversationScreen'
 import { createConversationId, isValidChatMessage, normalizeChatMessage } from './lib/chat'
@@ -1083,12 +1083,15 @@ describe('Chater application shell', () => {
     const timestamp = (value: number) => ({ toMillis: () => value })
     vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
     vi.mocked(reload).mockResolvedValue(undefined)
-    vi.mocked(getDocs).mockResolvedValue({
-      docs: [
-        { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
-        { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
-      ]
-    } as never)
+    const momentDocs = [
+      { id: 'other-1', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/one.jpg', mediaType: 'image', caption: 'First update', createdAt: timestamp(1000), expiresAt: Date.now() + 86400000 }) },
+      { id: 'other-2', data: () => ({ uid: 'other-user', displayName: 'Other Person', mediaUrl: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/other-user/moments/two.jpg', mediaType: 'image', caption: 'Second update', createdAt: timestamp(2000), expiresAt: Date.now() + 86400000 }) }
+    ]
+    vi.mocked(onSnapshot).mockImplementation(((reference: unknown, next: (snapshot: { docs: typeof momentDocs }) => void) => {
+      const path = (reference as { parts?: unknown[] }).parts?.slice(1).join('/')
+      next({ docs: path === 'moments' ? momentDocs : [] })
+      return vi.fn()
+    }) as never)
 
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
@@ -1146,6 +1149,91 @@ describe('Chater application shell', () => {
     expect(shareTextMoment).toBeDisabled()
     fireEvent.change(screen.getByPlaceholderText('Type a Moment'), { target: { value: 'Hello from Chater' } })
     expect(shareTextMoment).toBeEnabled()
+  })
+
+  it('uploads a selected audio file as a Music Moment', async () => {
+    const user = { uid: 'music-user', email: 'music@example.com', emailVerified: true, photoURL: null, displayName: 'Music Creator', getIdToken: vi.fn(async () => 'music-token') }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, url: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/music-user/moments/music.mp3' })
+    }))
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'music@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Music Creator' })).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Add a moment' }))
+    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+    const audioFile = new File(['music bytes'], 'song.mp3', { type: 'audio/mpeg' })
+    fireEvent.change(screen.getByLabelText('Choose an audio file for Music Moment'), { target: { files: [audioFile] } })
+    fireEvent.change(screen.getByPlaceholderText('Add a caption…'), { target: { value: 'A song for today' } })
+    fireEvent.click(screen.getByRole('button', { name: /Share Music Moment/ }))
+    await waitFor(() => expect(addDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: 'music-user', mediaType: 'audio', caption: 'A song for today' })
+    ))
+    expect(fetch).toHaveBeenCalledWith(
+      CHATER_MEDIA_BASE_URL + '/upload',
+      expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'X-Chater-Media-Category': 'moment', 'Content-Type': 'audio/mpeg' }), body: audioFile })
+    )
+  })
+
+  it('records a short voice Moment only after the user starts recording', async () => {
+    const user = { uid: 'voice-user', email: 'voice@example.com', emailVerified: true, photoURL: null, displayName: 'Voice Creator', getIdToken: vi.fn(async () => 'voice-token') }
+    vi.mocked(signInWithEmailAndPassword).mockResolvedValue({ user } as never)
+    vi.mocked(reload).mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, url: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/voice-user/moments/voice.webm' })
+    }))
+    const stopTrack = vi.fn()
+    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream
+    const getUserMedia = vi.fn(async () => stream)
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } })
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:voice-preview') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    class FakeMediaRecorder {
+      static isTypeSupported = vi.fn(() => true)
+      state: RecordingState = 'inactive'
+      mimeType = 'audio/webm'
+      ondataavailable: ((event: BlobEvent) => void) | null = null
+      onstop: (() => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(_stream: MediaStream, _options?: MediaRecorderOptions) {}
+      start() { this.state = 'recording' }
+      stop() {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['voice recording'], { type: 'audio/webm' }) } as BlobEvent)
+        this.onstop?.()
+      }
+    }
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder as unknown as typeof MediaRecorder)
+    openApp()
+    fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'voice@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Voice Creator' })).toBeInTheDocument())
+    fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Add a moment' }))
+    fireEvent.click(screen.getByRole('button', { name: /Voice/ }))
+    expect(getUserMedia).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Start recording' }))
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledWith({ audio: true }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop recording' }))
+    await screen.findByText('Voice recording ready')
+    fireEvent.click(screen.getByRole('button', { name: /Share Voice Moment/ }))
+    await waitFor(() => expect(addDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: 'voice-user', mediaType: 'audio' })
+    ))
+    expect(stopTrack).toHaveBeenCalled()
   })
 
   it('hides the shared search field on Groups and You', () => {
