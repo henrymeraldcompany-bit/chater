@@ -319,10 +319,10 @@ describe('Chater application shell', () => {
 
     try {
       openApp()
-      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(onSnapshot).toHaveBeenCalled())
       fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }))
       fireEvent.click(screen.getByRole('button', { name: 'Sync contacts' }))
-      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
       vi.mocked(getDocs).mockResolvedValueOnce({
         docs: [{
           id: 'ada-user',
@@ -385,7 +385,7 @@ describe('Chater application shell', () => {
     vi.mocked(getDoc).mockResolvedValue({ exists: () => true, data: () => ({ username: 'signed_in', displayName: 'Signed In Member' }) } as never)
     openApp()
     await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSnapshot).toHaveBeenCalled())
     const member = {
       id: 'target-user',
       data: () => ({
@@ -415,7 +415,7 @@ describe('Chater application shell', () => {
     expect(document.querySelector('.username-search-result')).toBeInTheDocument()
     expect(document.querySelector('.username-search-avatar')).toHaveClass('username-search-avatar')
     fireEvent.click(searchIcon)
-    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(2))
     expect(document.querySelector('.people-search-screen')).toBeInTheDocument()
   })
 
@@ -1168,7 +1168,7 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Music Creator' })).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Add a moment' }))
-    fireEvent.click(screen.getByRole('button', { name: /Music/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Add Moments' })).getByRole('button', { name: 'Music', exact: true }))
     const audioFile = new File(['music bytes'], 'song.mp3', { type: 'audio/mpeg' })
     fireEvent.change(screen.getByLabelText('Choose an audio file for Music Moment'), { target: { files: [audioFile] } })
     fireEvent.change(screen.getByPlaceholderText('Add a caption…'), { target: { value: 'A song for today' } })
@@ -1222,7 +1222,7 @@ describe('Chater application shell', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Voice Creator' })).toBeInTheDocument())
     fireEvent.click(screen.getAllByRole('button', { name: 'Moments' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Add a moment' }))
-    fireEvent.click(screen.getByRole('button', { name: /Voice/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Add Moments' })).getByRole('button', { name: 'Voice', exact: true }))
     expect(getUserMedia).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Start recording' }))
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledWith({ audio: true }))
