@@ -210,8 +210,6 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
 
   const isAdmin = Boolean(activeGroup && activeGroup.adminIds.includes(userId))
   const isOwner = Boolean(activeGroup && activeGroup.ownerId === userId)
-  const activeGroupId = activeGroup?.id ?? ''
-  const activeGroupMemberIds = activeGroup?.memberIds.join('|') ?? ''
 
   const resetCreate = () => {
     setCreateOpen(false)
