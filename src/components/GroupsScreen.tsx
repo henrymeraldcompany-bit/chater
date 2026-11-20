@@ -21,6 +21,7 @@ type ChaterGroup = {
   lastMessageText: string
   lastMessageSenderId: string
   lastMessageAt: unknown
+  onlyAdminsCanSend: boolean
 }
 
 type GroupMessage = {
@@ -55,7 +56,8 @@ function groupFromSnapshot(id: string, data: Record<string, unknown>): ChaterGro
     photoURL: typeof data.photoURL === 'string' ? data.photoURL : '',
     lastMessageText: typeof data.lastMessageText === 'string' ? data.lastMessageText : '',
     lastMessageSenderId: typeof data.lastMessageSenderId === 'string' ? data.lastMessageSenderId : '',
-    lastMessageAt: data.lastMessageAt ?? null
+    lastMessageAt: data.lastMessageAt ?? null,
+    onlyAdminsCanSend: data.onlyAdminsCanSend === true
   }
 }
 
@@ -117,6 +119,9 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [memberUsername, setMemberUsername] = useState('')
   const [groupSearch, setGroupSearch] = useState('')
+  const [memberSearch, setMemberSearch] = useState('')
+  const [pendingDeleteMessageId, setPendingDeleteMessageId] = useState('')
+  const [editOnlyAdminsCanSend, setEditOnlyAdminsCanSend] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [editInfoOpen, setEditInfoOpen] = useState(false)
   const [editGroupName, setEditGroupName] = useState('')
@@ -280,7 +285,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
         updatedAt: serverTimestamp(),
         lastMessageText: '',
         lastMessageSenderId: '',
-        lastMessageAt: null
+        lastMessageAt: null,
+        onlyAdminsCanSend: false
       })
       resetCreate()
       setNotice('Your group has been created.')
@@ -296,7 +302,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
     const db = firestoreDb
     const group = activeGroup
     const text = messageDraft.replace(/\r\n?/g, '\n').trim()
-    if (!db || !group || !group.memberIds.includes(userId) || !text || text.length > 4000 || busy) return
+    if (!db || !group || !group.memberIds.includes(userId) || (group.onlyAdminsCanSend && !isAdmin) || !text || text.length > 4000 || busy) return
     setBusy(true)
     setNotice('')
     try {
@@ -328,6 +334,24 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       setNotice(error instanceof Error && error.message
         ? error.message
         : 'The group message could not be sent. Check your connection and group permissions.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteGroupMessage = async (messageId: string) => {
+    const db = firestoreDb
+    const group = activeGroup
+    if (!db || !group || !pendingDeleteMessageId || !messages.some(message => message.id === messageId)) return
+    const message = messages.find(item => item.id === messageId)
+    if (!message || (message.senderId !== userId && !isAdmin)) return
+    setBusy(true)
+    setNotice('')
+    try {
+      await deleteDoc(doc(db, 'groups', group.id, 'messages', messageId))
+      setPendingDeleteMessageId('')
+    } catch {
+      setNotice('Chater could not delete that group message. Check your connection and permissions.')
     } finally {
       setBusy(false)
     }
@@ -377,6 +401,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       await updateDoc(doc(db, 'groups', group.id), {
         name,
         description,
+        onlyAdminsCanSend: editOnlyAdminsCanSend,
         updatedAt: serverTimestamp()
       })
       setEditInfoOpen(false)
@@ -487,11 +512,17 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
         {editInfoOpen && <form className="group-edit-info-form" onSubmit={saveGroupInfo}>
           <label>Group name<input value={editGroupName} onChange={event => setEditGroupName(event.target.value)} minLength={2} maxLength={50} required/></label>
           <label>Description<textarea value={editGroupDescription} onChange={event => setEditGroupDescription(event.target.value)} maxLength={180} rows={2}/></label>
+          <label className="group-admin-only-setting"><input type="checkbox" checked={editOnlyAdminsCanSend} onChange={event => setEditOnlyAdminsCanSend(event.target.checked)}/>Only administrators can send messages</label>
           <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save group information'}</button>
         </form>}
         <div className="group-info-heading"><strong>Members ({members.length || activeGroup.memberIds.length})</strong>{isOwner && <span>Group owner</span>}</div>
+        <input aria-label="Search group members" className="group-member-search" value={memberSearch} onChange={event => setMemberSearch(event.target.value)} placeholder="Search members by name or username"/>
         <div className="group-member-list">
-          {activeGroup.memberIds.map(uid => {
+          {activeGroup.memberIds.filter(uid => {
+            const profile = members.find(item => item.uid === uid)
+            const term = memberSearch.trim().toLowerCase()
+            return !term || formatMemberName(profile, uid).toLowerCase().includes(term) || profile?.username.toLowerCase().includes(term)
+          }).map(uid => {
             const profile = members.find(item => item.uid === uid)
             const memberIsAdmin = activeGroup.adminIds.includes(uid)
             return <div className="group-member-row" key={uid}>
@@ -523,12 +554,18 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           {message.kind === 'announcement' && <span className="group-announcement-label"><ShieldCheck size={13}/>Group announcement</span>}
           {message.senderId !== userId && <strong>{message.senderName}</strong>}
           <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
+          {(message.senderId === userId || isAdmin) && <div className="group-message-actions">
+            {pendingDeleteMessageId === message.id
+              ? <><button type="button" className="text-button danger-text" disabled={busy} onClick={() => void deleteGroupMessage(message.id)}>Confirm delete</button><button type="button" className="text-button" onClick={() => setPendingDeleteMessageId('')}>Cancel</button></>
+              : <button type="button" className="text-button danger-text" onClick={() => setPendingDeleteMessageId(message.id)}>Delete</button>}
+          </div>}
         </article>)}
       </div>
       {notice && <p className="group-notice" role="status">{notice}</p>}
+      {activeGroup.onlyAdminsCanSend && !isAdmin && <p className="group-read-only-note">Only group administrators can send messages here.</p>}
       <form className="group-message-composer" onSubmit={sendGroupMessage}>
-        <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message the group…" disabled={busy}/>
-        <div className="group-message-send-actions">{isAdmin && <label><input type="checkbox" checked={announcementMode} onChange={event => setAnnouncementMode(event.target.checked)}/>Announcement</label>}<button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim()}><Send size={19}/></button></div>
+        <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message the group…" disabled={busy || (activeGroup.onlyAdminsCanSend && !isAdmin)}/>
+        <div className="group-message-send-actions">{isAdmin && <label><input type="checkbox" checked={announcementMode} onChange={event => setAnnouncementMode(event.target.checked)}/>Announcement</label>}<button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim() || (activeGroup.onlyAdminsCanSend && !isAdmin)}><Send size={19}/></button></div>
       </form>
     </section>
   }
