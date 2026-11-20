@@ -299,7 +299,7 @@ describe('Chater group conversations', () => {
     fireEvent.change(screen.getByLabelText('Add members by username'), { target: { value: '@other_member' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add member' }))
     await screen.findByText('Other Member')
-    fireEvent.click(screen.getByRole('button', { name: /Create group/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Create a group' })).getByRole('button', { name: /Create group/ }))
 
     await waitFor(() => expect(addDoc).toHaveBeenCalledWith(
       expect.anything(),
