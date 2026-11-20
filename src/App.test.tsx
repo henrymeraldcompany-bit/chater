@@ -473,7 +473,7 @@ describe('Chater application shell', () => {
       }) } as never)
     openApp()
     await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSnapshot).toHaveBeenCalled())
     const member = { id: 'target-user', data: () => ({
       uid: 'target-user', username: 'mee_maw', displayName: 'Mee Maw',
       photoURL: 'https://media.example/avatar.jpg'
