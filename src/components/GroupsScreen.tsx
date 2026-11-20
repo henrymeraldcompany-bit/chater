@@ -116,6 +116,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [memberUsername, setMemberUsername] = useState('')
   const [groupSearch, setGroupSearch] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const activeGroupId = activeGroup?.id ?? ''
+  const activeGroupMemberIds = activeGroup?.memberIds.join('|') ?? ''
 
   useEffect(() => {
     const db = firestoreDb
