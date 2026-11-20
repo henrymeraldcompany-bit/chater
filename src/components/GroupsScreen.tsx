@@ -118,6 +118,9 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [memberUsername, setMemberUsername] = useState('')
   const [groupSearch, setGroupSearch] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [editInfoOpen, setEditInfoOpen] = useState(false)
+  const [editGroupName, setEditGroupName] = useState('')
+  const [editGroupDescription, setEditGroupDescription] = useState('')
   const activeGroupId = activeGroup?.id ?? ''
   const activeGroupMemberIds = activeGroup?.memberIds.join('|') ?? ''
 
@@ -357,6 +360,34 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
     }
   }
 
+  const saveGroupInfo = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const db = firestoreDb
+    const group = activeGroup
+    const name = editGroupName.trim().replace(/\s+/g, ' ')
+    const description = editGroupDescription.trim().replace(/\s+/g, ' ')
+    if (!db || !group || !isAdmin) return
+    if (name.length < 2 || name.length > 50 || description.length > 180) {
+      setMemberLookupNotice('Use a group name of 2–50 characters and a description up to 180 characters.')
+      return
+    }
+    setBusy(true)
+    setMemberLookupNotice('')
+    try {
+      await updateDoc(doc(db, 'groups', group.id), {
+        name,
+        description,
+        updatedAt: serverTimestamp()
+      })
+      setEditInfoOpen(false)
+      setMemberLookupNotice('Group information updated.')
+    } catch {
+      setMemberLookupNotice('Chater could not save the group information.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const changeMemberRole = async (member: GroupMember) => {
     const db = firestoreDb
     const group = activeGroup
@@ -452,6 +483,12 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       </header>
       {detailsOpen && <section className="group-info-panel" aria-label="Group information">
         <div className="group-info-title"><strong>{activeGroup.name}</strong><span>{activeGroup.description || 'No group description yet.'}</span></div>
+        {isAdmin && <button type="button" className="text-button group-edit-info-trigger" onClick={() => { setEditGroupName(activeGroup.name); setEditGroupDescription(activeGroup.description); setEditInfoOpen(open => !open) }}>{editInfoOpen ? 'Cancel edit' : 'Edit group information'}</button>}
+        {editInfoOpen && <form className="group-edit-info-form" onSubmit={saveGroupInfo}>
+          <label>Group name<input value={editGroupName} onChange={event => setEditGroupName(event.target.value)} minLength={2} maxLength={50} required/></label>
+          <label>Description<textarea value={editGroupDescription} onChange={event => setEditGroupDescription(event.target.value)} maxLength={180} rows={2}/></label>
+          <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save group information'}</button>
+        </form>}
         <div className="group-info-heading"><strong>Members ({members.length || activeGroup.memberIds.length})</strong>{isOwner && <span>Group owner</span>}</div>
         <div className="group-member-list">
           {activeGroup.memberIds.map(uid => {
