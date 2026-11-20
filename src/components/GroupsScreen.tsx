@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, Check, ChevronRight, MessageCircle, MoreVertical, Plus,
-  Send, ShieldCheck, Trash2, Users, X
+  Search, Send, ShieldCheck, Trash2, Users, X
 } from 'lucide-react'
 import {
   addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc,
@@ -106,6 +106,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [members, setMembers] = useState<GroupMember[]>([])
   const [groupsBusy, setGroupsBusy] = useState(true)
   const [messageDraft, setMessageDraft] = useState('')
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false)
+  const [messageSearch, setMessageSearch] = useState('')
   const [announcementMode, setAnnouncementMode] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -210,6 +212,14 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       stopMessages()
     }
   }, [activeGroupId, activeGroupMemberIds, displayName, userId])
+
+  const filteredGroupMessages = useMemo(() => {
+    const term = messageSearch.trim().toLowerCase()
+    if (!term) return messages
+    return messages.filter(message =>
+      message.text.toLowerCase().includes(term) || message.senderName.toLowerCase().includes(term)
+    )
+  }, [messages, messageSearch])
 
   const visibleGroups = useMemo(() => {
     const search = groupSearch.trim().toLowerCase()
@@ -504,8 +514,10 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           <span className="group-avatar">{activeGroup.name.slice(0, 1).toUpperCase()}</span>
           <span><strong>{activeGroup.name}</strong><small>{activeGroup.memberIds.length} members · tap for group info</small></span>
         </button>
+        <button type="button" className="icon-button" aria-label={messageSearchOpen ? 'Close group message search' : 'Search group messages'} onClick={() => { setMessageSearchOpen(open => !open); setMessageSearch('') }}><Search size={19}/></button>
         <button type="button" className="icon-button" aria-label="Group information" onClick={() => setDetailsOpen(open => !open)}><MoreVertical size={21}/></button>
       </header>
+      {messageSearchOpen && <label className="group-message-search"><Search size={16}/><input aria-label="Search messages in this group" value={messageSearch} onChange={event => setMessageSearch(event.target.value)} placeholder="Search messages or people"/><button type="button" aria-label="Close search" onClick={() => { setMessageSearch(''); setMessageSearchOpen(false) }}><X size={16}/></button></label>}
       {detailsOpen && <section className="group-info-panel" aria-label="Group information">
         <div className="group-info-title"><strong>{activeGroup.name}</strong><span>{activeGroup.description || 'No group description yet.'}</span></div>
         {isAdmin && <button type="button" className="text-button group-edit-info-trigger" onClick={() => { setEditGroupName(activeGroup.name); setEditGroupDescription(activeGroup.description); setEditInfoOpen(open => !open) }}>{editInfoOpen ? 'Cancel edit' : 'Edit group information'}</button>}
@@ -550,7 +562,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
         </div>}
       </section>}
       <div className="group-message-list" role="log" aria-label={activeGroup.name + ' messages'} aria-live="polite">
-        {messages.length === 0 ? <div className="group-empty-chat"><MessageCircle size={30}/><strong>No group messages yet</strong><span>Send the first message to everyone in this group.</span></div> : messages.map(message => <article key={message.id} className={(message.senderId === userId ? 'group-message own-group-message' : 'group-message') + (message.kind === 'announcement' ? ' group-announcement' : '')}>
+        {messages.length === 0 ? <div className="group-empty-chat"><MessageCircle size={30}/><strong>No group messages yet</strong><span>Send the first message to everyone in this group.</span></div> : filteredGroupMessages.length === 0 ? <p className="group-inline-notice" role="status">No messages match your search.</p> : filteredGroupMessages.map(message => <article key={message.id} className={(message.senderId === userId ? 'group-message own-group-message' : 'group-message') + (message.kind === 'announcement' ? ' group-announcement' : '')}>
           {message.kind === 'announcement' && <span className="group-announcement-label"><ShieldCheck size={13}/>Group announcement</span>}
           {message.senderId !== userId && <strong>{message.senderName}</strong>}
           <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
