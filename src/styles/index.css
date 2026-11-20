@@ -2219,3 +2219,7 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .group-read-only-note{margin:0;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--panel-raised);color:var(--text-muted);font-size:10px}
 .group-message-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:3px;border-top:1px solid var(--border)}
 .group-message-actions .text-button{padding:3px 1px;font-size:9px}
+
+.group-message-search{min-height:40px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border);border-radius:11px;background:var(--panel);color:var(--text-muted)}
+.group-message-search input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:11px}
+.group-message-search button{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-muted)}
