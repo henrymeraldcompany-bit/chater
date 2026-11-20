@@ -21,7 +21,6 @@ vi.mock('firebase/firestore', () => ({
   addDoc: vi.fn(async () => ({ id: 'test-moment' })),
   arrayUnion: vi.fn((...values: unknown[]) => ({ operation: 'arrayUnion', values })),
   arrayRemove: vi.fn((...values: unknown[]) => ({ operation: 'arrayRemove', values })),
-  limit: vi.fn((...parts: unknown[]) => ({ parts })),
   updateDoc: vi.fn(async () => undefined),
   writeBatch: vi.fn(() => ({ delete: vi.fn(), commit: vi.fn(async () => undefined) })),
   doc: vi.fn((...parts: unknown[]) => ({ parts })),
