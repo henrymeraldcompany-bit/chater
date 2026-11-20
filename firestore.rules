@@ -241,6 +241,10 @@ service cloud.firestore {
         && request.resource.data.photoURL.size() <= 2048
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.memberIds is list
+        && request.resource.data.adminIds is list
+        && request.resource.data.memberIds.toSet().size() == request.resource.data.memberIds.size()
+        && request.resource.data.adminIds.size() == 1
+        && request.resource.data.adminIds.hasOnly([request.auth.uid])
         && request.resource.data.memberIds.size() >= 2
         && request.resource.data.memberIds.size() <= 20
         && request.resource.data.memberIds.hasAll([request.auth.uid])
@@ -276,6 +280,8 @@ service cloud.firestore {
           ])
           && request.resource.data.memberIds is list
           && request.resource.data.adminIds is list
+          && request.resource.data.memberIds.toSet().size() == request.resource.data.memberIds.size()
+          && request.resource.data.adminIds.toSet().size() == request.resource.data.adminIds.size()
           && request.resource.data.memberIds.size() >= 1
           && request.resource.data.memberIds.size() <= 200
           && request.resource.data.memberIds.hasAll([resource.data.ownerId])
@@ -293,6 +299,7 @@ service cloud.firestore {
           && request.resource.data.memberIds is list
           && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
           && request.resource.data.memberIds.size() <= 200
+          && request.resource.data.memberIds.toSet().size() == request.resource.data.memberIds.size()
           && request.resource.data.memberIds.hasAll(resource.data.memberIds)
           && request.resource.data.adminIds == resource.data.adminIds
           && request.resource.data.updatedAt == request.time
