@@ -208,5 +208,141 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
       }
     }
+
+    // Group chats: membership controls group discovery and all conversation access.
+    match /groups/{groupId} {
+      function isGroupMember() {
+        return signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
+      }
+
+      function isGroupAdmin() {
+        return isGroupMember()
+          && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.adminIds;
+      }
+
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'name', 'description', 'photoURL', 'ownerId', 'adminIds', 'memberIds',
+          'createdAt', 'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'name', 'description', 'photoURL', 'ownerId', 'adminIds', 'memberIds',
+          'createdAt', 'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 50
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 180
+        && request.resource.data.photoURL is string
+        && request.resource.data.photoURL.size() <= 2048
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberIds is list
+        && request.resource.data.memberIds.size() >= 2
+        && request.resource.data.memberIds.size() <= 20
+        && request.resource.data.memberIds.hasAll([request.auth.uid])
+        && request.resource.data.adminIds == [request.auth.uid]
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastMessageText == ''
+        && request.resource.data.lastMessageSenderId == ''
+        && request.resource.data.lastMessageAt == null;
+
+      allow update: if isGroupMember() && (
+        // Owner or administrator can edit basic group information.
+        (
+          request.auth.uid in resource.data.adminIds
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'description', 'photoURL', 'updatedAt'
+          ])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 2
+          && request.resource.data.name.size() <= 50
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 180
+          && request.resource.data.photoURL is string
+          && request.resource.data.photoURL.size() <= 2048
+          && request.resource.data.updatedAt == request.time
+        )
+        ||
+        // Only the owner can promote or demote administrators and manage removals.
+        (
+          request.auth.uid == resource.data.ownerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'memberIds', 'adminIds', 'updatedAt'
+          ])
+          && request.resource.data.memberIds is list
+          && request.resource.data.adminIds is list
+          && request.resource.data.memberIds.size() >= 1
+          && request.resource.data.memberIds.size() <= 200
+          && request.resource.data.memberIds.hasAll([resource.data.ownerId])
+          && request.resource.data.memberIds.hasAll(request.resource.data.adminIds)
+          && request.resource.data.adminIds.hasAll([resource.data.ownerId])
+          && request.resource.data.updatedAt == request.time
+        )
+        ||
+        // Existing administrators may add one new member, but cannot grant admin rights.
+        (
+          request.auth.uid in resource.data.adminIds
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'memberIds', 'updatedAt'
+          ])
+          && request.resource.data.memberIds is list
+          && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+          && request.resource.data.memberIds.size() <= 200
+          && request.resource.data.memberIds.hasAll(resource.data.memberIds)
+          && request.resource.data.adminIds == resource.data.adminIds
+          && request.resource.data.updatedAt == request.time
+        )
+        ||
+        // A regular member may leave, but cannot remove another participant or the owner.
+        (
+          request.auth.uid != resource.data.ownerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'memberIds', 'adminIds', 'updatedAt'
+          ])
+          && request.resource.data.memberIds == resource.data.memberIds.removeAll([request.auth.uid])
+          && request.resource.data.adminIds == resource.data.adminIds.removeAll([request.auth.uid])
+          && request.resource.data.updatedAt == request.time
+        )
+        ||
+        // Group members may update only the last-message preview when they send a message.
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastMessageText', 'lastMessageSenderId', 'lastMessageAt', 'updatedAt'
+          ])
+          && request.resource.data.lastMessageText is string
+          && request.resource.data.lastMessageText.size() <= 180
+          && request.resource.data.lastMessageSenderId == request.auth.uid
+          && request.resource.data.lastMessageAt == request.time
+          && request.resource.data.updatedAt == request.time
+        )
+      );
+
+      allow delete: if signedIn() && request.auth.uid == resource.data.ownerId;
+
+      match /messages/{messageId} {
+        allow read: if isGroupMember();
+
+        allow create: if isGroupMember()
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'createdAt'])
+          && request.resource.data.keys().hasAll(['senderId', 'senderName', 'text', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 50
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if false;
+        allow delete: if isGroupAdmin() || (
+          isGroupMember() && resource.data.senderId == request.auth.uid
+        );
+      }
+    }
   }
 }
