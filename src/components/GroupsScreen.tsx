@@ -1,0 +1,514 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import {
+  ArrowLeft, Check, ChevronRight, MessageCircle, MoreVertical, Plus,
+  Send, ShieldCheck, Trash2, Users, X
+} from 'lucide-react'
+import {
+  addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc,
+  getDocs, limit, onSnapshot, orderBy, query as firestoreQuery,
+  runTransaction, serverTimestamp, updateDoc, where, writeBatch
+} from 'firebase/firestore'
+import { firestoreDb } from '../lib/firebase'
+
+type ChaterGroup = {
+  id: string
+  name: string
+  description: string
+  ownerId: string
+  adminIds: string[]
+  memberIds: string[]
+  photoURL: string
+  lastMessageText: string
+  lastMessageSenderId: string
+  lastMessageAt: unknown
+}
+
+type GroupMessage = {
+  id: string
+  senderId: string
+  senderName: string
+  text: string
+  createdAt: unknown
+}
+
+type GroupMember = {
+  uid: string
+  username: string
+  displayName: string
+  photoURL: string
+}
+
+type GroupsScreenProps = {
+  userId: string
+  displayName: string
+}
+
+function groupFromSnapshot(id: string, data: Record<string, unknown>): ChaterGroup {
+  return {
+    id,
+    name: typeof data.name === 'string' ? data.name : 'Chater group',
+    description: typeof data.description === 'string' ? data.description : '',
+    ownerId: typeof data.ownerId === 'string' ? data.ownerId : '',
+    adminIds: Array.isArray(data.adminIds) ? data.adminIds.filter((item): item is string => typeof item === 'string') : [],
+    memberIds: Array.isArray(data.memberIds) ? data.memberIds.filter((item): item is string => typeof item === 'string') : [],
+    photoURL: typeof data.photoURL === 'string' ? data.photoURL : '',
+    lastMessageText: typeof data.lastMessageText === 'string' ? data.lastMessageText : '',
+    lastMessageSenderId: typeof data.lastMessageSenderId === 'string' ? data.lastMessageSenderId : '',
+    lastMessageAt: data.lastMessageAt ?? null
+  }
+}
+
+function formatGroupTime(value: unknown): string {
+  if (!value || typeof value !== 'object' || !('toDate' in value)) return ''
+  try {
+    const date = (value as { toDate(): Date }).toDate()
+    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date)
+  } catch {
+    return ''
+  }
+}
+
+function formatMemberName(profile: GroupMember | undefined, uid: string): string {
+  return profile?.displayName || profile?.username || (uid === '' ? 'Chater member' : 'Member')
+}
+
+async function findPublicGroupMember(rawUsername: string, currentUserId: string): Promise<GroupMember> {
+  const db = firestoreDb
+  if (!db) throw new Error('Chater cannot connect to the member directory right now.')
+  const username = rawUsername.trim().replace(/^@/, '').toLowerCase()
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+    throw new Error('Enter a valid Chater username (3–20 letters, numbers or underscores).')
+  }
+  const usernameSnapshot = await getDoc(doc(db, 'usernames', username))
+  if (!usernameSnapshot.exists()) throw new Error('No Chater account uses that username.')
+  const uid = usernameSnapshot.data()?.uid
+  if (typeof uid !== 'string' || !uid || uid === currentUserId) {
+    throw new Error('Choose another Chater member.')
+  }
+  const profileSnapshot = await getDoc(doc(db, 'users', uid))
+  if (!profileSnapshot.exists()) throw new Error('That Chater profile is not available.')
+  const profile = profileSnapshot.data() as Record<string, unknown>
+  return {
+    uid,
+    username,
+    displayName: typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : username,
+    photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+  }
+}
+
+export default function GroupsScreen({ userId, displayName }: GroupsScreenProps) {
+  const [groups, setGroups] = useState<ChaterGroup[]>([])
+  const [activeGroup, setActiveGroup] = useState<ChaterGroup | null>(null)
+  const [messages, setMessages] = useState<GroupMessage[]>([])
+  const [members, setMembers] = useState<GroupMember[]>([])
+  const [groupsBusy, setGroupsBusy] = useState(true)
+  const [messageDraft, setMessageDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [groupDescription, setGroupDescription] = useState('')
+  const [createUsername, setCreateUsername] = useState('')
+  const [selectedMembers, setSelectedMembers] = useState<GroupMember[]>([])
+  const [memberLookupBusy, setMemberLookupBusy] = useState(false)
+  const [memberLookupNotice, setMemberLookupNotice] = useState('')
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [memberUsername, setMemberUsername] = useState('')
+  const [groupSearch, setGroupSearch] = useState('')
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  useEffect(() => {
+    const db = firestoreDb
+    if (!db || !userId) {
+      setGroups([])
+      setGroupsBusy(false)
+      return
+    }
+    setGroupsBusy(true)
+    return onSnapshot(
+      firestoreQuery(collection(db, 'groups'), where('memberIds', 'array-contains', userId)),
+      snapshot => {
+        const next = snapshot.docs
+          .map(item => groupFromSnapshot(item.id, item.data() as Record<string, unknown>))
+          .filter(group => group.memberIds.includes(userId))
+          .sort((left, right) => left.name.localeCompare(right.name))
+        setGroups(next)
+        setActiveGroup(current => current ? next.find(group => group.id === current.id) || null : null)
+        setGroupsBusy(false)
+      },
+      () => {
+        setGroups([])
+        setGroupsBusy(false)
+        setNotice('Your groups could not be loaded. Check that the latest Chater group security rules are published.')
+      }
+    )
+  }, [userId])
+
+  useEffect(() => {
+    const db = firestoreDb
+    if (!db || !activeGroup) {
+      setMessages([])
+      setMembers([])
+      return
+    }
+    let active = true
+    const messagesQuery = firestoreQuery(
+      collection(db, 'groups', activeGroup.id, 'messages'),
+      orderBy('createdAt', 'asc')
+    )
+    const stopMessages = onSnapshot(messagesQuery, snapshot => {
+      if (!active) return
+      setMessages(snapshot.docs.map(item => {
+        const data = item.data() as Record<string, unknown>
+        return {
+          id: item.id,
+          senderId: typeof data.senderId === 'string' ? data.senderId : '',
+          senderName: typeof data.senderName === 'string' ? data.senderName : 'Chater member',
+          text: typeof data.text === 'string' ? data.text : '',
+          createdAt: data.createdAt
+        }
+      }).filter(message => message.senderId && message.text))
+    }, () => {
+      if (active) setNotice('Group messages could not be loaded. Check your connection and group permissions.')
+    })
+    void Promise.all(activeGroup.memberIds.map(async uid => {
+      try {
+        const profileSnapshot = await getDoc(doc(db, 'users', uid))
+        if (!profileSnapshot.exists()) return {
+          uid, username: '', displayName: uid === userId ? displayName : 'Chater member', photoURL: ''
+        }
+        const profile = profileSnapshot.data() as Record<string, unknown>
+        return {
+          uid,
+          username: typeof profile.username === 'string' ? profile.username : '',
+          displayName: typeof profile.displayName === 'string' && profile.displayName.trim()
+            ? profile.displayName.trim()
+            : (typeof profile.username === 'string' ? profile.username : 'Chater member'),
+          photoURL: typeof profile.photoURL === 'string' ? profile.photoURL : ''
+        }
+      } catch {
+        return { uid, username: '', displayName: uid === userId ? displayName : 'Chater member', photoURL: '' }
+      }
+    })).then(profiles => {
+      if (active) setMembers(profiles)
+    })
+    return () => {
+      active = false
+      stopMessages()
+    }
+  }, [activeGroup?.id, activeGroup?.memberIds.join('|'), displayName, userId])
+
+  const visibleGroups = useMemo(() => {
+    const search = groupSearch.trim().toLowerCase()
+    return groups.filter(group => !search || group.name.toLowerCase().includes(search) || group.description.toLowerCase().includes(search))
+  }, [groups, groupSearch])
+
+  const isAdmin = Boolean(activeGroup && activeGroup.adminIds.includes(userId))
+  const isOwner = Boolean(activeGroup && activeGroup.ownerId === userId)
+
+  const resetCreate = () => {
+    setCreateOpen(false)
+    setGroupName('')
+    setGroupDescription('')
+    setCreateUsername('')
+    setSelectedMembers([])
+    setMemberLookupNotice('')
+    setNotice('')
+  }
+
+  const addMemberToSelection = async () => {
+    if (!createUsername.trim()) return
+    setMemberLookupBusy(true)
+    setMemberLookupNotice('')
+    try {
+      const profile = await findPublicGroupMember(createUsername, userId)
+      if (selectedMembers.some(member => member.uid === profile.uid)) {
+        setMemberLookupNotice('That member has already been added.')
+      } else if (selectedMembers.length >= 19) {
+        setMemberLookupNotice('A new group can start with up to 20 members.')
+      } else {
+        setSelectedMembers(current => [...current, profile])
+        setCreateUsername('')
+      }
+    } catch (error) {
+      setMemberLookupNotice(error instanceof Error ? error.message : 'The member could not be found.')
+    } finally {
+      setMemberLookupBusy(false)
+    }
+  }
+
+  const createGroup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const db = firestoreDb
+    const name = groupName.trim().replace(/\s+/g, ' ')
+    const description = groupDescription.trim().replace(/\s+/g, ' ')
+    if (!db || !userId) {
+      setMemberLookupNotice('Sign in to create a Chater group.')
+      return
+    }
+    if (name.length < 2 || name.length > 50) {
+      setMemberLookupNotice('Group names must be 2–50 characters.')
+      return
+    }
+    if (description.length > 180) {
+      setMemberLookupNotice('Group descriptions must be 180 characters or fewer.')
+      return
+    }
+    if (selectedMembers.length < 1) {
+      setMemberLookupNotice('Add at least one other Chater member to create a group.')
+      return
+    }
+    setBusy(true)
+    setMemberLookupNotice('')
+    try {
+      await addDoc(collection(db, 'groups'), {
+        name,
+        description,
+        photoURL: '',
+        ownerId: userId,
+        adminIds: [userId],
+        memberIds: [userId, ...selectedMembers.map(member => member.uid)],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastMessageText: '',
+        lastMessageSenderId: '',
+        lastMessageAt: null
+      })
+      resetCreate()
+      setNotice('Your group has been created.')
+    } catch (error) {
+      setMemberLookupNotice(error instanceof Error ? error.message : 'Chater could not create this group. Check the group security rules and try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const sendGroupMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const db = firestoreDb
+    const group = activeGroup
+    const text = messageDraft.replace(/\r\n?/g, '\n').trim()
+    if (!db || !group || !group.memberIds.includes(userId) || !text || text.length > 4000 || busy) return
+    setBusy(true)
+    setNotice('')
+    try {
+      const groupRef = doc(db, 'groups', group.id)
+      const messageRef = doc(collection(db, 'groups', group.id, 'messages'))
+      await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(groupRef)
+        const data = snapshot.data()
+        if (!snapshot.exists() || !Array.isArray(data?.memberIds) || !data.memberIds.includes(userId)) {
+          throw new Error('You are no longer a member of this group.')
+        }
+        transaction.set(messageRef, {
+          senderId: userId,
+          senderName: displayName.trim() || 'Chater member',
+          text,
+          createdAt: serverTimestamp()
+        })
+        transaction.update(groupRef, {
+          lastMessageText: text.replace(/\s+/g, ' ').slice(0, 180),
+          lastMessageSenderId: userId,
+          lastMessageAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+      })
+      setMessageDraft('')
+    } catch (error) {
+      setNotice(error instanceof Error && error.message
+        ? error.message
+        : 'The group message could not be sent. Check your connection and group permissions.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const addMemberToGroup = async () => {
+    const db = firestoreDb
+    const group = activeGroup
+    if (!db || !group || !isAdmin || !memberUsername.trim()) return
+    setMemberLookupBusy(true)
+    setMemberLookupNotice('')
+    try {
+      const profile = await findPublicGroupMember(memberUsername, userId)
+      if (group.memberIds.includes(profile.uid)) {
+        setMemberLookupNotice('That person is already in this group.')
+      } else if (group.memberIds.length >= 200) {
+        setMemberLookupNotice('This group has reached its current 200-member limit.')
+      } else {
+        await updateDoc(doc(db, 'groups', group.id), {
+          memberIds: arrayUnion(profile.uid),
+          updatedAt: serverTimestamp()
+        })
+        setMemberUsername('')
+        setMemberLookupNotice('Member added to the group.')
+      }
+    } catch (error) {
+      setMemberLookupNotice(error instanceof Error ? error.message : 'Chater could not add this member.')
+    } finally {
+      setMemberLookupBusy(false)
+    }
+  }
+
+  const changeMemberRole = async (member: GroupMember) => {
+    const db = firestoreDb
+    const group = activeGroup
+    if (!db || !group || !isOwner || member.uid === userId) return
+    setMemberLookupNotice('')
+    try {
+      await updateDoc(doc(db, 'groups', group.id), {
+        adminIds: group.adminIds.includes(member.uid) ? arrayRemove(member.uid) : arrayUnion(member.uid),
+        updatedAt: serverTimestamp()
+      })
+    } catch {
+      setMemberLookupNotice('Only the group owner can change administrator roles.')
+    }
+  }
+
+  const removeMember = async (member: GroupMember) => {
+    const db = firestoreDb
+    const group = activeGroup
+    if (!db || !group || !isOwner || member.uid === userId) return
+    setMemberLookupNotice('')
+    try {
+      await updateDoc(doc(db, 'groups', group.id), {
+        memberIds: arrayRemove(member.uid),
+        adminIds: arrayRemove(member.uid),
+        updatedAt: serverTimestamp()
+      })
+    } catch {
+      setMemberLookupNotice('Chater could not remove that member. Check your group permissions.')
+    }
+  }
+
+  const leaveGroup = async () => {
+    const db = firestoreDb
+    const group = activeGroup
+    if (!db || !group || isOwner) return
+    setBusy(true)
+    try {
+      await updateDoc(doc(db, 'groups', group.id), {
+        memberIds: arrayRemove(userId),
+        adminIds: arrayRemove(userId),
+        updatedAt: serverTimestamp()
+      })
+      setActiveGroup(null)
+      setDetailsOpen(false)
+      setNotice('You have left the group.')
+    } catch {
+      setNotice('Chater could not remove you from this group. Check your connection and try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteGroup = async () => {
+    const db = firestoreDb
+    const group = activeGroup
+    if (!db || !group || !isOwner) return
+    setBusy(true)
+    setNotice('')
+    try {
+      const messagesRef = collection(db, 'groups', group.id, 'messages')
+      while (true) {
+        const page = await getDocs(firestoreQuery(messagesRef, limit(400)))
+        if (page.empty) break
+        const batch = writeBatch(db)
+        page.docs.forEach(item => batch.delete(item.ref))
+        await batch.commit()
+      }
+      await deleteDoc(doc(db, 'groups', group.id))
+      setActiveGroup(null)
+      setDeleteConfirmOpen(false)
+      setDetailsOpen(false)
+      setNotice('The group and its messages have been deleted.')
+    } catch {
+      setNotice('Chater could not delete every group message. The group has been kept so you can retry.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!firestoreDb || !userId) {
+    return <div className="empty-state feature-empty"><Users size={38}/><h1>Groups</h1><p>Sign in with a verified Chater account to create and join group conversations.</p></div>
+  }
+
+  if (activeGroup) {
+    return <section className="groups-area group-chat-area">
+      <header className="group-chat-toolbar">
+        <button type="button" className="icon-button" aria-label="Back to groups" onClick={() => { setActiveGroup(null); setDetailsOpen(false); setNotice('') }}><ArrowLeft size={21}/></button>
+        <button type="button" className="group-chat-heading" onClick={() => setDetailsOpen(open => !open)} aria-expanded={detailsOpen}>
+          <span className="group-avatar">{activeGroup.name.slice(0, 1).toUpperCase()}</span>
+          <span><strong>{activeGroup.name}</strong><small>{activeGroup.memberIds.length} members · tap for group info</small></span>
+        </button>
+        <button type="button" className="icon-button" aria-label="Group information" onClick={() => setDetailsOpen(open => !open)}><MoreVertical size={21}/></button>
+      </header>
+      {detailsOpen && <section className="group-info-panel" aria-label="Group information">
+        <div className="group-info-title"><strong>{activeGroup.name}</strong><span>{activeGroup.description || 'No group description yet.'}</span></div>
+        <div className="group-info-heading"><strong>Members ({members.length || activeGroup.memberIds.length})</strong>{isOwner && <span>Group owner</span>}</div>
+        <div className="group-member-list">
+          {activeGroup.memberIds.map(uid => {
+            const profile = members.find(item => item.uid === uid)
+            const memberIsAdmin = activeGroup.adminIds.includes(uid)
+            return <div className="group-member-row" key={uid}>
+              <span className="group-member-avatar">{formatMemberName(profile, uid).slice(0, 1).toUpperCase()}</span>
+              <span className="group-member-name"><strong>{formatMemberName(profile, uid)}</strong><small>{uid === activeGroup.ownerId ? 'Owner' : memberIsAdmin ? 'Administrator' : 'Member'}</small></span>
+              {isOwner && uid !== userId && <div className="group-member-actions">
+                <button type="button" className="text-button" onClick={() => void changeMemberRole(profile || { uid, username: '', displayName: 'Member', photoURL: '' })}>{memberIsAdmin ? 'Demote' : 'Make admin'}</button>
+                <button type="button" className="text-button danger-text" onClick={() => void removeMember(profile || { uid, username: '', displayName: 'Member', photoURL: '' })}>Remove</button>
+              </div>}
+            </div>
+          })}
+        </div>
+        {isAdmin && <div className="group-add-member">
+          <label htmlFor="group-add-username">Add a Chater member by username</label>
+          <div><input id="group-add-username" value={memberUsername} onChange={event => setMemberUsername(event.target.value)} placeholder="@username" autoCapitalize="none" autoCorrect="off"/><button type="button" className="primary-button" disabled={memberLookupBusy || !memberUsername.trim()} onClick={() => void addMemberToGroup()}>{memberLookupBusy ? 'Adding…' : 'Add'}</button></div>
+        </div>}
+        {memberLookupNotice && <p className="group-inline-notice" role="status">{memberLookupNotice}</p>}
+        <div className="group-admin-actions">
+          {!isOwner && <button type="button" className="secondary-button" disabled={busy} onClick={() => void leaveGroup()}>Leave group</button>}
+          {isOwner && <button type="button" className="secondary-button danger-button" onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={16}/>Delete group</button>}
+        </div>
+        {deleteConfirmOpen && <div className="group-delete-confirm" role="group" aria-label="Confirm group deletion">
+          <strong>Delete this group?</strong><p>This permanently removes the group and its Chater group messages for every member.</p>
+          <div><button type="button" className="secondary-button" disabled={busy} onClick={() => setDeleteConfirmOpen(false)}>Cancel</button><button type="button" className="primary-button danger-button" disabled={busy} onClick={() => void deleteGroup()}>{busy ? 'Deleting…' : 'Delete group'}</button></div>
+        </div>}
+      </section>}
+      <div className="group-message-list" role="log" aria-label={activeGroup.name + ' messages'} aria-live="polite">
+        {messages.length === 0 ? <div className="group-empty-chat"><MessageCircle size={30}/><strong>No group messages yet</strong><span>Send the first message to everyone in this group.</span></div> : messages.map(message => <article key={message.id} className={message.senderId === userId ? 'group-message own-group-message' : 'group-message'}>
+          {message.senderId !== userId && <strong>{message.senderName}</strong>}
+          <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
+        </article>)}
+      </div>
+      {notice && <p className="group-notice" role="status">{notice}</p>}
+      <form className="group-message-composer" onSubmit={sendGroupMessage}>
+        <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message the group…" disabled={busy}/>
+        <button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim()}><Send size={19}/></button>
+      </form>
+    </section>
+  }
+
+  return <section className="groups-area">
+    <div className="groups-heading-row"><div><p className="eyebrow">YOUR PEOPLE, TOGETHER</p><h1>Groups</h1><p>Create a shared space for conversations with friends and teams.</p></div><button type="button" className="primary-button group-create-trigger" onClick={() => { setCreateOpen(true); setNotice('') }}><Plus size={17}/>Create group</button></div>
+    <label className="group-search"><Users size={18}/><input value={groupSearch} onChange={event => setGroupSearch(event.target.value)} placeholder="Search your groups"/></label>
+    {notice && <p className="group-notice" role="status">{notice}</p>}
+    {groupsBusy ? <p className="group-loading" role="status">Loading your groups…</p> : visibleGroups.length === 0 ? <div className="group-empty-state"><span><Users size={28}/></span><strong>{groups.length ? 'No matching groups' : 'Your group chats start here'}</strong><p>{groups.length ? 'Try another group name.' : 'Create a group, add members by username, and start a conversation together.'}</p><button type="button" className="secondary-button" onClick={() => setCreateOpen(true)}><Plus size={16}/>Create your first group</button></div> : <div className="group-list">{visibleGroups.map(group => <button type="button" className="group-list-item" key={group.id} onClick={() => { setActiveGroup(group); setNotice('') }}>
+      <span className="group-list-avatar">{group.name.slice(0, 1).toUpperCase()}</span>
+      <span className="group-list-copy"><strong>{group.name}</strong><small>{group.lastMessageText || group.description || (group.memberIds.length + ' members')}</small></span>
+      <span className="group-list-meta"><small>{formatGroupTime(group.lastMessageAt)}</small><ChevronRight size={17}/></span>
+    </button>)}</div>}
+    {createOpen && <div className="group-create-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) resetCreate() }}>
+      <form className="group-create-panel" role="dialog" aria-modal="true" aria-labelledby="group-create-title" onSubmit={createGroup}>
+        <header><div><p className="eyebrow">CHATER GROUPS</p><h2 id="group-create-title">Create a group</h2></div><button type="button" className="icon-button" aria-label="Close group creation" onClick={resetCreate}><X size={20}/></button></header>
+        <label>Group name<input value={groupName} onChange={event => setGroupName(event.target.value)} minLength={2} maxLength={50} required placeholder="e.g. Weekend plans"/></label>
+        <label>Description (optional)<textarea value={groupDescription} onChange={event => setGroupDescription(event.target.value)} maxLength={180} rows={2} placeholder="What is this group for?"/></label>
+        <label>Add members by username<input value={createUsername} onChange={event => setCreateUsername(event.target.value)} placeholder="@username" autoCapitalize="none" autoCorrect="off"/></label>
+        <button type="button" className="secondary-button group-add-selected" disabled={!createUsername.trim() || memberLookupBusy} onClick={() => void addMemberToSelection()}>{memberLookupBusy ? 'Looking up member…' : 'Add member'}</button>
+        {selectedMembers.length > 0 && <div className="group-selected-members"><strong>Members to add ({selectedMembers.length})</strong>{selectedMembers.map(member => <div key={member.uid}><span>{member.displayName} <small>@{member.username}</small></span><button type="button" aria-label={'Remove ' + member.displayName} onClick={() => setSelectedMembers(current => current.filter(item => item.uid !== member.uid))}><X size={16}/></button></div>)}</div>}
+        {memberLookupNotice && <p className="group-inline-notice" role="alert">{memberLookupNotice}</p>}
+        <p className="group-create-footnote">You will be the group owner and first administrator. Groups can contain up to 200 members.</p>
+        <button type="submit" className="primary-button" disabled={busy || memberLookupBusy || selectedMembers.length === 0}>{busy ? 'Creating group…' : 'Create group'} <Check size={16}/></button>
+      </form>
+    </div>}
+  </section>
+}
