@@ -4,6 +4,7 @@ import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, reauthe
 import { addDoc, getDoc, getDocs, onSnapshot, query, runTransaction, setDoc, where } from 'firebase/firestore'
 import App, { extractChaterUsernameFromQR, matchChaterContactsByName, normalizeContactDisplayName } from './App'
 import ConversationScreen from './components/ConversationScreen'
+import GroupsScreen from './components/GroupsScreen'
 import { createConversationId, isValidChatMessage, normalizeChatMessage } from './lib/chat'
 import { CHATER_MEDIA_BASE_URL, isChaterMediaUrl } from './lib/media'
 
@@ -18,6 +19,11 @@ vi.mock('firebase/firestore', () => ({
   where: vi.fn((...parts: unknown[]) => ({ parts })),
   collection: vi.fn((...parts: unknown[]) => ({ parts })),
   addDoc: vi.fn(async () => ({ id: 'test-moment' })),
+  arrayUnion: vi.fn((...values: unknown[]) => ({ operation: 'arrayUnion', values })),
+  arrayRemove: vi.fn((...values: unknown[]) => ({ operation: 'arrayRemove', values })),
+  limit: vi.fn((...parts: unknown[]) => ({ parts })),
+  updateDoc: vi.fn(async () => undefined),
+  writeBatch: vi.fn(() => ({ delete: vi.fn(), commit: vi.fn(async () => undefined) })),
   doc: vi.fn((...parts: unknown[]) => ({ parts })),
   serverTimestamp: vi.fn(() => 'SERVER_TIMESTAMP'),
   deleteDoc: vi.fn(async () => undefined),
@@ -277,6 +283,35 @@ describe('Chater direct-message rules', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear chat' }))
     expect(window.localStorage.getItem('chater:chat-cleared-at:' + createConversationId('signed-in-user', 'other-user'))).toMatch(/^\d+$/)
     expect(screen.getByRole('status')).toHaveTextContent('Chat cleared on this device')
+  })
+})
+
+describe('Chater group conversations', () => {
+  it('creates a group after adding a member by their unique username', async () => {
+    vi.mocked(getDoc)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ uid: 'other-member' }) } as never)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ username: 'other_member', displayName: 'Other Member', photoURL: '' }) } as never)
+    vi.mocked(addDoc).mockResolvedValue({ id: 'created-group' } as never)
+    render(<GroupsScreen userId="group-owner" displayName="Group Owner" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Create your first group/ }))
+    fireEvent.change(screen.getByLabelText('Group name'), { target: { value: 'Weekend plans' } })
+    fireEvent.change(screen.getByLabelText('Add members by username'), { target: { value: '@other_member' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }))
+    await screen.findByText('Other Member')
+    fireEvent.click(screen.getByRole('button', { name: /Create group/ }))
+
+    await waitFor(() => expect(addDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        name: 'Weekend plans',
+        description: '',
+        ownerId: 'group-owner',
+        adminIds: ['group-owner'],
+        memberIds: ['group-owner', 'other-member'],
+        lastMessageText: ''
+      })
+    ))
   })
 })
 
