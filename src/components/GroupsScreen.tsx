@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, Check, ChevronRight, MessageCircle, MoreVertical, Plus,
-  Send, Trash2, Users, X
+  Send, ShieldCheck, Trash2, Users, X
 } from 'lucide-react'
 import {
   addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc,
