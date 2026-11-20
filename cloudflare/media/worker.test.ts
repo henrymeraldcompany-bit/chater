@@ -82,3 +82,73 @@ describe('Chater R2 Moment expiry worker', () => {
     expect(media.delete).toHaveBeenCalledWith(['users/member_3/moments/legacy.mp4'])
   })
 })
+
+describe('Chater R2 service routes and pagination', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('reports R2 health without requiring a user token', async () => {
+    const response = await mediaWorker.fetch(
+      new Request('https://chater-r2-test.henrymeraldcompany.workers.dev/health', {
+        headers: { origin: 'https://chater-r2-preview.pages.dev' }
+      }),
+      { MEDIA: {} }
+    )
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      storage: 'cloudflare-r2',
+      bucketConfigured: true
+    })
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://chater-r2-preview.pages.dev')
+  })
+
+  it('continues Moment expiry cleanup through every R2 list page', async () => {
+    const now = Date.now()
+    const media = {
+      list: vi.fn()
+        .mockResolvedValueOnce({
+          objects: [{
+            key: 'users/member_1/moments/expired-first.png',
+            uploaded: new Date(now - 25 * 60 * 60 * 1000),
+            customMetadata: {}
+          }],
+          truncated: true,
+          cursor: 'next-page'
+        })
+        .mockResolvedValueOnce({
+          objects: [
+            {
+              key: 'users/member_2/moments/expired-second.mp4',
+              uploaded: new Date(now - 26 * 60 * 60 * 1000),
+              customMetadata: {}
+            },
+            {
+              key: 'users/member_2/moments/still-active.mp4',
+              uploaded: new Date(now - 23 * 60 * 60 * 1000),
+              customMetadata: {}
+            }
+          ],
+          truncated: false
+        }),
+      delete: vi.fn(async () => undefined)
+    }
+    let scheduledWork: Promise<unknown> | undefined
+    await mediaWorker.scheduled({}, { MEDIA: media }, {
+      waitUntil: (promise: Promise<unknown>) => { scheduledWork = promise }
+    })
+    await scheduledWork
+
+    expect(media.list).toHaveBeenCalledTimes(2)
+    expect(media.list).toHaveBeenNthCalledWith(2, {
+      prefix: 'users/',
+      cursor: 'next-page',
+      limit: 1000,
+      include: ['customMetadata']
+    })
+    expect(media.delete).toHaveBeenCalledTimes(2)
+    expect(media.delete).toHaveBeenNthCalledWith(1, ['users/member_1/moments/expired-first.png'])
+    expect(media.delete).toHaveBeenNthCalledWith(2, ['users/member_2/moments/expired-second.mp4'])
+  })
+})
