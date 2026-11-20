@@ -28,6 +28,7 @@ type GroupMessage = {
   senderId: string
   senderName: string
   text: string
+  kind: 'text' | 'announcement'
   createdAt: unknown
 }
 
@@ -103,6 +104,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [members, setMembers] = useState<GroupMember[]>([])
   const [groupsBusy, setGroupsBusy] = useState(true)
   const [messageDraft, setMessageDraft] = useState('')
+  const [announcementMode, setAnnouncementMode] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -167,6 +169,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           senderId: typeof data.senderId === 'string' ? data.senderId : '',
           senderName: typeof data.senderName === 'string' ? data.senderName : 'Chater member',
           text: typeof data.text === 'string' ? data.text : '',
+          kind: data.kind === 'announcement' ? 'announcement' : 'text',
           createdAt: data.createdAt
         }
       }).filter(message => message.senderId && message.text))
@@ -308,6 +311,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           senderId: userId,
           senderName: displayName.trim() || 'Chater member',
           text,
+          kind: announcementMode && isAdmin ? 'announcement' : 'text',
           createdAt: serverTimestamp()
         })
         transaction.update(groupRef, {
@@ -318,6 +322,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
         })
       })
       setMessageDraft('')
+      setAnnouncementMode(false)
     } catch (error) {
       setNotice(error instanceof Error && error.message
         ? error.message
@@ -479,7 +484,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
         </div>}
       </section>}
       <div className="group-message-list" role="log" aria-label={activeGroup.name + ' messages'} aria-live="polite">
-        {messages.length === 0 ? <div className="group-empty-chat"><MessageCircle size={30}/><strong>No group messages yet</strong><span>Send the first message to everyone in this group.</span></div> : messages.map(message => <article key={message.id} className={message.senderId === userId ? 'group-message own-group-message' : 'group-message'}>
+        {messages.length === 0 ? <div className="group-empty-chat"><MessageCircle size={30}/><strong>No group messages yet</strong><span>Send the first message to everyone in this group.</span></div> : messages.map(message => <article key={message.id} className={(message.senderId === userId ? 'group-message own-group-message' : 'group-message') + (message.kind === 'announcement' ? ' group-announcement' : '')}>
+          {message.kind === 'announcement' && <span className="group-announcement-label"><ShieldCheck size={13}/>Group announcement</span>}
           {message.senderId !== userId && <strong>{message.senderName}</strong>}
           <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
         </article>)}
@@ -487,7 +493,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       {notice && <p className="group-notice" role="status">{notice}</p>}
       <form className="group-message-composer" onSubmit={sendGroupMessage}>
         <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message the group…" disabled={busy}/>
-        <button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim()}><Send size={19}/></button>
+        <div className="group-message-send-actions">{isAdmin && <label><input type="checkbox" checked={announcementMode} onChange={event => setAnnouncementMode(event.target.checked)}/>Announcement</label>}<button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim()}><Send size={19}/></button></div>
       </form>
     </section>
   }
