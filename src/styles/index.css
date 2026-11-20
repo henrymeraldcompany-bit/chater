@@ -2112,3 +2112,12 @@ body,.app-shell{background:var(--page);color:var(--text)}
   justify-content: flex-end;
   gap: .6rem;
 }
+
+/* Accessible audio-first Moment creation and voice recording states. */
+.moment-audio-editor>label:not(.moment-gallery-picker){display:grid;gap:8px;color:var(--text);font-size:11px;font-weight:700}
+.moment-audio-editor>label textarea{width:100%;min-height:72px;padding:11px;border:1px solid var(--border);border-radius:11px;background:var(--field);color:var(--text);font:inherit;resize:vertical}
+.moment-audio-preview{display:grid;gap:10px;padding:13px;border:1px solid var(--border);border-radius:13px;background:var(--panel);color:var(--text)}
+.moment-audio-preview strong{overflow-wrap:anywhere;font-size:12px}
+.moment-audio-preview audio{width:100%;max-width:100%}
+.moment-recording-status{display:grid;justify-items:center;gap:12px;padding:16px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:14px;background:var(--accent-soft);color:var(--text);font-size:12px}
+.moment-recording-dot{width:11px;height:11px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 5px #ef444422}
