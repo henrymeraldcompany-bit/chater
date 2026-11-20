@@ -2212,3 +2212,10 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .group-edit-info-form{display:grid;gap:10px;padding:11px;border:1px solid var(--border);border-radius:12px;background:var(--panel-raised)}
 .group-edit-info-form label{display:grid;gap:6px;color:var(--text);font-size:10px;font-weight:700}
 .group-edit-info-form input,.group-edit-info-form textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--field);color:var(--text);font:inherit;font-size:11px}
+
+.group-member-search{width:100%;min-height:38px;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--field);color:var(--text);font:inherit;font-size:10px}
+.group-admin-only-setting{display:flex!important;align-items:center;gap:8px!important;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--field)}
+.group-admin-only-setting input{width:15px;height:15px;min-height:15px;accent-color:var(--accent)}
+.group-read-only-note{margin:0;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--panel-raised);color:var(--text-muted);font-size:10px}
+.group-message-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:3px;border-top:1px solid var(--border)}
+.group-message-actions .text-button{padding:3px 1px;font-size:9px}
