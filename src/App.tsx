@@ -184,10 +184,6 @@ function BrandLogo({ className }: { className: string }) {
 function SplashScreen() {
   return <div className="splash-screen" aria-label="Chater from GOZIE"><div className="splash-brand"><BrandLogo className="brand-logo" /><span>Chater</span></div><p>from <strong>GOZIE</strong></p></div>
 }
-function EmptyIllustration({ icon: Icon }: { icon: LucideIcon }) {
-  return <div className="empty-art"><div className="empty-orbit orbit-one"/><div className="empty-orbit orbit-two"/><div className="empty-icon"><Icon size={34} strokeWidth={1.5}/></div><span className="sparkle sparkle-a">✦</span><span className="sparkle sparkle-b">✧</span></div>
-}
-
 const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null
 function ProfileAvatar({ photoURL, displayName, className = '' }: { photoURL?: string | null; displayName?: string | null; className?: string }) {
   const initial = displayName?.trim().charAt(0).toUpperCase()
@@ -1273,11 +1269,6 @@ export default function App() {
     if (lastTab !== activeTab) tabHistoryRef.current.push(activeTab)
   }, [activeTab])
 
-  const pageCopy = useMemo(() => ({
-    Moments: { eyebrow: 'LIFE IN MOMENTS', title: 'Moments', description: 'Share a little piece of your day. Moments disappear after 24 hours.', action: 'Share a Moment', icon: CirclePlay },
-    Groups: { eyebrow: 'YOUR PEOPLE, TOGETHER', title: 'Groups', description: 'Create group chats, bring people together, and share with everyone in the group.', action: 'Create a group', icon: Users },
-    Calls: { eyebrow: 'CLOSER, WHEREVER YOU ARE', title: 'Calls', description: 'Your voice and video call history will appear here.', action: 'Start a call', icon: Phone }
-  }), [])
   const momentGroups = useMemo<MomentGroup[]>(() => {
     const byOwner = new Map<string, MomentEntry[]>()
     moments.forEach(moment => {
@@ -1704,10 +1695,6 @@ export default function App() {
   </main>
 }
 
-function FeatureEmpty({data,onAction}:{data:{eyebrow:string;title:string;description:string;action:string;icon:LucideIcon};onAction:()=>void}) {
-  const Icon=data.icon
-  return <div className="empty-state feature-empty"><EmptyIllustration icon={Icon}/><p className="eyebrow">{data.eyebrow}</p><h1>{data.title}</h1><p className="empty-description">{data.description}</p><button className="primary-button" onClick={onAction}><Plus size={17}/>{data.action}</button></div>
-}
 function formatMomentTime(timestamp: number) {
   if (!timestamp) return 'Recently'
   const date = new Date(timestamp)
