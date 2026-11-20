@@ -466,7 +466,7 @@ export default function App() {
     if (!authUser || !firestoreDb) { setMoments([]); return }
     const db = firestoreDb
     let active = true
-    getDocs(collection(db, 'moments')).then(snapshot => {
+    const unsubscribe = onSnapshot(collection(db, 'moments'), snapshot => {
       const now = Date.now()
       const entries = snapshot.docs.map(item => {
         const data = item.data()
@@ -489,8 +489,8 @@ export default function App() {
         const expiresAt = item.data().expiresAt
         return typeof expiresAt === 'number' && expiresAt <= now
       })
-      // Expired Moment records may be cleaned up by any signed-in member;
-      // their R2 files are removed by the media Worker's scheduled expiry sweep.
+      // Expired records are hidden immediately. Firestore removes the document
+      // when the rules permit; the Worker independently removes the R2 object.
       void Promise.all(expiredDocs.map(item =>
         deleteDoc(doc(db, 'moments', item.id)).catch(() => undefined)
       ))
@@ -498,8 +498,13 @@ export default function App() {
         .filter(item => isChaterMediaUrl(item.mediaUrl) && isMomentActive(item.expiresAt, now))
         .sort((left, right) => right.createdAt - left.createdAt)
       if (active) setMoments(activeEntries)
-    }).catch(() => { if (active) setMoments([]) })
-    return () => { active = false }
+    }, () => {
+      if (active) setMoments([])
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
   }, [authUser?.uid])
 
   // Keep the Moments feed in sync with each item's exact 24-hour expiry
@@ -572,14 +577,32 @@ export default function App() {
 
   const handleGeneralWallpaperUpload = async (file: File) => {
     if (!authUser) return
+    if (!firestoreDb) {
+      setAppearanceNotice('Chater could not connect to your account settings. The wallpaper has not been uploaded.')
+      return
+    }
     setWallpaperUploadBusy(true)
     setAppearanceNotice('Uploading your general chat wallpaper…')
+    let uploadedUrl = ''
     try {
       const previousImageUrl = wallpaperImageUrl
-      const url = await uploadWallpaperImage(file, 'general')
-      setWallpaperImageUrl(url)
-      setAppearanceNotice('General chat wallpaper uploaded. Saving to your account…')
-      if (previousImageUrl && previousImageUrl !== url) {
+      uploadedUrl = await uploadWallpaperImage(file, 'general')
+      // Save the new reference before deleting the previous object. If the
+      // account write fails, keep the old wallpaper usable and clean up the upload.
+      try {
+        await setDoc(doc(firestoreDb, 'users', authUser.uid), {
+          uid: authUser.uid,
+          preferences: { theme, wallpaper, wallpaperImageUrl: uploadedUrl, bubbleStyle },
+          updatedAt: serverTimestamp()
+        }, { merge: true })
+      } catch (error) {
+        await deleteChaterMedia(authUser, uploadedUrl).catch(() => undefined)
+        uploadedUrl = ''
+        throw error
+      }
+      setWallpaperImageUrl(uploadedUrl)
+      setAppearanceNotice('General chat wallpaper saved to your account.')
+      if (previousImageUrl && previousImageUrl !== uploadedUrl) {
         try {
           await deleteChaterMedia(authUser, previousImageUrl)
         } catch {
@@ -650,10 +673,15 @@ export default function App() {
   const uploadPhotoForUser = async (user: User, file: File) => {
     if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
     if (file.size > 5 * 1024 * 1024) throw new Error('Your profile picture must be 5 MB or smaller.')
+    const previousPhotoURL = isChaterMediaUrl(user.photoURL) ? user.photoURL : ''
     const photoURL = await uploadChaterMedia(user, file, { category: 'profile' })
     await updateProfile(user, { photoURL })
     if (firestoreDb) await setDoc(doc(firestoreDb, 'users', user.uid), { uid: user.uid, photoURL, updatedAt: serverTimestamp() }, { merge: true })
     setProfilePhotoUrl(photoURL)
+    // Replacing a picture should not leave the previous R2 object orphaned.
+    if (previousPhotoURL && previousPhotoURL !== photoURL) {
+      await deleteChaterMedia(user, previousPhotoURL).catch(() => undefined)
+    }
     return photoURL
   }
   const handleUsernameChange = async (nextUsername: string) => {
@@ -1966,6 +1994,8 @@ function CallsScreen({scheduledCalls,onStartCall,onScheduleCall}:{scheduledCalls
 function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:string;onClose:()=>void;onShare:(file:File,caption:string)=>void}) {
   const [mode,setMode]=useState<'gallery'|'text'|'layout'|'music'|'voice'>('gallery')
   const [file,setFile]=useState<File|null>(null)
+  const [musicFile,setMusicFile]=useState<File|null>(null)
+  const [voicePreviewFile,setVoicePreviewFile]=useState<File|null>(null)
   const [layoutFiles,setLayoutFiles]=useState<File[]>([])
   const [caption,setCaption]=useState('')
   const [textDraft,setTextDraft]=useState('')
@@ -1973,9 +2003,18 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
   const [fontStyle,setFontStyle]=useState<'clean'|'serif'|'bold'>('clean')
   const [localNotice,setLocalNotice]=useState('')
   const [previewURL,setPreviewURL]=useState('')
+  const [musicPreviewURL,setMusicPreviewURL]=useState('')
+  const [voicePreviewURL,setVoicePreviewURL]=useState('')
   const [layoutURLs,setLayoutURLs]=useState<string[]>([])
+  const [voiceRecording,setVoiceRecording]=useState(false)
   const galleryInput=useRef<HTMLInputElement|null>(null)
   const layoutInput=useRef<HTMLInputElement|null>(null)
+  const voiceRecorderRef=useRef<MediaRecorder|null>(null)
+  const voiceStreamRef=useRef<MediaStream|null>(null)
+  const voiceChunksRef=useRef<Blob[]>([])
+  const recordingTimerRef=useRef<number|null>(null)
+  const discardRecordingRef=useRef(false)
+  const mountedRef=useRef(true)
 
   useEffect(()=>{
     if(!file){setPreviewURL('');return}
@@ -1984,15 +2023,112 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
     return ()=>URL.revokeObjectURL(url)
   },[file])
   useEffect(()=>{
+    if(!musicFile){setMusicPreviewURL('');return}
+    const url=URL.createObjectURL(musicFile)
+    setMusicPreviewURL(url)
+    return ()=>URL.revokeObjectURL(url)
+  },[musicFile])
+  useEffect(()=>{
+    if(!voicePreviewFile){setVoicePreviewURL('');return}
+    const url=URL.createObjectURL(voicePreviewFile)
+    setVoicePreviewURL(url)
+    return ()=>URL.revokeObjectURL(url)
+  },[voicePreviewFile])
+  useEffect(()=>{
     const urls=layoutFiles.map(item=>URL.createObjectURL(item))
     setLayoutURLs(urls)
     return ()=>urls.forEach(url=>URL.revokeObjectURL(url))
   },[layoutFiles])
+  useEffect(()=>()=> {
+    mountedRef.current=false
+    if(recordingTimerRef.current!==null) window.clearTimeout(recordingTimerRef.current)
+    discardRecordingRef.current=true
+    const recorder=voiceRecorderRef.current
+    if(recorder&&recorder.state!=='inactive') recorder.stop()
+    voiceStreamRef.current?.getTracks().forEach(track=>track.stop())
+  },[])
 
   const shareFile=(nextFile:File,nextCaption=caption)=>{
+    if(nextFile.size>50*1024*1024){setLocalNotice('Moments must be 50 MB or smaller.');return}
     setLocalNotice('')
     onShare(nextFile,nextCaption)
   }
+  const stopVoiceRecording=(discard=false)=>{
+    if(discard) discardRecordingRef.current=true
+    if(recordingTimerRef.current!==null){
+      window.clearTimeout(recordingTimerRef.current)
+      recordingTimerRef.current=null
+    }
+    const recorder=voiceRecorderRef.current
+    if(recorder&&recorder.state!=='inactive') recorder.stop()
+    else voiceStreamRef.current?.getTracks().forEach(track=>track.stop())
+    if(mountedRef.current) setVoiceRecording(false)
+  }
+  const startVoiceRecording=async()=>{
+    if(typeof MediaRecorder==='undefined'||!navigator.mediaDevices?.getUserMedia){
+      setLocalNotice('Voice recording is not supported by this browser. Try recording a voice note with your phone and choose it from the gallery.')
+      return
+    }
+    setLocalNotice('')
+    setVoicePreviewFile(null)
+    discardRecordingRef.current=false
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true})
+      if(!mountedRef.current){stream.getTracks().forEach(track=>track.stop());return}
+      voiceStreamRef.current=stream
+      voiceChunksRef.current=[]
+      const supportedType=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>
+        typeof MediaRecorder.isTypeSupported==='function'&&MediaRecorder.isTypeSupported(type)
+      )
+      const recorder=supportedType?new MediaRecorder(stream,{mimeType:supportedType}):new MediaRecorder(stream)
+      voiceRecorderRef.current=recorder
+      recorder.ondataavailable=event=>{if(event.data.size>0)voiceChunksRef.current.push(event.data)}
+      recorder.onerror=()=>{
+        if(mountedRef.current)setLocalNotice('Chater could not record audio. Check microphone permission and try again.')
+        discardRecordingRef.current=true
+        stream.getTracks().forEach(track=>track.stop())
+        setVoiceRecording(false)
+      }
+      recorder.onstop=()=>{
+        if(recordingTimerRef.current!==null){
+          window.clearTimeout(recordingTimerRef.current)
+          recordingTimerRef.current=null
+        }
+        stream.getTracks().forEach(track=>track.stop())
+        voiceStreamRef.current=null
+        voiceRecorderRef.current=null
+        const chunks=voiceChunksRef.current
+        const blob=new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type||'audio/webm'})
+        if(mountedRef.current){
+          setVoiceRecording(false)
+          if(!discardRecordingRef.current&&blob.size>0){
+            const mimeType=blob.type||'audio/webm'
+            const extension=mimeType.includes('mp4')?'m4a':mimeType.includes('ogg')?'ogg':'webm'
+            setVoicePreviewFile(new File([blob],'chater-voice-moment.'+extension,{type:mimeType}))
+            setLocalNotice('Voice recording ready. Preview it before sharing.')
+          }else if(!discardRecordingRef.current){
+            setLocalNotice('No audio was recorded. Check microphone permission and try again.')
+          }
+        }
+      }
+      recorder.start()
+      setVoiceRecording(true)
+      recordingTimerRef.current=window.setTimeout(()=>{
+        if(recorder.state==='recording'){
+          setLocalNotice('Recording reached the 60-second limit.')
+          recorder.stop()
+        }
+      },60_000)
+    }catch(error){
+      voiceStreamRef.current?.getTracks().forEach(track=>track.stop())
+      voiceStreamRef.current=null
+      setVoiceRecording(false)
+      setLocalNotice(error instanceof Error&&error.name==='NotAllowedError'
+        ? 'Microphone access was blocked. Allow microphone permission in your browser settings and try again.'
+        : 'Chater could not start voice recording. Check microphone permission and try again.')
+    }
+  }
+
   const createTextMoment=()=>{
     if(!textDraft.trim()){setLocalNotice('Write something before sharing your text Moment.');return}
     const canvas=document.createElement('canvas')
@@ -2039,7 +2175,7 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
       context.fillRect(0,0,canvas.width,canvas.height)
       const gap=12
       const count=photos.length
-      const columns=count===2?2:2
+      const columns=2
       const rows=Math.ceil(count/columns)
       const cellWidth=(canvas.width-gap*(columns+1))/columns
       const cellHeight=(canvas.height-gap*(rows+1))/rows
@@ -2073,9 +2209,9 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
   ]
   return <div className="moment-create-overlay" role="dialog" aria-modal="true" aria-label="Add Moments">
     <header className="moment-create-header">
-      <button type="button" className="moment-create-close" onClick={onClose} aria-label="Close"><X size={23}/></button>
+      <button type="button" className="moment-create-close" onClick={()=>{stopVoiceRecording(true);onClose()}} aria-label="Close"><X size={23}/></button>
       <div><strong>{mode==='text'?'Text Moment':mode==='layout'?'Moments layout':mode==='music'?'Music Moment':mode==='voice'?'Voice Moment':'Add Moments'}</strong><small>Share something from your day</small></div>
-      {mode!=='gallery' && <button type="button" className="moment-create-back" onClick={()=>setMode('gallery')} aria-label="Back"><ArrowLeft size={20}/></button>}
+      {mode!=='gallery' && <button type="button" className="moment-create-back" onClick={()=>{stopVoiceRecording(true);setMode('gallery')}} aria-label="Back"><ArrowLeft size={20}/></button>}
     </header>
     {mode==='gallery' && <>
       <div className="moment-create-actions">
@@ -2084,13 +2220,13 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
       <div className="moment-gallery-heading"><strong>Recent</strong><button type="button" onClick={()=>galleryInput.current?.click()}>Choose from gallery <ChevronRight size={15}/></button></div>
       <input ref={galleryInput} className="moment-hidden-input" type="file" accept="image/*,video/*,audio/*" onChange={event=>{setFile(event.target.files?.[0]||null);setMode('gallery')}}/>
       <div className="moment-gallery-grid">
-        <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>galleryInput.current?.click()}><ImagePlus size={28}/><strong>Gallery</strong><small>Select a photo or video</small></button>
+        <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>galleryInput.current?.click()}><ImagePlus size={28}/><strong>Gallery</strong><small>Select a photo, video or audio file</small></button>
         <button type="button" className="moment-gallery-tile moment-camera-tile" onClick={()=>{const input=document.getElementById('moment-camera-capture') as HTMLInputElement|null;input?.click()}}><Camera size={28}/><strong>Camera</strong><small>Take a new photo</small></button>
-        {file && <button type="button" className="moment-gallery-tile moment-selected-tile" onClick={()=>setMode('gallery')}>{file.type.startsWith('video/')?<Video size={30}/>:<img src={previewURL} alt="Selected Moment"/>}<strong>Selected</strong></button>}
+        {file && <button type="button" className="moment-gallery-tile moment-selected-tile" onClick={()=>setMode('gallery')}>{file.type.startsWith('video/')?<Video size={30}/>:file.type.startsWith('audio/')?<Music2 size={30}/>:<img src={previewURL} alt="Selected Moment"/>}<strong>Selected</strong></button>}
       </div>
       <input id="moment-camera-capture" className="moment-hidden-input" type="file" accept="image/*" capture="environment" onChange={event=>setFile(event.target.files?.[0]||null)}/>
       {file && <div className="moment-selected-preview">
-        {file.type.startsWith('video/')?<video src={previewURL} controls playsInline/>:<img src={previewURL} alt="Selected Moment"/>}
+        {file.type.startsWith('video/')?<video src={previewURL} controls playsInline/>:file.type.startsWith('audio/')?<audio src={previewURL} controls/>:<img src={previewURL} alt="Selected Moment"/>}
         <label>Caption (optional)<textarea value={caption} onChange={event=>setCaption(event.target.value)} maxLength={180} placeholder="Add a caption…"/></label>
         <button type="button" className="moment-publish-button" disabled={busy} onClick={()=>shareFile(file)}>{busy?'Sharing…':'Share Moment'} <Check size={17}/></button>
       </div>}
@@ -2110,12 +2246,21 @@ function MomentComposer({busy,notice,onClose,onShare}:{busy:boolean;notice:strin
       {layoutURLs.length>0 && <div className="moment-layout-thumbs">{layoutURLs.map((url,index)=><img key={url} src={url} alt={'Layout photo '+(index+1)}/>)}</div>}
       <button type="button" className="moment-publish-button" disabled={layoutFiles.length<2||busy} onClick={createLayoutMoment}>{busy?'Creating…':'Create and share layout'} <Check size={17}/></button>
     </div>}
-    {(mode==='music'||mode==='voice') && <div className="moment-audio-unavailable">
-      <span>{mode==='music'?<Music2 size={34}/>:<Mic size={34}/>}</span>
-      <strong>{mode==='music'?'Music Moments':'Voice Moments'}</strong>
-      <p>{mode==='music'?'Adding music requires Chater to save an audio track alongside a photo.':'Voice Moments require Chater to save an audio recording as its own Moment type.'}</p>
-      <small>That needs a small Firestore rules and data-format update. I have not changed those rules for this redesign.</small>
-      <button type="button" className="moment-audio-back" onClick={()=>setMode('gallery')}>Back to Moments</button>
+    {mode==='music' && <div className="moment-layout-editor moment-audio-editor">
+      <div className="moment-layout-preview"><Music2 size={34}/><strong>Share an audio Moment</strong><small>Choose a supported audio file. Chater will share it as a 24-hour Moment.</small></div>
+      <label className="moment-gallery-picker">Choose audio file<input aria-label="Choose an audio file for Music Moment" type="file" accept="audio/*" onChange={event=>setMusicFile(event.target.files?.[0]||null)}/></label>
+      {musicFile && <div className="moment-audio-preview"><strong>{musicFile.name}</strong><audio src={musicPreviewURL} controls/></div>}
+      <label>Caption (optional)<textarea value={caption} onChange={event=>setCaption(event.target.value)} maxLength={180} placeholder="Add a caption…"/></label>
+      <button type="button" className="moment-publish-button" disabled={!musicFile||busy} onClick={()=>musicFile&&shareFile(musicFile)}>{busy?'Sharing…':'Share Music Moment'} <Check size={17}/></button>
+    </div>}
+    {mode==='voice' && <div className="moment-layout-editor moment-audio-editor">
+      <div className="moment-layout-preview"><Mic size={34}/><strong>Record a voice Moment</strong><small>Record up to 60 seconds. Chater asks for microphone access only when you tap Record.</small></div>
+      {!voiceRecording&&!voicePreviewFile && <button type="button" className="moment-publish-button" disabled={busy} onClick={()=>void startVoiceRecording()}><Mic size={17}/> Start recording</button>}
+      {voiceRecording && <div className="moment-recording-status" role="status"><span className="moment-recording-dot"/>Recording… up to 60 seconds<button type="button" className="secondary-button" onClick={()=>stopVoiceRecording()}>Stop recording</button></div>}
+      {voicePreviewFile && <div className="moment-audio-preview"><strong>Voice recording ready</strong><audio src={voicePreviewURL} controls/></div>}
+      {voicePreviewFile && <label>Caption (optional)<textarea value={caption} onChange={event=>setCaption(event.target.value)} maxLength={180} placeholder="Add a caption…"/></label>}
+      {voicePreviewFile && <button type="button" className="moment-publish-button" disabled={busy} onClick={()=>shareFile(voicePreviewFile)}>{busy?'Sharing…':'Share Voice Moment'} <Check size={17}/></button>}
+      {voicePreviewFile && <button type="button" className="text-button" disabled={busy} onClick={()=>{setVoicePreviewFile(null);setLocalNotice('Record another voice Moment when you are ready.')}}>Record again</button>}
     </div>}
     {(notice||localNotice) && <p className="moment-create-notice" role="alert">{localNotice||notice}</p>}
   </div>
