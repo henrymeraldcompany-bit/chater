@@ -135,7 +135,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'participants', 'createdAt', 'updatedAt',
-          'lastMessageText', 'lastMessageSenderId', 'lastMessageAt', 'onlyAdminsCanSend'
+          'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
         ])
         && request.resource.data.keys().hasAll([
           'participants', 'createdAt', 'updatedAt',
@@ -226,11 +226,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'name', 'description', 'photoURL', 'ownerId', 'adminIds', 'memberIds',
-          'createdAt', 'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+          'createdAt', 'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt', 'onlyAdminsCanSend'
         ])
         && request.resource.data.keys().hasAll([
           'name', 'description', 'photoURL', 'ownerId', 'adminIds', 'memberIds',
-          'createdAt', 'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+          'createdAt', 'updatedAt', 'lastMessageText', 'lastMessageSenderId', 'lastMessageAt', 'onlyAdminsCanSend'
         ])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 2
