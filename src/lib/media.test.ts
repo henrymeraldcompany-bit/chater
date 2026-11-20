@@ -8,7 +8,7 @@ afterEach(() => {
 describe('Chater R2 media deletion', () => {
   it('deletes an authenticated user-owned object by its decoded R2 key', async () => {
     const user = { uid: 'member_123', getIdToken: vi.fn(async () => 'test-id-token') }
-    const mediaUrl = CHATER_MEDIA_BASE_URL + '/media/users/member_123/wallpapers/general/background%20image.png'
+    const mediaUrl = CHATER_MEDIA_BASE_URL + '/media/users/member_123/wallpapers/general/background-image.png'
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true })
@@ -22,7 +22,7 @@ describe('Chater R2 media deletion', () => {
         Authorization: 'Bearer test-id-token',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ objectKey: 'users/member_123/wallpapers/general/background image.png' })
+      body: JSON.stringify({ objectKey: 'users/member_123/wallpapers/general/background-image.png' })
     })
   })
 
