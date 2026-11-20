@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, Check, ChevronRight, MessageCircle, MoreVertical, Plus,
-  Send, ShieldCheck, Trash2, Users, X
+  Send, Trash2, Users, X
 } from 'lucide-react'
 import {
   addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc,
@@ -146,14 +146,14 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
 
   useEffect(() => {
     const db = firestoreDb
-    if (!db || !activeGroup) {
+    if (!db || !activeGroupId) {
       setMessages([])
       setMembers([])
       return
     }
     let active = true
     const messagesQuery = firestoreQuery(
-      collection(db, 'groups', activeGroup.id, 'messages'),
+      collection(db, 'groups', activeGroupId, 'messages'),
       orderBy('createdAt', 'asc')
     )
     const stopMessages = onSnapshot(messagesQuery, snapshot => {
@@ -171,7 +171,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
     }, () => {
       if (active) setNotice('Group messages could not be loaded. Check your connection and group permissions.')
     })
-    void Promise.all(activeGroup.memberIds.map(async uid => {
+    void Promise.all(activeGroupMemberIds.split('|').filter(Boolean).map(async uid => {
       try {
         const profileSnapshot = await getDoc(doc(db, 'users', uid))
         if (!profileSnapshot.exists()) return {
@@ -196,7 +196,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       active = false
       stopMessages()
     }
-  }, [activeGroup?.id, activeGroup?.memberIds.join('|'), displayName, userId])
+  }, [activeGroupId, activeGroupMemberIds, displayName, userId])
 
   const visibleGroups = useMemo(() => {
     const search = groupSearch.trim().toLowerCase()
@@ -205,6 +205,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
 
   const isAdmin = Boolean(activeGroup && activeGroup.adminIds.includes(userId))
   const isOwner = Boolean(activeGroup && activeGroup.ownerId === userId)
+  const activeGroupId = activeGroup?.id ?? ''
+  const activeGroupMemberIds = activeGroup?.memberIds.join('|') ?? ''
 
   const resetCreate = () => {
     setCreateOpen(false)
