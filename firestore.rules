@@ -135,7 +135,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'participants', 'createdAt', 'updatedAt',
-          'lastMessageText', 'lastMessageSenderId', 'lastMessageAt'
+          'lastMessageText', 'lastMessageSenderId', 'lastMessageAt', 'onlyAdminsCanSend'
         ])
         && request.resource.data.keys().hasAll([
           'participants', 'createdAt', 'updatedAt',
@@ -253,14 +253,15 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastMessageText == ''
         && request.resource.data.lastMessageSenderId == ''
-        && request.resource.data.lastMessageAt == null;
+        && request.resource.data.lastMessageAt == null
+        && request.resource.data.onlyAdminsCanSend == false;
 
       allow update: if isGroupMember() && (
         // Owner or administrator can edit basic group information.
         (
           request.auth.uid in resource.data.adminIds
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'name', 'description', 'photoURL', 'updatedAt'
+            'name', 'description', 'photoURL', 'onlyAdminsCanSend', 'updatedAt'
           ])
           && request.resource.data.name is string
           && request.resource.data.name.size() >= 2
@@ -269,6 +270,7 @@ service cloud.firestore {
           && request.resource.data.description.size() <= 180
           && request.resource.data.photoURL is string
           && request.resource.data.photoURL.size() <= 2048
+          && request.resource.data.onlyAdminsCanSend is bool
           && request.resource.data.updatedAt == request.time
         )
         ||
@@ -345,6 +347,7 @@ service cloud.firestore {
           && request.resource.data.text.size() <= 4000
           && request.resource.data.kind in ['text', 'announcement']
           && (request.resource.data.kind == 'text' || isGroupAdmin())
+          && (!get(/databases/$(database)/documents/groups/$(groupId)).data.onlyAdminsCanSend || isGroupAdmin())
           && request.resource.data.createdAt == request.time;
 
         allow update: if false;
