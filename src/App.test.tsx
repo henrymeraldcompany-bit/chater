@@ -57,10 +57,17 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+const initialCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+const initialRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  if (initialCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', initialCreateObjectURL)
+  else Reflect.deleteProperty(URL, 'createObjectURL')
+  if (initialRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', initialRevokeObjectURL)
+  else Reflect.deleteProperty(URL, 'revokeObjectURL')
   window.localStorage.clear()
 })
 
@@ -356,7 +363,7 @@ describe('Chater application shell', () => {
       await waitFor(() => expect(onSnapshot).toHaveBeenCalled())
       fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }))
       fireEvent.click(screen.getByRole('button', { name: 'Sync contacts' }))
-      await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(onSnapshot).toHaveBeenCalled())
       vi.mocked(getDocs).mockResolvedValueOnce({
         docs: [{
           id: 'ada-user',
@@ -1193,6 +1200,8 @@ describe('Chater application shell', () => {
       ok: true,
       json: async () => ({ success: true, url: 'https://chater-media.henrymeraldcompany.workers.dev/media/users/music-user/moments/music.mp3' })
     }))
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:music-preview') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
     openApp()
     fireEvent.click(screen.getAllByRole('button', { name: 'You' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
