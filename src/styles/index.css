@@ -2202,3 +2202,8 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .group-message-composer button:disabled{opacity:.45}
 @media(min-width:760px){.groups-area{padding:24px 26px}.group-chat-area{max-width:900px;margin:0 auto}.group-create-panel{padding:24px}}
 @media(prefers-reduced-motion:reduce){.groups-area *{scroll-behavior:auto!important}}
+.group-message-send-actions{display:flex;align-items:center;gap:9px}
+.group-message-send-actions>label{display:flex;align-items:center;gap:5px;color:var(--text-muted);font-size:9px;white-space:nowrap}
+.group-message-send-actions>label input{accent-color:var(--accent)}
+.group-announcement{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.group-announcement-label{display:flex;align-items:center;gap:5px;color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
