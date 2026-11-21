@@ -656,7 +656,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           {selected.senderId === userId && <button type="button" onClick={() => { setEditMessageId(selected.id); setEditMessageDraft(selected.text) }}><Pencil size={17}/>Edit message</button>}
           {isAdmin && <button type="button" onClick={() => void togglePinnedMessage(selected)}><Pin size={17}/>{selected.pinned ? 'Unpin message' : 'Pin message'}</button>}
           <button type="button" onClick={() => { setReplyingTo(selected); setSelectedMessageId('') }}><MessageCircle size={17}/>Reply</button>
-          {(selected.senderId === userId || isAdmin) && <button type="button" className="danger-text" onClick={() => setPendingDeleteMessageId(selected.id)}><Trash2 size={17}/>Delete message</button>
+          {(selected.senderId === userId || isAdmin) && <button type="button" className="danger-text" onClick={() => setPendingDeleteMessageId(selected.id)}><Trash2 size={17}/>Delete message</button>}
           {pendingDeleteMessageId === selected.id && <div className="group-message-delete-confirm"><span>Delete this message?</span><button type="button" disabled={busy} onClick={() => void deleteGroupMessage(selected.id)}>Confirm</button><button type="button" onClick={() => setPendingDeleteMessageId('')}>Cancel</button></div>}
           <button type="button" onClick={() => setSelectedMessageId('')}>Close</button>
         </div>
