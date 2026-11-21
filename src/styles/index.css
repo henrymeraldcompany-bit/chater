@@ -2223,3 +2223,74 @@ body,.app-shell{background:var(--page);color:var(--text)}
 .group-message-search{min-height:40px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border);border-radius:11px;background:var(--panel);color:var(--text-muted)}
 .group-message-search input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:11px}
 .group-message-search button{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-muted)}
+
+/* Group conversations open as a focused full-screen chat, like the reference app. */
+.group-chat-area {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: max(8px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: var(--page, #0d1014);
+}
+.group-chat-toolbar {
+  flex: 0 0 auto;
+  min-height: 58px;
+  gap: 8px;
+  padding: 0 2px 9px;
+}
+.group-chat-heading { flex: 1; min-width: 0; gap: 10px; }
+.group-chat-heading > span:last-child { min-width: 0; }
+.group-chat-heading strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.group-chat-heading small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.group-message-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 7px;
+  padding: 14px 2px 12px;
+  overscroll-behavior: contain;
+}
+.group-message {
+  max-width: min(86%, 560px);
+  gap: 4px;
+  padding: 8px 11px 6px;
+  border-radius: 9px 9px 9px 3px;
+}
+.own-group-message { border-radius: 9px 9px 3px 9px; }
+.group-message p { font-size: 14px; line-height: 1.4; }
+.group-message time { font-size: 10px; }
+.group-message-actions { display:none !important; }
+.group-message-composer {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  padding: 5px 6px 5px 13px;
+  border-radius: 28px;
+  background: var(--panel, #20272b);
+}
+.group-message-composer textarea {
+  min-height: 38px;
+  max-height: 110px;
+  resize: none;
+  padding: 9px 2px;
+  font-size: 14px;
+}
+.group-message-composer button {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  border-radius: 50%;
+}
+.group-message-send-actions { gap: 7px; }
+.group-message-send-actions > label { font-size: 10px; }
+@media (min-width: 760px) {
+  .group-chat-area { padding-right: max(18px, calc((100vw - 760px) / 2)); padding-left: max(18px, calc((100vw - 760px) / 2)); }
+}

@@ -28,10 +28,20 @@ const MAX_MOMENT_BYTES = 50 * 1024 * 1024;
 const MOMENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 function isAllowedOrigin(origin) {
-  return !origin ||
-    ALLOWED_ORIGINS.includes(origin) ||
-    origin === "http://localhost:5173" ||
-    origin === "http://127.0.0.1:5173";
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin) ||
+      origin === "http://localhost:5173" ||
+      origin === "http://127.0.0.1:5173") return true;
+  // Cloudflare Pages preview deployments use a unique hash subdomain.
+  // Permit only HTTPS deployments inside this dedicated preview project.
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "https:" &&
+      /^[a-z0-9-]+\.chater-r2-preview\.pages\.dev$/.test(parsed.hostname) &&
+      parsed.origin === origin;
+  } catch {
+    return false;
+  }
 }
 
 function corsHeaders(origin, publicMedia = false) {

@@ -84,6 +84,34 @@ describe('Chater R2 Moment expiry worker', () => {
 })
 
 describe('Chater R2 service routes and pagination', () => {
+  it('allows hashed Cloudflare Pages preview deployments but rejects unrelated origins', async () => {
+    const previewOrigin = 'https://a5652182.chater-r2-preview.pages.dev'
+    const allowed = await mediaWorker.fetch(
+      new Request('https://chater-r2-test.henrymeraldcompany.workers.dev/health', {
+        headers: { origin: previewOrigin }
+      }),
+      { MEDIA: {} }
+    )
+    expect(allowed.status).toBe(200)
+    expect(allowed.headers.get('access-control-allow-origin')).toBe(previewOrigin)
+
+    const rejected = await mediaWorker.fetch(
+      new Request('https://chater-r2-test.henrymeraldcompany.workers.dev/health', {
+        headers: { origin: 'https://evil.example' }
+      }),
+      { MEDIA: {} }
+    )
+    expect(rejected.status).toBe(403)
+
+    const insecure = await mediaWorker.fetch(
+      new Request('https://chater-r2-test.henrymeraldcompany.workers.dev/health', {
+        headers: { origin: 'http://a5652182.chater-r2-preview.pages.dev' }
+      }),
+      { MEDIA: {} }
+    )
+    expect(insecure.status).toBe(403)
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
