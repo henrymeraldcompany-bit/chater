@@ -412,11 +412,13 @@ export default function App() {
         const savedAccent = readSavedAccent(user.uid)
         setAccent(savedAccent)
         setCustomHex(savedAccent)
-        setProfilePhotoUrl(isChaterMediaUrl(user.photoURL) ? user.photoURL : '')
         const profileSnapshot = firestoreDb ? await getDoc(doc(firestoreDb, 'users', user.uid)) : null
         const storedProfile = (profileSnapshot?.data() || {}) as Record<string, unknown>
+        setProfilePhotoUrl(Object.prototype.hasOwnProperty.call(storedProfile, 'photoURL')
+          ? (isChaterMediaUrl(storedProfile.photoURL) ? storedProfile.photoURL : '')
+          : (isChaterMediaUrl(user.photoURL) ? user.photoURL : ''))
         applyAppearancePreferences(user.uid, storedProfile)
-        if (isChaterMediaUrl(user.photoURL) && storedProfile.photoURL !== user.photoURL && firestoreDb) {
+        if (!Object.prototype.hasOwnProperty.call(storedProfile, 'photoURL') && isChaterMediaUrl(user.photoURL) && firestoreDb) {
           void setDoc(doc(firestoreDb, 'users', user.uid), {
             uid: user.uid,
             photoURL: user.photoURL,

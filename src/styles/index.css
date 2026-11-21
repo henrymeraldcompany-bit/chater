@@ -2294,3 +2294,16 @@ body,.app-shell{background:var(--page);color:var(--text)}
 @media (min-width: 760px) {
   .group-chat-area { padding-right: max(18px, calc((100vw - 760px) / 2)); padding-left: max(18px, calc((100vw - 760px) / 2)); }
 }
+
+/* Group chat menu and WhatsApp-like press-and-hold message actions. */
+.group-menu-anchor{position:relative;display:flex;align-items:center}
+.group-chat-dropdown{position:absolute;z-index:150;top:calc(100% + 6px);right:0;display:grid;width:min(260px,calc(100vw - 34px));padding:6px 0;border:1px solid var(--border);border-radius:12px;background:var(--dialog,#171c20);box-shadow:0 12px 32px #0008}
+.group-chat-dropdown button,.group-message-action-sheet>button{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 15px;border:0;background:transparent;color:var(--text);text-align:left;font:inherit;font-size:13px}
+.group-chat-dropdown button:hover,.group-message-action-sheet>button:hover{background:var(--hover);color:var(--accent)}
+.group-theme-midnight{background:linear-gradient(145deg,#192534,#0d1118)}.group-theme-forest{background:linear-gradient(145deg,#173b31,#0c1714)}
+.group-pinned-banner{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);text-align:left}.group-pinned-banner span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.group-message-pinned{outline:1px solid color-mix(in srgb,var(--accent) 55%,transparent)}.group-message-pin-label{display:flex;align-items:center;gap:5px;color:var(--accent);font-size:10px}
+.group-message-action-sheet,.group-message-edit-sheet{position:fixed;z-index:180;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));display:grid;gap:5px;padding:12px;border:1px solid var(--border);border-radius:16px;background:var(--dialog,#171c20);box-shadow:0 16px 42px #0009}
+.group-message-action-sheet-head{display:flex;align-items:center;justify-content:space-between;padding:3px 5px 8px;border-bottom:1px solid var(--border)}.group-message-action-sheet-head button{border:0;background:transparent;color:var(--text-muted)}
+.group-message-delete-confirm{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;color:var(--text-muted);font-size:12px}.group-message-delete-confirm button{border:0;background:transparent;color:var(--accent);font:inherit}
+.group-message-edit-sheet label{display:grid;gap:8px;font-size:13px}.group-message-edit-sheet textarea{width:100%;min-height:90px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--field);color:var(--text);font:inherit}.group-message-edit-sheet>div{display:flex;justify-content:flex-end;gap:8px}

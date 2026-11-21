@@ -350,7 +350,17 @@ service cloud.firestore {
           && (!get(/databases/$(database)/documents/groups/$(groupId)).data.onlyAdminsCanSend || isGroupAdmin())
           && request.resource.data.createdAt == request.time;
 
-        allow update: if false;
+        allow update: if isGroupMember() && (
+          (resource.data.senderId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 4000)
+          ||
+          (isGroupAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pinned'])
+            && request.resource.data.pinned is bool)
+        );
         allow delete: if isGroupAdmin() || (
           isGroupMember() && resource.data.senderId == request.auth.uid
         );
