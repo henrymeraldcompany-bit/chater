@@ -295,7 +295,8 @@ describe('Chater direct-message rules', () => {
 describe('Chater group conversations', () => {
   it('opens group chats as a full-screen personal-chat-style conversation outside the tab layout', async () => {
     vi.mocked(onSnapshot).mockImplementationOnce((_reference, next) => {
-      next({ docs: [{
+      const emitGroupSnapshot = next as unknown as (snapshot: { docs: unknown[] }) => void
+      emitGroupSnapshot({ docs: [{
         id: 'weekend-group',
         data: () => ({
           name: 'Weekend plans',
