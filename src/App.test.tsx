@@ -293,6 +293,43 @@ describe('Chater direct-message rules', () => {
 })
 
 describe('Chater group conversations', () => {
+  it('opens group chats as a full-screen personal-chat-style conversation outside the tab layout', async () => {
+    vi.mocked(onSnapshot).mockImplementationOnce((_reference, next) => {
+      next({ docs: [{
+        id: 'weekend-group',
+        data: () => ({
+          name: 'Weekend plans',
+          description: 'Friends group',
+          ownerId: 'group-owner',
+          adminIds: ['group-owner'],
+          memberIds: ['group-owner', 'other-member'],
+          photoURL: '',
+          lastMessageText: 'See you soon',
+          lastMessageSenderId: 'other-member',
+          lastMessageAt: null,
+          onlyAdminsCanSend: false
+        })
+      }] } as never)
+      return vi.fn()
+    })
+    render(<GroupsScreen userId="group-owner" displayName="Group Owner" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Weekend plans/ }))
+    const groupConversation = await screen.findByRole('dialog', { name: 'Group conversation Weekend plans' })
+
+    expect(groupConversation.parentElement).toBe(document.body)
+    expect(groupConversation).toHaveClass('public-profile-screen', 'conversation-entry-screen', 'live-conversation-screen')
+    expect(groupConversation.querySelector('.conversation-entry-toolbar')).toBeInTheDocument()
+    expect(groupConversation.querySelector('.conversation-thread')).toBeInTheDocument()
+    expect(groupConversation.querySelector('.live-conversation-composer')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Chat options' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+    expect(screen.getByRole('menuitem', { name: 'Search' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Chat theme' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Export chat' })).toBeInTheDocument()
+  })
+
   it('creates a group after adding a member by their unique username', async () => {
     vi.mocked(getDoc)
       .mockResolvedValueOnce({ exists: () => true, data: () => ({ uid: 'other-member' }) } as never)

@@ -2311,3 +2311,81 @@ body,.app-shell{background:var(--page);color:var(--text)}
 /* Reply previews in group chats. */
 .group-message-quote,.group-reply-preview{display:grid;gap:3px;padding:7px 9px;border-left:3px solid var(--accent);border-radius:5px;background:color-mix(in srgb,var(--accent) 9%,transparent);min-width:0}.group-message-quote strong,.group-reply-preview strong{font-size:11px;color:var(--accent)}.group-message-quote span,.group-reply-preview span{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)}.group-reply-preview{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between}.group-reply-preview>div{display:grid;min-width:0;gap:2px}.group-reply-preview button{flex:0 0 auto;border:0;background:transparent;color:var(--text-muted)}
 .group-message{touch-action:pan-y;user-select:none;-webkit-user-select:none}
+
+
+/* Groups use the same full-screen conversation surface as one-to-one chats. */
+.group-conversation-screen {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.group-conversation-screen .group-conversation-toolbar {
+  flex: 0 0 auto;
+}
+.group-conversation-screen .group-conversation-title {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.group-conversation-screen .group-conversation-title strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-conversation-screen .group-conversation-title span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-conversation-screen .group-message-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 18px 14px 22px;
+  overscroll-behavior: contain;
+}
+.group-conversation-screen .group-chat-message {
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.group-conversation-screen .group-message-sender {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.group-conversation-screen .group-chat-message.group-announcement {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+.group-conversation-screen .group-chat-message.group-message-pinned {
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.group-conversation-screen .group-message-composer {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin: 5px 12px max(10px, env(safe-area-inset-bottom));
+  padding: 5px 6px 5px 13px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--panel);
+}
+.group-conversation-screen .group-message-composer textarea {
+  min-height: 38px;
+  max-height: 110px;
+  resize: none;
+  padding: 9px 2px;
+  font-size: 14px;
+}
+.group-conversation-screen .group-message-composer button {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowLeft, Check, ChevronRight, Download, FileText, MessageCircle,
   MoreVertical, Palette, Pencil, Pin, Plus, Search, Send, ShieldCheck,
@@ -141,6 +142,47 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [editGroupDescription, setEditGroupDescription] = useState('')
   const activeGroupId = activeGroup?.id ?? ''
   const activeGroupMemberIds = activeGroup?.memberIds.join('|') ?? ''
+
+
+  useEffect(() => {
+    if (!activeGroup) return
+    const handleGroupBack = (event: Event) => {
+      if (selectedMessageId) {
+        setSelectedMessageId('')
+        event.preventDefault()
+        return
+      }
+      if (editMessageId) {
+        setEditMessageId('')
+        setEditMessageDraft('')
+        event.preventDefault()
+        return
+      }
+      if (groupMenuOpen) {
+        setGroupMenuOpen(false)
+        event.preventDefault()
+        return
+      }
+      if (detailsOpen) {
+        setDetailsOpen(false)
+        setEditInfoOpen(false)
+        setDeleteConfirmOpen(false)
+        event.preventDefault()
+        return
+      }
+      if (messageSearchOpen) {
+        setMessageSearchOpen(false)
+        setMessageSearch('')
+        event.preventDefault()
+        return
+      }
+      setActiveGroup(null)
+      setNotice('')
+      event.preventDefault()
+    }
+    window.addEventListener('chater:android-back', handleGroupBack)
+    return () => window.removeEventListener('chater:android-back', handleGroupBack)
+  }, [activeGroup, selectedMessageId, editMessageId, groupMenuOpen, detailsOpen, messageSearchOpen])
 
   useEffect(() => {
     const db = firestoreDb
@@ -566,26 +608,46 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   }
 
   if (activeGroup) {
-    return <section className="groups-area group-chat-area">
-      <header className="group-chat-toolbar">
+    return createPortal(<section
+      className="public-profile-screen conversation-entry-screen live-conversation-screen group-conversation-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-label={'Group conversation ' + activeGroup.name}
+      data-chat-theme="default"
+    >
+      <header className="public-profile-toolbar conversation-entry-toolbar group-conversation-toolbar">
         <button type="button" className="icon-button" aria-label="Back to groups" onClick={() => { setActiveGroup(null); setDetailsOpen(false); setNotice('') }}><ArrowLeft size={21}/></button>
-        <button type="button" className="group-chat-heading" onClick={() => setDetailsOpen(open => !open)} aria-expanded={detailsOpen}>
-          <span className="group-avatar">{activeGroup.name.slice(0, 1).toUpperCase()}</span>
-          <span><strong>{activeGroup.name}</strong><small>{activeGroup.memberIds.length} members · tap for group info</small></span>
-        </button>
-        <button type="button" className="icon-button" aria-label={messageSearchOpen ? 'Close group message search' : 'Search group messages'} onClick={() => { setMessageSearchOpen(open => !open); setMessageSearch('') }}><Search size={19}/></button>
-        <div className="group-menu-anchor">
-          <button type="button" className="icon-button" aria-label="Group chat options" aria-haspopup="menu" aria-expanded={groupMenuOpen} onClick={() => setGroupMenuOpen(open => !open)}><MoreVertical size={21}/></button>
-          {groupMenuOpen && <div className="group-chat-dropdown" role="menu" aria-label="Group chat options">
-            <button type="button" role="menuitem" onClick={() => { setDetailsOpen(true); setGroupMenuOpen(false) }}><Users size={17}/>Group info</button>
-            <button type="button" role="menuitem" onClick={() => { setMessageSearchOpen(true); setMessageSearch(''); setGroupMenuOpen(false) }}><Search size={17}/>Search</button>
-            <button type="button" role="menuitem" onClick={() => { setGroupTheme(current => current === 'default' ? 'midnight' : current === 'midnight' ? 'forest' : 'default'); setGroupMenuOpen(false) }}><Palette size={17}/>Change chat theme</button>
-            <button type="button" role="menuitem" onClick={() => { setNotice('Media, links and documents shared in this group will appear here when group attachments are enabled.'); setGroupMenuOpen(false) }}><FileText size={17}/>Media, links and docs</button>
-            <button type="button" role="menuitem" onClick={exportGroupChat}><Download size={17}/>Export chat</button>
+        <span className="profile-avatar conversation-entry-avatar group-conversation-avatar" aria-label={activeGroup.name + ' group picture'}>
+          {activeGroup.name.slice(0, 1).toUpperCase()}
+        </span>
+        <div className="group-conversation-title">
+          <strong>{activeGroup.name}</strong>
+          <span>{activeGroup.memberIds.length} members</span>
+        </div>
+        <div className="conversation-menu-anchor">
+          <button
+            type="button"
+            className="conversation-menu-trigger"
+            aria-label="Chat options"
+            aria-haspopup="menu"
+            aria-expanded={groupMenuOpen}
+            onClick={() => setGroupMenuOpen(open => !open)}
+          ><MoreVertical size={22}/></button>
+          {groupMenuOpen && <div className="conversation-dropdown" role="menu" aria-label="Chat options menu">
+            <button type="button" role="menuitem" onClick={() => { setDetailsOpen(true); setGroupMenuOpen(false) }}><Users size={18}/>Group info</button>
+            <button type="button" role="menuitem" onClick={() => { setMessageSearchOpen(true); setMessageSearch(''); setGroupMenuOpen(false) }}><Search size={18}/>Search</button>
+            <button type="button" role="menuitem" onClick={() => { setGroupTheme(current => current === 'default' ? 'midnight' : current === 'midnight' ? 'forest' : 'default'); setGroupMenuOpen(false) }}><Palette size={18}/>Chat theme</button>
+            <button type="button" role="menuitem" onClick={() => { setNotice('Media, links and documents shared in this group will appear here when group attachments are enabled.'); setGroupMenuOpen(false) }}><FileText size={18}/>Media, links and docs</button>
+            <button type="button" role="menuitem" onClick={exportGroupChat}><Download size={18}/>Export chat</button>
           </div>}
         </div>
       </header>
-      {messageSearchOpen && <label className="group-message-search"><Search size={16}/><input aria-label="Search messages in this group" value={messageSearch} onChange={event => setMessageSearch(event.target.value)} placeholder="Search messages or people"/><button type="button" aria-label="Close search" onClick={() => { setMessageSearch(''); setMessageSearchOpen(false) }}><X size={16}/></button></label>}
+      {messageSearchOpen && <div className="conversation-search-bar" role="search">
+        <Search size={18}/>
+        <input autoFocus aria-label="Search messages" placeholder="Search in this group" value={messageSearch} onChange={event => setMessageSearch(event.target.value)}/>
+        <span>{messageSearch.trim() ? filteredGroupMessages.length + ' found' : ''}</span>
+        <button type="button" aria-label="Close search" onClick={() => { setMessageSearch(''); setMessageSearchOpen(false) }}><X size={18}/></button>
+      </div>}
       {detailsOpen && <section className="group-info-panel" aria-label="Group information">
         <div className="group-info-title"><strong>{activeGroup.name}</strong><span>{activeGroup.description || 'No group description yet.'}</span></div>
         {isAdmin && <button type="button" className="text-button group-edit-info-trigger" onClick={() => { setEditGroupName(activeGroup.name); setEditGroupDescription(activeGroup.description); setEditInfoOpen(open => !open) }}>{editInfoOpen ? 'Cancel edit' : 'Edit group information'}</button>}
@@ -629,12 +691,12 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           <div><button type="button" className="secondary-button" disabled={busy} onClick={() => setDeleteConfirmOpen(false)}>Cancel</button><button type="button" className="primary-button danger-button" disabled={busy} onClick={() => void deleteGroup()}>{busy ? 'Deleting…' : 'Delete group'}</button></div>
         </div>}
       </section>}
-      <div className={'group-message-list group-theme-' + groupTheme} role="log" aria-label={activeGroup.name + ' messages'} aria-live="polite">
+      <div className={'conversation-thread group-message-thread group-theme-' + groupTheme} role="log" aria-label={activeGroup.name + ' messages'} aria-live="polite">
         {messages.some(message => message.pinned) && <button type="button" className="group-pinned-banner" onClick={() => { const pinned = messages.find(message => message.pinned); if (pinned) document.getElementById('group-message-' + pinned.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}><Pin size={15}/><span>{messages.find(message => message.pinned)?.text || 'Pinned message'}</span></button>}
         {messages.length === 0 ? <div className="group-empty-chat"><MessageCircle size={30}/><strong>No group messages yet</strong><span>Send the first message to everyone in this group.</span></div> : filteredGroupMessages.length === 0 ? <p className="group-inline-notice" role="status">No messages match your search.</p> : filteredGroupMessages.map(message => <article
           id={'group-message-' + message.id}
           key={message.id}
-          className={(message.senderId === userId ? 'group-message own-group-message' : 'group-message') + (message.kind === 'announcement' ? ' group-announcement' : '') + (message.pinned ? ' group-message-pinned' : '')}
+          className={'chat-message ' + (message.senderId === userId ? 'chat-message-sent' : 'chat-message-received') + ' group-chat-message' + (message.kind === 'announcement' ? ' group-announcement' : '') + (message.pinned ? ' group-message-pinned' : '')}
           onContextMenu={event => { event.preventDefault(); setSelectedMessageId(message.id); setEditMessageId(''); setPendingDeleteMessageId('') }}
           onPointerDown={() => { longPressTriggered.current = false; if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current); longPressTimer.current = window.setTimeout(() => { longPressTriggered.current = true; setSelectedMessageId(message.id); setEditMessageId(''); setPendingDeleteMessageId('') }, 520) }}
           onPointerUp={() => { if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }}
@@ -644,7 +706,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           {message.kind === 'announcement' && <span className="group-announcement-label"><ShieldCheck size={13}/>Group announcement</span>}
           {message.pinned && <span className="group-message-pin-label"><Pin size={12}/>Pinned</span>}
           {message.replyTo && <div className="group-message-quote"><strong>{message.replyTo.senderName}</strong><span>{message.replyTo.text}</span></div>}
-          {message.senderId !== userId && <strong>{message.senderName}</strong>}
+          {message.senderId !== userId && <span className="group-message-sender">{message.senderName}</span>}
           <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
         </article>)}
       </div>
@@ -667,12 +729,12 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       </form>}
       {notice && <p className="group-notice" role="status">{notice}</p>}
       {activeGroup.onlyAdminsCanSend && !isAdmin && <p className="group-read-only-note">Only group administrators can send messages here.</p>}
-      <form className="group-message-composer" onSubmit={sendGroupMessage}>
+      <form className="conversation-entry-composer live-conversation-composer group-message-composer" onSubmit={sendGroupMessage}>
         {replyingTo && <div className="group-reply-preview"><div><strong>Replying to {replyingTo.senderName}</strong><span>{replyingTo.text}</span></div><button type="button" aria-label="Cancel reply" onClick={() => setReplyingTo(null)}><X size={16}/></button></div>}
-        <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message the group…" disabled={busy || (activeGroup.onlyAdminsCanSend && !isAdmin)}/>
+        <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message" disabled={busy || (activeGroup.onlyAdminsCanSend && !isAdmin)}/>
         <div className="group-message-send-actions">{isAdmin && <label><input type="checkbox" checked={announcementMode} onChange={event => setAnnouncementMode(event.target.checked)}/>Announcement</label>}<button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim() || (activeGroup.onlyAdminsCanSend && !isAdmin)}><Send size={19}/></button></div>
       </form>
-    </section>
+    </section>, document.body)
   }
 
   return <section className="groups-area">
