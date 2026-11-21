@@ -443,7 +443,8 @@ export default function App() {
         const savedAccent = readSavedAccent(user.uid)
         setAccent(savedAccent)
         setCustomHex(savedAccent)
-        setProfilePhotoUrl(isChaterMediaUrl(user.photoURL) ? user.photoURL : '')
+        // Do not resurrect a stale Firebase Auth photo when the Firestore profile cannot be read.
+        setProfilePhotoUrl('')
         setProfileDetails(emptyProfileDetails)
         const localUsername = window.localStorage.getItem(`chater:profile:username:${user.uid}`) || ''
         setProfileUsername(localUsername)
@@ -534,9 +535,11 @@ export default function App() {
     setMomentBusy(true)
     setMomentNotice('')
     let stage: 'R2 upload' | 'Firestore save' = 'R2 upload'
+    let uploadedMediaUrl = ''
     try {
       const expiresAt = Date.now() + MOMENT_LIFETIME_MS
       const mediaUrl = await uploadChaterMedia(authUser, file, { category: 'moment', expiresAt, timeoutMs: 10 * 60 * 1000 })
+      uploadedMediaUrl = mediaUrl
       const mediaType: MomentEntry['mediaType'] = isAudio ? 'audio' : isVideo ? 'video' : 'image'
       const data = { uid: authUser.uid, displayName: authUser.displayName || 'Chater member', mediaUrl, mediaType, caption: caption.trim().slice(0, 180), createdAt: serverTimestamp(), expiresAt }
       stage = 'Firestore save'
@@ -545,9 +548,10 @@ export default function App() {
       setDialog(null)
       setMomentNotice('')
     } catch (error) {
+      if (stage === 'Firestore save' && uploadedMediaUrl) await deleteChaterMedia(authUser, uploadedMediaUrl).catch(() => undefined)
       const errorCode = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code || '') : ''
       const detail = error instanceof Error ? error.message : 'Please try again.'
-      setMomentNotice(error instanceof Error && error.name === 'AbortError' ? 'The upload took too long. Check your connection and try again.' : stage === 'Firestore save' ? 'R2 upload succeeded, but Firestore could not save the Moment' + (errorCode ? ' (' + errorCode + ')' : '') + ': ' + detail : detail)
+      setMomentNotice(error instanceof Error && error.name === 'AbortError' ? 'The upload took too long. Check your connection and try again.' : stage === 'Firestore save' ? 'Chater could not save the Moment. Confirm the latest Firestore rules are published and try again' + (errorCode ? ' (' + errorCode + ')' : '') + ': ' + detail : detail)
     } finally { setMomentBusy(false) }
   }
 
@@ -672,15 +676,19 @@ export default function App() {
   const uploadPhotoForUser = async (user: User, file: File) => {
     if (!file.type.startsWith('image/')) throw new Error('Choose an image file.')
     if (file.size > 5 * 1024 * 1024) throw new Error('Your profile picture must be 5 MB or smaller.')
-    const previousPhotoURL = isChaterMediaUrl(user.photoURL) ? user.photoURL : ''
+    if (!firestoreDb) throw new Error('Chater could not connect to your profile database. Check your connection and try again.')
+    const previousPhotoURL = profilePhotoUrl
     const photoURL = await uploadChaterMedia(user, file, { category: 'profile' })
-    await updateProfile(user, { photoURL })
-    if (firestoreDb) await setDoc(doc(firestoreDb, 'users', user.uid), { uid: user.uid, photoURL, updatedAt: serverTimestamp() }, { merge: true })
-    setProfilePhotoUrl(photoURL)
-    // Replacing a picture should not leave the previous R2 object orphaned.
-    if (previousPhotoURL && previousPhotoURL !== photoURL) {
-      await deleteChaterMedia(user, previousPhotoURL).catch(() => undefined)
+    try {
+      await setDoc(doc(firestoreDb, 'users', user.uid), { uid: user.uid, photoURL, updatedAt: serverTimestamp() }, { merge: true })
+    } catch (error) {
+      await deleteChaterMedia(user, photoURL).catch(() => undefined)
+      throw error
     }
+    setProfilePhotoUrl(photoURL)
+    // Firestore is the source of truth; Auth photo metadata is kept best-effort for legacy clients.
+    await updateProfile(user, { photoURL }).catch(() => undefined)
+    if (isChaterMediaUrl(previousPhotoURL) && previousPhotoURL !== photoURL) await deleteChaterMedia(user, previousPhotoURL).catch(() => undefined)
     return photoURL
   }
   const handleUsernameChange = async (nextUsername: string) => {
@@ -1234,15 +1242,15 @@ export default function App() {
     setPhotoBusy(true)
     setPhotoNotice('Removing your profile picture…')
     try {
-      await updateProfile(authUser, { photoURL: null })
-      if (firestoreDb) {
-        await setDoc(doc(firestoreDb, 'users', authUser.uid), {
-          uid: authUser.uid,
-          photoURL: null,
-          updatedAt: serverTimestamp()
-        }, { merge: true })
-      }
+      if (!firestoreDb) throw new Error('Chater could not connect to your profile database. Check your connection and try again.')
+      await setDoc(doc(firestoreDb, 'users', authUser.uid), {
+        uid: authUser.uid,
+        photoURL: null,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
       setProfilePhotoUrl('')
+      // Keep Firebase Auth metadata in sync when possible; Firestore remains authoritative.
+      await updateProfile(authUser, { photoURL: null }).catch(() => undefined)
       try {
         await deleteChaterMedia(authUser, previousPhotoUrl)
         setPhotoNotice('Your profile picture was removed and deleted from Cloudflare R2.')

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowLeft, Check, ChevronRight, Download, FileText, MessageCircle,
   MoreVertical, Palette, Pencil, Pin, Plus, Search, Send, ShieldCheck,
@@ -33,6 +33,7 @@ type GroupMessage = {
   kind: 'text' | 'announcement'
   createdAt: unknown
   pinned: boolean
+  replyTo?: { messageId: string; senderName: string; text: string }
 }
 
 type GroupMember = {
@@ -108,6 +109,9 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
   const [members, setMembers] = useState<GroupMember[]>([])
   const [groupsBusy, setGroupsBusy] = useState(true)
   const [messageDraft, setMessageDraft] = useState('')
+  const [replyingTo, setReplyingTo] = useState<GroupMessage | null>(null)
+  const longPressTimer = useRef<number | null>(null)
+  const longPressTriggered = useRef(false)
   const [messageSearchOpen, setMessageSearchOpen] = useState(false)
   const [messageSearch, setMessageSearch] = useState('')
   const [announcementMode, setAnnouncementMode] = useState(false)
@@ -188,7 +192,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           text: typeof data.text === 'string' ? data.text : '',
           kind: data.kind === 'announcement' ? 'announcement' as const : 'text' as const,
           createdAt: data.createdAt,
-          pinned: data.pinned === true
+          pinned: data.pinned === true,
+          replyTo: data.replyTo && typeof data.replyTo === 'object' ? data.replyTo as GroupMessage['replyTo'] : undefined
         }
       }).filter(message => message.senderId && message.text))
     }, () => {
@@ -337,7 +342,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           senderName: displayName.trim() || 'Chater member',
           text,
           kind: announcementMode && isAdmin ? 'announcement' : 'text',
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          ...(replyingTo ? { replyTo: { messageId: replyingTo.id, senderName: replyingTo.senderName, text: replyingTo.text.slice(0, 300) } } : {})
         })
         transaction.update(groupRef, {
           lastMessageText: text.replace(/\s+/g, ' ').slice(0, 180),
@@ -347,6 +353,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
         })
       })
       setMessageDraft('')
+      setReplyingTo(null)
       setAnnouncementMode(false)
     } catch (error) {
       setNotice(error instanceof Error && error.message
@@ -629,10 +636,15 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           key={message.id}
           className={(message.senderId === userId ? 'group-message own-group-message' : 'group-message') + (message.kind === 'announcement' ? ' group-announcement' : '') + (message.pinned ? ' group-message-pinned' : '')}
           onContextMenu={event => { event.preventDefault(); setSelectedMessageId(message.id); setEditMessageId(''); setPendingDeleteMessageId('') }}
+          onPointerDown={() => { longPressTriggered.current = false; if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current); longPressTimer.current = window.setTimeout(() => { longPressTriggered.current = true; setSelectedMessageId(message.id); setEditMessageId(''); setPendingDeleteMessageId('') }, 520) }}
+          onPointerUp={() => { if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }}
+          onPointerLeave={() => { if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }}
+          onPointerCancel={() => { if (longPressTimer.current !== null) window.clearTimeout(longPressTimer.current); longPressTimer.current = null }}
         >
           {message.kind === 'announcement' && <span className="group-announcement-label"><ShieldCheck size={13}/>Group announcement</span>}
           {message.pinned && <span className="group-message-pin-label"><Pin size={12}/>Pinned</span>}
-          {message.senderId !== userId && <strong>{message.senderName}</strong>}
+          {message.replyTo && <div className="group-message-quote"><strong>{message.replyTo.senderName}</strong><span>{message.replyTo.text}</span></div>}
+          {message.senderId !== userId && <strong>{message.senderName}</strong>
           <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
         </article>)}
       </div>
@@ -643,7 +655,8 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           <div className="group-message-action-sheet-head"><strong>Message options</strong><button type="button" aria-label="Close message options" onClick={() => setSelectedMessageId('')}><X size={17}/></button></div>
           {selected.senderId === userId && <button type="button" onClick={() => { setEditMessageId(selected.id); setEditMessageDraft(selected.text) }}><Pencil size={17}/>Edit message</button>}
           {isAdmin && <button type="button" onClick={() => void togglePinnedMessage(selected)}><Pin size={17}/>{selected.pinned ? 'Unpin message' : 'Pin message'}</button>}
-          {(selected.senderId === userId || isAdmin) && <button type="button" className="danger-text" onClick={() => setPendingDeleteMessageId(selected.id)}><Trash2 size={17}/>Delete message</button>}
+          <button type="button" onClick={() => { setReplyingTo(selected); setSelectedMessageId('') }}><MessageCircle size={17}/>Reply</button>
+          {(selected.senderId === userId || isAdmin) && <button type="button" className="danger-text" onClick={() => setPendingDeleteMessageId(selected.id)}><Trash2 size={17}/>Delete message</button>
           {pendingDeleteMessageId === selected.id && <div className="group-message-delete-confirm"><span>Delete this message?</span><button type="button" disabled={busy} onClick={() => void deleteGroupMessage(selected.id)}>Confirm</button><button type="button" onClick={() => setPendingDeleteMessageId('')}>Cancel</button></div>}
           <button type="button" onClick={() => setSelectedMessageId('')}>Close</button>
         </div>
@@ -655,6 +668,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
       {notice && <p className="group-notice" role="status">{notice}</p>}
       {activeGroup.onlyAdminsCanSend && !isAdmin && <p className="group-read-only-note">Only group administrators can send messages here.</p>}
       <form className="group-message-composer" onSubmit={sendGroupMessage}>
+        {replyingTo && <div className="group-reply-preview"><div><strong>Replying to {replyingTo.senderName}</strong><span>{replyingTo.text}</span></div><button type="button" aria-label="Cancel reply" onClick={() => setReplyingTo(null)}><X size={16}/></button></div>}
         <textarea aria-label="Group message" rows={1} maxLength={4000} value={messageDraft} onChange={event => setMessageDraft(event.target.value)} placeholder="Message the group…" disabled={busy || (activeGroup.onlyAdminsCanSend && !isAdmin)}/>
         <div className="group-message-send-actions">{isAdmin && <label><input type="checkbox" checked={announcementMode} onChange={event => setAnnouncementMode(event.target.checked)}/>Announcement</label>}<button type="submit" aria-label="Send group message" disabled={busy || !messageDraft.trim() || (activeGroup.onlyAdminsCanSend && !isAdmin)}><Send size={19}/></button></div>
       </form>

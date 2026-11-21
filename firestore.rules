@@ -337,7 +337,7 @@ service cloud.firestore {
         allow read: if isGroupMember();
 
         allow create: if isGroupMember()
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'kind', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'kind', 'createdAt', 'replyTo'])
           && request.resource.data.keys().hasAll(['senderId', 'senderName', 'text', 'kind', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
@@ -348,6 +348,15 @@ service cloud.firestore {
           && request.resource.data.kind in ['text', 'announcement']
           && (request.resource.data.kind == 'text' || isGroupAdmin())
           && (!get(/databases/$(database)/documents/groups/$(groupId)).data.onlyAdminsCanSend || isGroupAdmin())
+          && (!('replyTo' in request.resource.data) || (
+            request.resource.data.replyTo is map
+            && request.resource.data.replyTo.keys().hasOnly(['messageId', 'senderName', 'text'])
+            && request.resource.data.replyTo.messageId is string
+            && request.resource.data.replyTo.senderName is string
+            && request.resource.data.replyTo.senderName.size() <= 50
+            && request.resource.data.replyTo.text is string
+            && request.resource.data.replyTo.text.size() <= 300
+          ))
           && request.resource.data.createdAt == request.time;
 
         allow update: if isGroupMember() && (
