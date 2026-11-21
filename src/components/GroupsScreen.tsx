@@ -644,7 +644,7 @@ export default function GroupsScreen({ userId, displayName }: GroupsScreenProps)
           {message.kind === 'announcement' && <span className="group-announcement-label"><ShieldCheck size={13}/>Group announcement</span>}
           {message.pinned && <span className="group-message-pin-label"><Pin size={12}/>Pinned</span>}
           {message.replyTo && <div className="group-message-quote"><strong>{message.replyTo.senderName}</strong><span>{message.replyTo.text}</span></div>}
-          {message.senderId !== userId && <strong>{message.senderName}</strong>
+          {message.senderId !== userId && <strong>{message.senderName}</strong>}
           <p>{message.text}</p><time>{formatGroupTime(message.createdAt)}</time>
         </article>)}
       </div>
